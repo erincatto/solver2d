@@ -1,0 +1,121 @@
+// SPDX-FileCopyrightText: 2024 Erin Catto
+// SPDX-License-Identifier: MIT
+
+#include "body.h"
+#include "core.h"
+#include "joint.h"
+#include "solver_data.h"
+#include "world.h"
+
+// p = attached point, m = mouse point
+// C = p - m
+// Cdot = v
+//      = v + cross(w, r)
+// J = [I r_skew]
+// Identity used:
+// w k % (rx i + ry mouse) = w * (-ry i + rx mouse)
+
+void s2MouseJoint_SetTarget(s2JointId jointId, s2Vec2 target)
+{
+	s2World* world = s2GetWorldFromIndex(jointId.world);
+
+	S2_ASSERT(0 <= jointId.index && jointId.index < world->jointPool.capacity);
+
+	s2Joint* base = world->joints + jointId.index;
+	S2_ASSERT(base->object.index == base->object.next);
+	S2_ASSERT(base->object.revision == jointId.revision);
+	S2_ASSERT(base->type == s2_mouseJoint);
+	base->mouseJoint.targetA = target;
+}
+
+void s2InitializeMouse(s2Joint* base, s2StepContext* context)
+{
+	S2_ASSERT(base->type == s2_mouseJoint);
+
+	int32_t indexB = base->edges[1].bodyIndex;
+	S2_ASSERT(0 <= indexB && indexB < context->bodyCapacity);
+
+	s2Body* bodyB = context->bodies + indexB;
+	S2_ASSERT(bodyB->object.index == bodyB->object.next);
+
+	s2MouseJoint* joint = &base->mouseJoint;
+	joint->localCenterB = bodyB->localCenter;
+	joint->invMassB = bodyB->invMass;
+	joint->invIB = bodyB->invI;
+
+	s2Vec2 cB = bodyB->position;
+	float aB = bodyB->angle;
+	s2Vec2 vB = bodyB->linearVelocity;
+	float wB = bodyB->angularVelocity;
+
+	s2Rot qB = s2MakeRot(aB);
+
+	float d = joint->damping;
+	float k = joint->stiffness;
+
+	// magic formulas
+	// gamma has units of inverse mass.
+	// beta has units of inverse time.
+	float h = context->dt;
+	joint->gamma = h * (d + h * k);
+	if (joint->gamma != 0.0f)
+	{
+		joint->gamma = 1.0f / joint->gamma;
+	}
+	joint->beta = h * k * joint->gamma;
+
+	// Compute the effective mass matrix.
+	joint->rB = s2RotateVector(qB, s2Sub(base->localAnchorB, joint->localCenterB));
+
+	// K    = [(1/m1 + 1/m2) * eye(2) - skew(r1) * invI1 * skew(r1) - skew(r2) * invI2 * skew(r2)]
+	//      = [1/m1+1/m2     0    ] + invI1 * [r1.y*r1.y -r1.x*r1.y] + invI2 * [r1.y*r1.y -r1.x*r1.y]
+	//        [    0     1/m1+1/m2]           [-r1.x*r1.y r1.x*r1.x]           [-r1.x*r1.y r1.x*r1.x]
+	s2Mat22 K;
+	K.cx.x = joint->invMassB + joint->invIB * joint->rB.y * joint->rB.y + joint->gamma;
+	K.cx.y = -joint->invIB * joint->rB.x * joint->rB.y;
+	K.cy.x = K.cx.y;
+	K.cy.y = joint->invMassB + joint->invIB * joint->rB.x * joint->rB.x + joint->gamma;
+
+	joint->mass = s2GetInverse22(K);
+
+	joint->C = s2Add(cB, s2Sub(joint->rB, joint->targetA));
+	joint->C = s2MulSV(joint->beta, joint->C);
+
+	// Cheat with some damping
+	wB *= S2_MAX(0.0f, 1.0f - 0.02f * (60.0f * h));
+
+	vB = s2MulAdd(vB, joint->invMassB, joint->impulse);
+	wB += joint->invIB * s2Cross(joint->rB, joint->impulse);
+
+	bodyB->linearVelocity = vB;
+	bodyB->angularVelocity = wB;
+}
+
+void s2SolveMouseVelocity(s2Joint* base, s2StepContext* context)
+{
+	s2MouseJoint* joint = &base->mouseJoint;
+	s2Body* bodyB = context->bodies + base->edges[1].bodyIndex;
+
+	s2Vec2 vB = bodyB->linearVelocity;
+	float wB = bodyB->angularVelocity;
+
+	// Cdot = v + cross(w, r)
+	s2Vec2 Cdot = s2Add(vB, s2CrossSV(wB, joint->rB));
+	s2Vec2 SoftCdot = s2Add(Cdot, s2MulAdd(joint->C, joint->gamma, joint->impulse));
+	s2Vec2 impulse = s2Neg(s2MulMV(joint->mass, SoftCdot));
+
+	s2Vec2 oldImpulse = joint->impulse;
+	joint->impulse = s2Add(joint->impulse, impulse);
+	float maxImpulse = context->dt * joint->maxForce;
+	if (s2LengthSquared(joint->impulse) > maxImpulse * maxImpulse)
+	{
+		joint->impulse = s2MulSV(maxImpulse / s2Length(joint->impulse), joint->impulse);
+	}
+	impulse = s2Sub(joint->impulse, oldImpulse);
+
+	vB = s2MulAdd(vB, joint->invMassB, impulse);
+	wB += joint->invIB * s2Cross(joint->rB, impulse);
+
+	bodyB->linearVelocity = vB;
+	bodyB->angularVelocity = wB;
+}
