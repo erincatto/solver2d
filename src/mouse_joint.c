@@ -4,7 +4,7 @@
 #include "body.h"
 #include "core.h"
 #include "joint.h"
-#include "solver_data.h"
+#include "solvers.h"
 #include "world.h"
 
 // p = attached point, m = mouse point
@@ -28,7 +28,7 @@ void s2MouseJoint_SetTarget(s2JointId jointId, s2Vec2 target)
 	base->mouseJoint.targetA = target;
 }
 
-void s2InitializeMouse(s2Joint* base, s2StepContext* context)
+void s2PrepareMouse(s2Joint* base, s2StepContext* context)
 {
 	S2_ASSERT(base->type == s2_mouseJoint);
 

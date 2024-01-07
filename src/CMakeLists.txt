@@ -4,8 +4,6 @@ set(S2D_SOURCE_FILES
 	allocate.h
 	array.c
 	array.h
-	bitset.c
-	bitset.h
 	block_allocator.c
 	block_allocator.h
 	body.c
@@ -14,17 +12,11 @@ set(S2D_SOURCE_FILES
 	broad_phase.h
 	contact.c
 	contact.h
-	contact_solver.c
-	contact_solver.h
 	core.h
 	distance.c
 	dynamic_tree.c
 	geometry.c
-	graph.c
-	graph.h
 	hull.c
-	island.c
-	island.h
 	joint.c
 	joint.h
 	manifold.c
@@ -35,7 +27,12 @@ set(S2D_SOURCE_FILES
 	revolute_joint.c
 	shape.c
 	shape.h
-	solver_data.h
+	solve_common.c
+	solve_pgs_ngs.c
+	solve_pgs_ngs_block.c
+	solve_pgs_soft.c
+	solve_tgs_soft.c
+	solvers.h
 	stack_allocator.c
 	stack_allocator.h
 	table.c

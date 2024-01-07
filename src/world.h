@@ -3,10 +3,7 @@
 
 #pragma once
 
-#include "bitset.h"
 #include "broad_phase.h"
-#include "island.h"
-#include "graph.h"
 #include "pool.h"
 
 #include "solver2d/callbacks.h"

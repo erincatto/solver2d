@@ -9,8 +9,6 @@
 #include "body.h"
 #include "contact.h"
 #include "core.h"
-#include "graph.h"
-#include "island.h"
 #include "joint.h"
 #include "world.h"
 #include "shape.h"

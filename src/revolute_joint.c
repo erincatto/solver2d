@@ -4,7 +4,7 @@
 #include "body.h"
 #include "core.h"
 #include "joint.h"
-#include "solver_data.h"
+#include "solvers.h"
 #include "world.h"
 
 #include "solver2d/debug_draw.h"
@@ -22,7 +22,7 @@
 // J = [0 0 -1 0 0 1]
 // K = invI1 + invI2
 
-void s2InitializeRevolute(s2Joint* base, s2StepContext* context)
+void s2PrepareRevolute(s2Joint* base, s2StepContext* context)
 {
 	S2_ASSERT(base->type == s2_revoluteJoint);
 
@@ -198,7 +198,7 @@ void s2SolveRevoluteVelocity(s2Joint* base, s2StepContext* context)
 	bodyB->angularVelocity = wB;
 }
 
-bool s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
+void s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
 {
 	S2_ASSERT(base->type == s2_revoluteJoint);
 
@@ -213,9 +213,6 @@ bool s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
 	float aB = bodyB->angle;
 
 	s2Rot qA = s2MakeRot(aA), qB = s2MakeRot(aB);
-
-	float angularError = 0.0f;
-	float positionError = 0.0f;
 
 	bool fixedRotation = (joint->invIA + joint->invIB == 0.0f);
 
@@ -244,7 +241,6 @@ bool s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
 		float limitImpulse = -joint->axialMass * C;
 		aA -= joint->invIA * limitImpulse;
 		aB += joint->invIB * limitImpulse;
-		angularError = S2_ABS(C);
 	}
 
 	// Solve point-to-point constraint.
@@ -255,7 +251,6 @@ bool s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
 		s2Vec2 rB = s2RotateVector(qB, s2Sub(base->localAnchorB, joint->localCenterB));
 
 		s2Vec2 C = s2Sub(s2Add(cB, rB), s2Add(cA, rA));
-		positionError = s2Length(C);
 
 		float mA = joint->invMassA, mB = joint->invMassB;
 		float iA = joint->invIA, iB = joint->invIB;
@@ -279,8 +274,6 @@ bool s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
 	bodyA->angle = aA;
 	bodyB->position = cB;
 	bodyB->angle = aB;
-
-	return positionError <= s2_linearSlop && angularError <= s2_angularSlop;
 }
 
 void s2RevoluteJoint_EnableLimit(s2JointId jointId, bool enableLimit)

@@ -24,7 +24,7 @@ InsertNewlineAtEOF: true
 IncludeBlocks: Regroup
 
 IncludeCategories:
-  - Regex:           '^"(box2d\/)'
+  - Regex:           '^"(solver2d\/)'
     Priority:        2
   - Regex:           '^<.*'
     Priority:        3

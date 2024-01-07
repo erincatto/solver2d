@@ -12,7 +12,8 @@
 #include "solver2d/debug_draw.h"
 #include "solver2d/joint_types.h"
 
-void s2LinearStiffness(float* stiffness, float* damping, float frequencyHertz, float dampingRatio, s2BodyId bodyIdA, s2BodyId bodyIdB)
+void s2LinearStiffness(float* stiffness, float* damping, float frequencyHertz, float dampingRatio, s2BodyId bodyIdA,
+					   s2BodyId bodyIdB)
 {
 	S2_ASSERT(bodyIdA.world == bodyIdB.world);
 
@@ -44,7 +45,8 @@ void s2LinearStiffness(float* stiffness, float* damping, float frequencyHertz, f
 	*damping = 2.0f * mass * dampingRatio * omega;
 }
 
-void s2AngularStiffness(float* stiffness, float* damping, float frequencyHertz, float dampingRatio, s2BodyId bodyIdA, s2BodyId bodyIdB)
+void s2AngularStiffness(float* stiffness, float* damping, float frequencyHertz, float dampingRatio, s2BodyId bodyIdA,
+						s2BodyId bodyIdB)
 {
 	S2_ASSERT(bodyIdA.world == bodyIdB.world);
 
@@ -289,19 +291,19 @@ void s2World_DestroyJoint(s2JointId jointId)
 	s2FreeObject(&world->jointPool, &joint->object);
 }
 
-extern void s2InitializeMouse(s2Joint* base, s2StepContext* data);
-extern void s2InitializeRevolute(s2Joint* base, s2StepContext* data);
+extern void s2PrepareMouse(s2Joint* base, s2StepContext* data);
+extern void s2PrepareRevolute(s2Joint* base, s2StepContext* data);
 
-void s2PrepareJoints(s2Joint* joint, s2StepContext* data)
+void s2PrepareJoint(s2Joint* joint, s2StepContext* data)
 {
 	switch (joint->type)
 	{
 		case s2_mouseJoint:
-			s2InitializeMouse(joint, data);
+			s2PrepareMouse(joint, data);
 			break;
 
 		case s2_revoluteJoint:
-			s2InitializeRevolute(joint, data);
+			s2PrepareRevolute(joint, data);
 			break;
 
 		default:
@@ -329,18 +331,18 @@ void s2SolveJointVelocity(s2Joint* joint, s2StepContext* data)
 	}
 }
 
-extern bool s2SolveRevolutePosition(s2Joint* base, s2StepContext* data);
+extern void s2SolveRevolutePosition(s2Joint* base, s2StepContext* data);
 
-// This returns true if the position errors are within tolerance.
-bool s2SolveJointPosition(s2Joint* joint, s2StepContext* data)
+void s2SolveJointPosition(s2Joint* joint, s2StepContext* data)
 {
 	switch (joint->type)
 	{
 		case s2_revoluteJoint:
-			return s2SolveRevolutePosition(joint, data);
+			s2SolveRevolutePosition(joint, data);
+			break;
 
 		default:
-			return true;
+			break;
 	}
 }
 

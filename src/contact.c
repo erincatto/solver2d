@@ -7,7 +7,6 @@
 #include "block_allocator.h"
 #include "body.h"
 #include "core.h"
-#include "island.h"
 #include "shape.h"
 #include "table.h"
 #include "world.h"

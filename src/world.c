@@ -7,25 +7,23 @@
 
 #include "allocate.h"
 #include "array.h"
-#include "bitset.h"
 #include "block_allocator.h"
 #include "body.h"
 #include "broad_phase.h"
 #include "contact.h"
 #include "core.h"
-#include "graph.h"
-#include "island.h"
 #include "joint.h"
 #include "pool.h"
 #include "shape.h"
+#include "solvers.h"
+#include "stack_allocator.h"
+
 #include "solver2d/aabb.h"
 #include "solver2d/constants.h"
 #include "solver2d/debug_draw.h"
 #include "solver2d/distance.h"
 #include "solver2d/solver2d.h"
 #include "solver2d/timer.h"
-#include "solver_data.h"
-#include "stack_allocator.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -119,10 +117,19 @@ void s2DestroyWorld(s2WorldId id)
 	memset(world, 0, sizeof(s2World));
 }
 
-static void s2Collide(s2World* world)
+void s2World_Step(s2WorldId worldId, float timeStep, int velocityIterations, int positionIterations)
 {
-	s2BroadPhase_RebuildTrees(&world->broadPhase);
+	s2World* world = s2GetWorldFromId(worldId);
+	world->stepId += 1;
 
+	// Stage 1: Update collision pairs and create contacts
+	s2UpdateBroadPhasePairs(world);
+
+	// Stage 2: Optimize broad-phase
+	s2BroadPhase* broadPhase = &world->broadPhase;
+	s2BroadPhase_RebuildTrees(broadPhase);
+
+	// Stage 3: Update contacts
 	s2Shape* shapes = world->shapes;
 	s2Body* bodies = world->bodies;
 	s2Contact* contacts = world->contacts;
@@ -154,146 +161,71 @@ static void s2Collide(s2World* world)
 			s2DestroyContact(world, contact);
 		}
 	}
-}
 
-static void s2Solve(s2World* world, s2StepContext* context)
-{
-	world->stepId += 1;
-
-	s2SolveWorld(world, context);
-
-	// Enlarge broad-phase proxies and build move array
-	s2BroadPhase* broadPhase = &world->broadPhase;
-
-	// Apply shape AABB changes to broadphase. This also create the move array which must be
-	// ordered to ensure determinism.
-	s2Shape* shapes = world->shapes;
-	int shapeCapacity = world->shapePool.capacity;
-
-	for (int i = 0; i < shapeCapacity; ++i)
+	// Stage 3: Integrate velocities, solve velocity constraints, and integrate positions.
+	s2StepContext context = {0};
+	context.dt = timeStep;
+	context.velocityIterations = velocityIterations;
+	context.positionIterations = positionIterations;
+	if (timeStep > 0.0f)
 	{
-		s2Shape* shape = shapes + i;
-		if (s2IsFree(&shape->object))
+		context.inv_dt = 1.0f / timeStep;
+	}
+	else
+	{
+		context.inv_dt = 0.0f;
+	}
+
+	context.restitutionThreshold = world->restitutionThreshold;
+	context.bodies = world->bodies;
+	context.bodyCapacity = world->bodyPool.capacity;
+
+	s2SolvePGS_NGS_Block(world, &context);
+	//s2SolvePGS_NGS(world, &context);
+	// s2SolveSoftPGS(world, context);
+	// s2SolveSoftTGS(world, context);
+	// s2SolveStickyTGS(world, context);
+
+	// Stage 4: Update transforms and broad-phase
+	int bodyCapacity = world->bodyPool.capacity;
+	const s2Vec2 aabbMargin = {s2_aabbMargin, s2_aabbMargin};
+	for (int i = 0; i < bodyCapacity; ++i)
+	{
+		s2Body* body = bodies + i;
+		if (s2IsFree(&body->object))
 		{
 			continue;
 		}
 
-		if (shape->enlargedAABB == false)
+		if (body->type == s2_staticBody)
 		{
 			continue;
 		}
 
-		s2BroadPhase_EnlargeProxy(broadPhase, shape->proxyKey, shape->fatAABB);
+		body->transform.q = s2MakeRot(body->angle);
+		body->transform.p = s2Sub(body->position, s2RotateVector(body->transform.q, body->localCenter));
+		body->force = s2Vec2_zero;
+		body->torque = 0.0f;
 
-		shape->enlargedAABB = false;
+		int shapeIndex = body->shapeList;
+		while (shapeIndex != S2_NULL_INDEX)
+		{
+			s2Shape* shape = world->shapes + shapeIndex;
+
+			shape->aabb = s2Shape_ComputeAABB(shape, body->transform);
+
+			if (s2AABB_Contains(shape->fatAABB, shape->aabb) == false)
+			{
+				shape->fatAABB.lowerBound = s2Sub(shape->aabb.lowerBound, aabbMargin);
+				shape->fatAABB.upperBound = s2Add(shape->aabb.upperBound, aabbMargin);
+				s2BroadPhase_EnlargeProxy(broadPhase, shape->proxyKey, shape->fatAABB);
+			}
+
+			shapeIndex = shape->nextShapeIndex;
+		}
 	}
 
 	s2ValidateBroadphase(&world->broadPhase);
-}
-
-// Graph coloring experiment
-static void s2Solve2(s2World* world, s2StepContext* context)
-{
-	world->stepId += 1;
-
-	// Prepare contact and shape bit-sets
-
-	// s2SolveGraphSoftPGS(world, context);
-	// s2SolveGraphPGS(world, context);
-	// s2SolveGraphSoftTGS(world, context);
-	s2SolveGraphStickyTGS(world, context);
-
-	s2ValidateNoEnlarged(&world->broadPhase);
-
-	// Enlarge broad-phase proxies and build move array
-	{
-		s2BroadPhase* broadPhase = &world->broadPhase;
-
-		s2Shape* shapes = world->shapes;
-		int shapeCapacity = world->shapePool.capacity;
-
-		for (int i = 0; i < shapeCapacity; ++i)
-		{
-			s2Shape* shape = shapes + i;
-			if (s2IsFree(&shape->object))
-			{
-				continue;
-			}
-
-			if (shape->enlargedAABB == false)
-			{
-				continue;
-			}
-
-			s2BroadPhase_EnlargeProxy(broadPhase, shape->proxyKey, shape->fatAABB);
-			
-			shape->enlargedAABB = false;
-		}
-
-		s2ValidateBroadphase(&world->broadPhase);
-	}
-}
-
-void s2World_Step(s2WorldId worldId, float timeStep, int velocityIterations, int positionIterations)
-{
-	s2World* world = s2GetWorldFromId(worldId);
-
-	// Update collision pairs and create contacts
-	s2UpdateBroadPhasePairs(world);
-
-	s2StepContext context = {0};
-	context.dt = timeStep;
-	context.velocityIterations = velocityIterations;
-	context.positionIterations = positionIterations;
-	if (timeStep > 0.0f)
-	{
-		context.inv_dt = 1.0f / timeStep;
-	}
-	else
-	{
-		context.inv_dt = 0.0f;
-	}
-
-	context.restitutionThreshold = world->restitutionThreshold;
-	context.bodies = world->bodies;
-	context.bodyCapacity = world->bodyPool.capacity;
-
-	// Update contacts
-	s2Collide(world);
-
-	// Integrate velocities, solve velocity constraints, and integrate positions.
-	s2Solve(world, &context);
-
-	s2GrowStack(world->stackAllocator);
-}
-
-void s2World_Step2(s2WorldId worldId, float timeStep, int velocityIterations, int positionIterations)
-{
-	s2World* world = s2GetWorldFromId(worldId);
-
-	// Update collision pairs and create contacts
-	s2UpdateBroadPhasePairs(world);
-
-	s2StepContext context = {0};
-	context.dt = timeStep;
-	context.velocityIterations = velocityIterations;
-	context.positionIterations = positionIterations;
-	if (timeStep > 0.0f)
-	{
-		context.inv_dt = 1.0f / timeStep;
-	}
-	else
-	{
-		context.inv_dt = 0.0f;
-	}
-
-	context.restitutionThreshold = world->restitutionThreshold;
-	context.bodies = world->bodies;
-	context.bodyCapacity = world->bodyPool.capacity;
-
-	s2Collide(world);
-
-	s2Solve2(world, &context);
 
 	s2GrowStack(world->stackAllocator);
 }

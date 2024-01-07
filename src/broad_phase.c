@@ -239,7 +239,7 @@ static bool s2PairQueryCallback(int proxyId, int shapeIndex, void* context)
 	}
 	else
 	{
-		pair = malloc(sizeof(s2MovePair));
+		pair = s2Alloc(sizeof(s2MovePair));
 		pair->heap = true;
 	}
 

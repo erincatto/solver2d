@@ -1,14 +1,123 @@
 // SPDX-FileCopyrightText: 2024 Erin Catto
 // SPDX-License-Identifier: MIT
 
-#include "contact_solver.h"
-
 #include "array.h"
 #include "body.h"
 #include "contact.h"
 #include "core.h"
+#include "joint.h"
+#include "shape.h"
+#include "solvers.h"
 #include "stack_allocator.h"
 #include "world.h"
+
+#include "solver2d/aabb.h"
+#include "solver2d/callbacks.h"
+#include "solver2d/timer.h"
+
+#include <float.h>
+
+/*
+Position Correction Notes
+=========================
+I tried the several algorithms for position correction of the 2D revolute joint.
+I looked at these systems:
+- simple pendulum (1m diameter sphere on massless 5m stick) with initial angular velocity of 100 rad/s.
+- suspension bridge with 30 1m long planks of length 1m.
+- multi-link chain with 30 1m long links.
+
+Here are the algorithms:
+
+Baumgarte - A fraction of the position error is added to the velocity error. There is no
+separate position solver.
+
+Pseudo Velocities - After the velocity solver and position integration,
+the position error, Jacobian, and effective mass are recomputed. Then
+the velocity constraints are solved with pseudo velocities and a fraction
+of the position error is added to the pseudo velocity error. The pseudo
+velocities are initialized to zero and there is no warm-starting. After
+the position solver, the pseudo velocities are added to the positions.
+This is also called the First Order World method or the Position LCP method.
+
+Modified Nonlinear Gauss-Seidel (NGS) - Like Pseudo Velocities except the
+position error is re-computed for each constraint and the positions are updated
+after the constraint is solved. The radius vectors (aka Jacobians) are
+re-computed too (otherwise the algorithm has horrible instability). The pseudo
+velocity states are not needed because they are effectively zero at the beginning
+of each iteration. Since we have the current position error, we allow the
+iterations to terminate early if the error becomes smaller than s2_linearSlop.
+
+Full NGS or just NGS - Like Modified NGS except the effective mass are re-computed
+each time a constraint is solved.
+
+Here are the results:
+Baumgarte - this is the cheapest algorithm but it has some stability problems,
+especially with the bridge. The chain links separate easily close to the root
+and they jitter as they struggle to pull together. This is one of the most common
+methods in the field. The big drawback is that the position correction artificially
+affects the momentum, thus leading to instabilities and false bounce. I used a
+bias factor of 0.2. A larger bias factor makes the bridge less stable, a smaller
+factor makes joints and contacts more spongy.
+
+Pseudo Velocities - the is more stable than the Baumgarte method. The bridge is
+stable. However, joints still separate with large angular velocities. Drag the
+simple pendulum in a circle quickly and the joint will separate. The chain separates
+easily and does not recover. I used a bias factor of 0.2. A larger value lead to
+the bridge collapsing when a heavy cube drops on it.
+
+Modified NGS - this algorithm is better in some ways than Baumgarte and Pseudo
+Velocities, but in other ways it is worse. The bridge and chain are much more
+stable, but the simple pendulum goes unstable at high angular velocities.
+
+Full NGS - stable in all tests. The joints display good stiffness. The bridge
+still sags, but this is better than infinite forces.
+
+Recommendations
+Pseudo Velocities are not really worthwhile because the bridge and chain cannot
+recover from joint separation. In other cases the benefit over Baumgarte is small.
+
+Modified NGS is not a robust method for the revolute joint due to the violent
+instability seen in the simple pendulum. Perhaps it is viable with other constraint
+types, especially scalar constraints where the effective mass is a scalar.
+
+This leaves Baumgarte and Full NGS. Baumgarte has small, but manageable instabilities
+and is very fast. I don't think we can escape Baumgarte, especially in highly
+demanding cases where high constraint fidelity is not needed.
+
+Full NGS is robust and easy on the eyes. I recommend this as an option for
+higher fidelity simulation and certainly for suspension bridges and long chains.
+Full NGS might be a good choice for ragdolls, especially motorized ragdolls where
+joint separation can be problematic. The number of NGS iterations can be reduced
+for better performance without harming robustness much.
+
+Each joint in a can be handled differently in the position solver. So I recommend
+a system where the user can select the algorithm on a per joint basis. I would
+probably default to the slower Full NGS and let the user select the faster
+Baumgarte method in performance critical scenarios.
+*/
+
+/*
+2D Rotation
+
+R = [cos(theta) -sin(theta)]
+	[sin(theta) cos(theta) ]
+
+thetaDot = omega
+
+Let q1 = cos(theta), q2 = sin(theta).
+R = [q1 -q2]
+	[q2  q1]
+
+q1Dot = -thetaDot * q2
+q2Dot = thetaDot * q1
+
+q1_new = q1_old - dt * w * q2
+q2_new = q2_old + dt * w * q1
+then normalize.
+
+This might be faster than computing sin+cos.
+However, we can compute sin+cos of the same angle fast.
+*/
 
 // Solver debugging is normally disabled because the block solver sometimes has to deal with a poorly conditioned
 // effective mass matrix.
@@ -44,12 +153,20 @@ typedef struct s2ContactPositionConstraint
 	s2Vec2 localAnchorsA[2];
 	s2Vec2 localAnchorsB[2];
 	float separations[2];
-	float lambdas[2];
 	s2Vec2 normal;
 	int32_t pointCount;
 } s2ContactPositionConstraint;
 
-s2ContactSolver s2CreateContactSolver(s2World* world, s2StepContext* context)
+typedef struct s2ContactSolver
+{
+	s2World* world;
+	s2StepContext* context;
+	struct s2ContactVelocityConstraint* velocityConstraints;
+	struct s2ContactPositionConstraint* positionConstraints;
+	int constraintCount;
+} s2ContactSolver;
+
+static s2ContactSolver s2CreateContactSolver(s2World* world, s2StepContext* context)
 {
 	s2StackAllocator* alloc = world->stackAllocator;
 	s2ContactSolver solver = {0};
@@ -159,7 +276,6 @@ s2ContactSolver s2CreateContactSolver(s2World* world, s2StepContext* context)
 			pc->localAnchorsA[j] = s2InvRotateVector(qA, vcp->rA);
 			pc->localAnchorsB[j] = s2InvRotateVector(qB, vcp->rB);
 			pc->separations[j] = cp->separation;
-			pc->lambdas[j] = 0.0f;
 		}
 
 		// If we have two points, then prepare the block solver.
@@ -242,13 +358,13 @@ s2ContactSolver s2CreateContactSolver(s2World* world, s2StepContext* context)
 	return solver;
 }
 
-void s2DestroyContactSolver(s2ContactSolver* solver, s2StackAllocator* alloc)
+static void s2DestroyContactSolver(s2ContactSolver* solver, s2StackAllocator* alloc)
 {
 	s2FreeStackItem(alloc, solver->velocityConstraints);
 	s2FreeStackItem(alloc, solver->positionConstraints);
 }
 
-void s2ContactSolver_SolveVelocityConstraints(s2ContactSolver* solver)
+static void s2ContactSolver_SolveVelocityConstraints(s2ContactSolver* solver)
 {
 	int32_t count = solver->constraintCount;
 
@@ -651,7 +767,7 @@ void s2ContactSolver_ApplyRestitution(s2ContactSolver* solver)
 	}
 }
 
-void s2ContactSolver_StoreImpulses(s2ContactSolver* solver)
+static void s2ContactSolver_StoreImpulses(s2ContactSolver* solver)
 {
 	int32_t count = solver->constraintCount;
 
@@ -670,9 +786,8 @@ void s2ContactSolver_StoreImpulses(s2ContactSolver* solver)
 	}
 }
 
-bool s2ContactSolver_SolvePositionConstraintsBlock(s2ContactSolver* solver)
+static void s2ContactSolver_SolvePositionConstraintsBlock(s2ContactSolver* solver)
 {
-	float minSeparation = 0.0f;
 	int32_t count = solver->constraintCount;
 	float slop = s2_linearSlop;
 
@@ -719,10 +834,6 @@ bool s2ContactSolver_SolvePositionConstraintsBlock(s2ContactSolver* solver)
 
 			s2Vec2 d2 = s2Sub(s2Add(cB, rS2), s2Add(cA, rA2));
 			float separation2 = s2Dot(d2, normal) + pc->separations[1];
-
-			// Track max constraint error.
-			minSeparation = S2_MIN(minSeparation, separation1);
-			minSeparation = S2_MIN(minSeparation, separation2);
 
 			float C1 = S2_CLAMP(s2_baumgarte * (separation1 + slop), -s2_maxLinearCorrection, 0.0f);
 			float C2 = S2_CLAMP(s2_baumgarte * (separation2 + slop), -s2_maxLinearCorrection, 0.0f);
@@ -858,9 +969,6 @@ bool s2ContactSolver_SolvePositionConstraintsBlock(s2ContactSolver* solver)
 				s2Vec2 d = s2Sub(s2Add(cB, rB), s2Add(cA, rA));
 				float separation = s2Dot(d, normal) + pc->separations[j];
 
-				// Track max constraint error.
-				minSeparation = S2_MIN(minSeparation, separation);
-
 				// Prevent large corrections. Need to maintain a small overlap to avoid overshoot.
 				// This improves stacking stability significantly.
 				float C = S2_CLAMP(s2_baumgarte * (separation + slop), -s2_maxLinearCorrection, 0.0f);
@@ -888,8 +996,73 @@ bool s2ContactSolver_SolvePositionConstraintsBlock(s2ContactSolver* solver)
 		bodyB->position = cB;
 		bodyB->angle = aB;
 	}
+}
 
-	// We can't expect minSpeparation >= -s2_linearSlop because we don't
-	// push the separation above -s2_linearSlop.
-	return minSeparation >= -3.0f * s2_linearSlop;
+void s2SolvePGS_NGS_Block(s2World* world, s2StepContext* context)
+{
+	s2Body* bodies = world->bodies;
+	s2Joint* joints = world->joints;
+	s2Vec2 gravity = world->gravity;
+
+	float h = context->dt;
+
+	s2IntegrateVelocities(world, h);
+
+	// Solver data
+	s2ContactSolver contactSolver = s2CreateContactSolver(world, context);
+
+	int jointCapacity = world->jointPool.capacity;
+	for (int i = 0; i < jointCapacity; ++i)
+	{
+		s2Joint* joint = joints + i;
+		if (s2IsFree(&joint->object))
+		{
+			continue;
+		}
+		s2PrepareJoint(joint, context);
+	}
+
+	// Solve velocity constraints
+	for (int i = 0; i < context->velocityIterations; ++i)
+	{
+		for (int i = 0; i < jointCapacity; ++i)
+		{
+			s2Joint* joint = joints + i;
+			if (s2IsFree(&joint->object))
+			{
+				continue;
+			}
+
+			s2SolveJointVelocity(joint, context);
+		}
+
+		s2ContactSolver_SolveVelocityConstraints(&contactSolver);
+	}
+
+	// Special handling for restitution
+	s2ContactSolver_ApplyRestitution(&contactSolver);
+
+	// Store impulses for warm starting
+	s2ContactSolver_StoreImpulses(&contactSolver);
+
+	s2IntegratePositions(world, h);
+
+	// Solve position constraints
+	for (int i = 0; i < context->positionIterations; ++i)
+	{
+		s2ContactSolver_SolvePositionConstraintsBlock(&contactSolver);
+
+		for (int i = 0; i < jointCapacity; ++i)
+		{
+			s2Joint* joint = joints + i;
+			if (s2IsFree(&joint->object))
+			{
+				continue;
+			}
+
+			s2SolveJointPosition(joint, context);
+		}
+	}
+
+	s2DestroyContactSolver(&contactSolver, world->stackAllocator);
 }
