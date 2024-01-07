@@ -32,6 +32,7 @@ set(S2D_SOURCE_FILES
 	solve_pgs_ngs_block.c
 	solve_pgs_soft.c
 	solve_tgs_soft.c
+	solve_xpbd.c
 	solvers.h
 	stack_allocator.c
 	stack_allocator.h

@@ -57,8 +57,8 @@ void s2IntegratePositions(s2World* world, float h);
 void s2WarmStartContacts(s2World* world, s2ContactConstraint* constraints, int constraintCount);
 void s2StoreContactImpulses(s2ContactConstraint* constraints, int constraintCount);
 
+void s2SolvePGS_NGS_Block(s2World* world, s2StepContext* stepContext);
 void s2SolvePGS_NGS(s2World* world, s2StepContext* context);
-void s2SolvePGS(s2World* world, s2StepContext* stepContext);
-void s2SolveSoftPGS(s2World* world, s2StepContext* stepContext);
-void s2SolveSoftTGS(s2World* world, s2StepContext* stepContext);
-void s2SolveStickyTGS(s2World* world, s2StepContext* stepContext);
+void s2SolvePGSSoft(s2World* world, s2StepContext* stepContext);
+//void s2SolveTGSSoft(s2World* world, s2StepContext* stepContext);
+//void s2SolveTGSSticky(s2World* world, s2StepContext* stepContext);

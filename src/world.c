@@ -180,9 +180,9 @@ void s2World_Step(s2WorldId worldId, float timeStep, int velocityIterations, int
 	context.bodies = world->bodies;
 	context.bodyCapacity = world->bodyPool.capacity;
 
-	s2SolvePGS_NGS_Block(world, &context);
+	//s2SolvePGS_NGS_Block(world, &context);
 	//s2SolvePGS_NGS(world, &context);
-	// s2SolveSoftPGS(world, context);
+	s2SolvePGSSoft(world, &context);
 	// s2SolveSoftTGS(world, context);
 	// s2SolveStickyTGS(world, context);
 

@@ -7,6 +7,7 @@
 #include "contact.h"
 #include "core.h"
 #include "joint.h"
+#include "shape.h"
 #include "solvers.h"
 #include "stack_allocator.h"
 #include "world.h"
@@ -313,6 +314,8 @@ void s2SolvePGS_NGS(s2World* world, s2StepContext* context)
 
 	for (int iter = 0; iter < positionIterations; ++iter)
 	{
+		s2SolveContactPosition(world, constraints, constraintCount);
+
 		for (int i = 0; i < jointCapacity; ++i)
 		{
 			s2Joint* joint = joints + i;
@@ -323,8 +326,6 @@ void s2SolvePGS_NGS(s2World* world, s2StepContext* context)
 
 			s2SolveJointPosition(joint, context);
 		}
-
-		s2SolveContactPosition(world, constraints, constraintCount);
 	}
 
 	s2FreeStackItem(world->stackAllocator, constraints);
