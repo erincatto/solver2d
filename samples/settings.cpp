@@ -53,10 +53,7 @@ void Settings::Save()
 	fprintf(file, "  \"drawFrictionImpulse\": %s,\n", m_drawFrictionImpulse ? "true" : "false");
 	fprintf(file, "  \"drawCOMs\": %s,\n", m_drawCOMs ? "true" : "false");
 	fprintf(file, "  \"drawStats\": %s,\n", m_drawStats ? "true" : "false");
-	fprintf(file, "  \"drawProfile\": %s,\n", m_drawProfile ? "true" : "false");
 	fprintf(file, "  \"enableWarmStarting\": %s,\n", m_enableWarmStarting ? "true" : "false");
-	fprintf(file, "  \"enableContinuous\": %s,\n", m_enableContinuous ? "true" : "false");
-	fprintf(file, "  \"enableSleep\": %s\n", m_enableSleep ? "true" : "false");
 	fprintf(file, "}\n");
 	fclose(file);
 }

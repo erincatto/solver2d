@@ -135,7 +135,7 @@ void s2SolveWorld(s2World* world, s2StepContext* context)
 	for (int i = 0; i < bodyCapacity; ++i)
 	{
 		s2Body* body = bodies + i;
-		if (s2ObjectIsFree(&body->object))
+		if (s2IsFree(&body->object))
 		{
 			continue;
 		}
@@ -149,18 +149,8 @@ void s2SolveWorld(s2World* world, s2StepContext* context)
 			float w = body->angularVelocity;
 
 			// Integrate velocities
-			v = s2Add(v, s2MulSV(h * invMass, s2MulAdd(body->force, body->gravityScale * body->mass, gravity)));
+			v = s2Add(v, s2MulSV(h * invMass, s2MulAdd(body->force, body->mass, gravity)));
 			w = w + h * invI * body->torque;
-
-			// Apply damping.
-			// ODE: dv/dt + c * v = 0
-			// Solution: v(t) = v0 * exp(-c * t)
-			// Time step: v(t + dt) = v0 * exp(-c * (t + dt)) = v0 * exp(-c * t) * exp(-c * dt) = v * exp(-c * dt)
-			// v2 = exp(-c * dt) * v1
-			// Pade approximation:
-			// v2 = v1 * 1 / (1 + c * dt)
-			v = s2MulSV(1.0f / (1.0f + h * body->linearDamping), v);
-			w *= 1.0f / (1.0f + h * body->angularDamping);
 
 			body->linearVelocity = v;
 			body->angularVelocity = w;
@@ -168,18 +158,17 @@ void s2SolveWorld(s2World* world, s2StepContext* context)
 	}
 
 	// Solver data
-	s2ContactSolver contactSolver = {0};
-	s2ContactSolver_Initialize(&contactSolver);
+	s2ContactSolver contactSolver = s2CreateContactSolver(world, context);
 
 	int jointCapacity = world->jointPool.capacity;
 	for (int i = 0; i < jointCapacity; ++i)
 	{
 		s2Joint* joint = joints + i;
-		if (s2ObjectIsFree(&joint->object))
+		if (s2IsFree(&joint->object))
 		{
 			continue;
 		}
-		s2InitVelocityConstraints(joint, context);
+		s2PrepareJoints(joint, context);
 	}
 
 	// Solve velocity constraints
@@ -188,12 +177,12 @@ void s2SolveWorld(s2World* world, s2StepContext* context)
 		for (int i = 0; i < jointCapacity; ++i)
 		{
 			s2Joint* joint = joints + i;
-			if (s2ObjectIsFree(&joint->object))
+			if (s2IsFree(&joint->object))
 			{
 				continue;
 			}
 
-			s2SolveVelocityConstraints(joint, context);
+			s2SolveJointVelocity(joint, context);
 		}
 
 		s2ContactSolver_SolveVelocityConstraints(&contactSolver);
@@ -209,7 +198,7 @@ void s2SolveWorld(s2World* world, s2StepContext* context)
 	for (int i = 0; i < bodyCapacity; ++i)
 	{
 		s2Body* body = bodies + i;
-		if (s2ObjectIsFree(&body->object))
+		if (s2IsFree(&body->object))
 		{
 			continue;
 		}
@@ -257,12 +246,12 @@ void s2SolveWorld(s2World* world, s2StepContext* context)
 		for (int i = 0; i < jointCapacity; ++i)
 		{
 			s2Joint* joint = joints + i;
-			if (s2ObjectIsFree(&joint->object))
+			if (s2IsFree(&joint->object))
 			{
 				continue;
 			}
 
-			bool jointOkay = s2SolvePositionConstraints(joint, context);
+			bool jointOkay = s2SolveJointPosition(joint, context);
 			jointsOkay = jointsOkay && jointOkay;
 		}
 
@@ -278,7 +267,7 @@ void s2SolveWorld(s2World* world, s2StepContext* context)
 	for (int i = 0; i < bodyCapacity; ++i)
 	{
 		s2Body* body = bodies + i;
-		if (s2ObjectIsFree(&body->object))
+		if (s2IsFree(&body->object))
 		{
 			continue;
 		}
@@ -292,7 +281,7 @@ void s2SolveWorld(s2World* world, s2StepContext* context)
 	for (int i = 0; i < bodyCapacity; ++i)
 	{
 		s2Body* body = bodies + i;
-		if (s2ObjectIsFree(&body->object))
+		if (s2IsFree(&body->object))
 		{
 			continue;
 		}
@@ -318,4 +307,6 @@ void s2SolveWorld(s2World* world, s2StepContext* context)
 			shapeIndex = shape->nextShapeIndex;
 		}
 	}
+
+	s2DestroyContactSolver(&contactSolver, world->stackAllocator);
 }

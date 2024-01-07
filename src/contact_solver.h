@@ -8,35 +8,21 @@
 
 #include "solver2d/callbacks.h"
 
-typedef struct s2ContactSolverDef
-{
-	const s2StepContext* context;
-	struct s2World* world;
-	int32_t contactList;
-	int32_t contactCount;
-} s2ContactSolverDef;
+typedef struct s2World s2World;
+typedef struct s2StepContext s2StepContext;
 
 typedef struct s2ContactSolver
 {
-	const s2StepContext* context;
-	struct s2World* world;
-	struct s2ContactPositionConstraint* positionConstraints;
+	s2World* world;
+	s2StepContext* context;
 	struct s2ContactVelocityConstraint* velocityConstraints;
-	int32_t contactList;
-	int32_t contactCount;
-	int32_t constraintCount;
+	struct s2ContactPositionConstraint* positionConstraints;
+	int constraintCount;
 } s2ContactSolver;
 
-s2ContactSolver* s2CreateContactSolver(s2ContactSolverDef* def);
+s2ContactSolver s2CreateContactSolver(s2World* world, s2StepContext* context);
+void s2DestroyContactSolver(s2ContactSolver* solver, s2StackAllocator* alloc);
 
-static inline void s2DestroyContactSolver(s2ContactSolver* solver, s2StackAllocator* alloc)
-{
-	s2FreeStackItem(alloc, solver->velocityConstraints);
-	s2FreeStackItem(alloc, solver->positionConstraints);
-	s2FreeStackItem(alloc, solver);
-}
-
-void s2ContactSolver_Initialize(s2ContactSolver* solver);
 void s2ContactSolver_SolveVelocityConstraints(s2ContactSolver* solver);
 void s2ContactSolver_ApplyRestitution(s2ContactSolver* solver);
 void s2ContactSolver_StoreImpulses(s2ContactSolver* solver);

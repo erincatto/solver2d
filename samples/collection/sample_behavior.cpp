@@ -9,6 +9,40 @@
 #include <GLFW/glfw3.h>
 #include <imgui.h>
 
+class SingleBox : public Sample
+{
+public:
+	SingleBox(const Settings& settings)
+		: Sample(settings)
+	{
+		float extent = 1.0f;
+
+		s2BodyDef bodyDef = s2DefaultBodyDef();
+		s2BodyId groundId = s2World_CreateBody(m_worldId, &bodyDef);
+
+		float groundWidth = 66.0f * extent;
+		s2ShapeDef shapeDef = s2DefaultShapeDef();
+		shapeDef.friction = 0.5f;
+
+		s2Segment segment = {{-0.5f * 2.0f * groundWidth, 0.0f}, {0.5f * 2.0f * groundWidth, 0.0f}};
+		s2Body_CreateSegment(groundId, &shapeDef, &segment);
+		bodyDef.type = s2_dynamicBody;
+
+		s2Polygon box = s2MakeBox(extent, extent);
+		bodyDef.position = {0.0f, 2.0f};
+		s2BodyId bodyId = s2World_CreateBody(m_worldId, &bodyDef);
+
+		s2Body_CreatePolygon(bodyId, &shapeDef, &box);
+	}
+
+	static Sample* Create(const Settings& settings)
+	{
+		return new SingleBox(settings);
+	}
+};
+
+static int sampleSingleBox = RegisterSample("Behavior", "Single Box", SingleBox::Create);
+
 class HighMassRatio : public Sample
 {
   public:
@@ -76,7 +110,7 @@ class HighMassRatio : public Sample
 	}
 };
 
-static int sampleIndex1 = RegisterSample("Behavior", "HighMassRatio", HighMassRatio::Create);
+static int sampleHighMassRatio = RegisterSample("Behavior", "High Mass Ratio", HighMassRatio::Create);
 
 
 class Friction : public Sample

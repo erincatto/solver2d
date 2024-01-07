@@ -30,7 +30,7 @@ static void s2IntegrateVelocities(s2World* world, float h)
 	for (int i = 0; i < bodyCapacity; ++i)
 	{
 		s2Body* body = bodies + i;
-		if (s2ObjectIsFree(&body->object))
+		if (s2IsFree(&body->object))
 		{
 			continue;
 		}
@@ -47,18 +47,8 @@ static void s2IntegrateVelocities(s2World* world, float h)
 		float w = body->angularVelocity;
 
 		// Integrate velocities
-		v = s2Add(v, s2MulSV(h * invMass, s2MulAdd(body->force, body->gravityScale * body->mass, gravity)));
+		v = s2Add(v, s2MulSV(h * invMass, s2MulAdd(body->force, body->mass, gravity)));
 		w = w + h * invI * body->torque;
-
-		// Apply damping.
-		// ODE: dv/dt + c * v = 0
-		// Solution: v(t) = v0 * exp(-c * t)
-		// Time step: v(t + dt) = v0 * exp(-c * (t + dt)) = v0 * exp(-c * t) * exp(-c * dt) = v * exp(-c * dt)
-		// v2 = exp(-c * dt) * v1
-		// Pade approximation:
-		// v2 = v1 * 1 / (1 + c * dt)
-		v = s2MulSV(1.0f / (1.0f + h * body->linearDamping), v);
-		w *= 1.0f / (1.0f + h * body->angularDamping);
 
 		body->linearVelocity = v;
 		body->angularVelocity = w;
@@ -602,7 +592,7 @@ static void s2WarmStartAll(s2World* world, s2Constraint* constraints, int constr
 	}
 }
 
-static void s2SolveVelocityConstraints(s2World* world, s2Constraint* constraints, int constraintCount, float inv_dt)
+static void s2SolveJointVelocity(s2World* world, s2Constraint* constraints, int constraintCount, float inv_dt)
 {
 	s2Body* bodies = world->bodies;
 
@@ -1102,7 +1092,7 @@ static void s2IntegratePositions(s2World* world, float h)
 	}
 }
 
-static void s2SolvePositionConstraints(s2World* world, s2Constraint* constraints, int constraintCount)
+static void s2SolveJointPosition(s2World* world, s2Constraint* constraints, int constraintCount)
 {
 	s2Body* bodies = world->bodies;
 	float slop = s2_linearSlop;
@@ -1295,7 +1285,7 @@ void s2SolveGraphPGS(s2World* world, const s2StepContext* stepContext)
 	for (int i = 0; i < contactCapacity; ++i)
 	{
 		s2Contact* contact = contacts + i;
-		if (s2ObjectIsFree(&contact->object))
+		if (s2IsFree(&contact->object))
 		{
 			continue;
 		}
@@ -1322,7 +1312,7 @@ void s2SolveGraphPGS(s2World* world, const s2StepContext* stepContext)
 
 	for (int iter = 0; iter < velocityIterations; ++iter)
 	{
-		s2SolveVelocityConstraints(world, constraints, constraintCount, inv_h);
+		s2SolveJointVelocity(world, constraints, constraintCount, inv_h);
 	}
 
 	s2StoreImpulses(constraints, constraintCount);
@@ -1331,7 +1321,7 @@ void s2SolveGraphPGS(s2World* world, const s2StepContext* stepContext)
 
 	for (int iter = 0; iter < positionIterations; ++iter)
 	{
-		s2SolvePositionConstraints(world, constraints, constraintCount);
+		s2SolveJointPosition(world, constraints, constraintCount);
 	}
 
 	s2FinalizeSolve(world);
@@ -1474,7 +1464,7 @@ void s2SolveGraphStickyTGS(s2World* world, const s2StepContext* stepContext)
 	for (int i = 0; i < contactCapacity; ++i)
 	{
 		s2Contact* contact = contacts + i;
-		if (s2ObjectIsFree(&contact->object))
+		if (s2IsFree(&contact->object))
 		{
 			continue;
 		}

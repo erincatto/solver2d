@@ -27,9 +27,6 @@ s2BodyId s2World_CreateBody(s2WorldId worldId, const s2BodyDef* def)
 	S2_ASSERT(s2IsValid(def->angle));
 	S2_ASSERT(s2IsValidVec2(def->linearVelocity));
 	S2_ASSERT(s2IsValid(def->angularVelocity));
-	S2_ASSERT(s2IsValid(def->linearDamping) && def->linearDamping >= 0.0f);
-	S2_ASSERT(s2IsValid(def->angularDamping) && def->angularDamping >= 0.0f);
-	S2_ASSERT(s2IsValid(def->gravityScale) && def->gravityScale >= 0.0f);
 
 	b->type = def->type;
 	b->transform.p = def->position;
@@ -54,10 +51,6 @@ s2BodyId s2World_CreateBody(s2WorldId worldId, const s2BodyDef* def)
 	b->invMass = 0.0f;
 	b->I = 0.0f;
 	b->invI = 0.0f;
-	b->linearDamping = def->linearDamping;
-	b->angularDamping = def->angularDamping;
-	b->gravityScale = def->gravityScale;
-	b->sleepTime = 0.0f;
 	b->userData = def->userData;
 	b->world = worldId.index;
 	b->enlargeAABB = false;

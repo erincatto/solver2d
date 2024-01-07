@@ -18,11 +18,6 @@ typedef enum s2JointType
 	s2_mouseJoint,
 } s2JointType;
 
-/// A joint edge is used to connect bodies and joints together
-/// in a joint graph where each body is a node and each joint
-/// is an edge. A joint edge belongs to a doubly linked list
-/// maintained in each attached body. Each joint has two joint
-/// nodes, one for each attached body.
 typedef struct s2JointEdge
 {
 	int32_t bodyIndex;
@@ -85,11 +80,8 @@ typedef struct s2RevoluteJoint
 typedef struct s2Joint
 {
 	s2Object object;
-
 	s2JointType type;
-
 	s2JointEdge edges[2];
-
 	s2Vec2 localAnchorA;
 	s2Vec2 localAnchorB;
 
@@ -102,10 +94,8 @@ typedef struct s2Joint
 	bool collideConnected;
 } s2Joint;
 
-void s2InitVelocityConstraints(s2Joint* joint, s2StepContext* data);
-void s2SolveVelocityConstraints(s2Joint* joint, s2StepContext* data);
-
-// This returns true if the position errors are within tolerance.
-bool s2SolvePositionConstraints(s2Joint* joint, s2StepContext* data);
+void s2PrepareJoints(s2Joint* joint, s2StepContext* data);
+void s2SolveJointVelocity(s2Joint* joint, s2StepContext* data);
+bool s2SolveJointPosition(s2Joint* joint, s2StepContext* data);
 
 void s2DrawJoint(s2DebugDraw* draw, s2World* world, s2Joint* joint);

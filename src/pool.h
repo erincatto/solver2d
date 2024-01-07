@@ -41,7 +41,7 @@ static inline bool s2ObjectValid(const s2Object* object)
 	return object->index == object->next;
 }
 
-static inline bool s2ObjectIsFree(const s2Object* object)
+static inline bool s2IsFree(const s2Object* object)
 {
 	return object->index != object->next;
 }

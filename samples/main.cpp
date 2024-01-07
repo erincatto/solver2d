@@ -333,7 +333,6 @@ static void UpdateUI()
 
 				ImGui::Separator();
 
-				ImGui::Checkbox("Sleep", &s_settings.m_enableSleep);
 				ImGui::Checkbox("Warm Starting", &s_settings.m_enableWarmStarting);
 
 				ImGui::Separator();

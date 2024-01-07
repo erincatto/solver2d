@@ -292,7 +292,7 @@ void s2World_DestroyJoint(s2JointId jointId)
 extern void s2InitializeMouse(s2Joint* base, s2StepContext* data);
 extern void s2InitializeRevolute(s2Joint* base, s2StepContext* data);
 
-void s2InitVelocityConstraints(s2Joint* joint, s2StepContext* data)
+void s2PrepareJoints(s2Joint* joint, s2StepContext* data)
 {
 	switch (joint->type)
 	{
@@ -312,7 +312,7 @@ void s2InitVelocityConstraints(s2Joint* joint, s2StepContext* data)
 extern void s2SolveMouseVelocity(s2Joint* base, s2StepContext* data);
 extern void s2SolveRevoluteVelocity(s2Joint* base, s2StepContext* data);
 
-void s2SolveVelocityConstraints(s2Joint* joint, s2StepContext* data)
+void s2SolveJointVelocity(s2Joint* joint, s2StepContext* data)
 {
 	switch (joint->type)
 	{
@@ -332,7 +332,7 @@ void s2SolveVelocityConstraints(s2Joint* joint, s2StepContext* data)
 extern bool s2SolveRevolutePosition(s2Joint* base, s2StepContext* data);
 
 // This returns true if the position errors are within tolerance.
-bool s2SolvePositionConstraints(s2Joint* joint, s2StepContext* data)
+bool s2SolveJointPosition(s2Joint* joint, s2StepContext* data)
 {
 	switch (joint->type)
 	{

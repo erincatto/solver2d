@@ -19,8 +19,8 @@ Sample::Sample(const Settings& settings)
 	s2Vec2 gravity = {0.0f, -10.0f};
 
 	s2WorldDef worldDef = s2DefaultWorldDef();
-	worldDef.bodyCapacity = 1024;
-	worldDef.contactCapacity = 4 * 1024;
+	worldDef.bodyCapacity = 4;
+	worldDef.contactCapacity = 4;
 	worldDef.stackAllocatorCapacity = 20 * 1024;
 
 	m_worldId = s2CreateWorld(&worldDef);
@@ -29,9 +29,6 @@ Sample::Sample(const Settings& settings)
 	m_mouseJointId = s2_nullJointId;
 
 	m_stepCount = 0;
-
-	s2BodyDef bodyDef = s2DefaultBodyDef();
-	m_groundBodyId = s2World_CreateBody(m_worldId, &bodyDef);
 }
 
 Sample::~Sample()
@@ -99,6 +96,9 @@ void Sample::MouseDown(s2Vec2 p, int button, int mod)
 			float dampingRatio = 0.7f;
 			float mass = s2Body_GetMass(queryContext.bodyId);
 
+			s2BodyDef bodyDef = s2DefaultBodyDef();
+			m_groundBodyId = s2World_CreateBody(m_worldId, &bodyDef);
+
 			s2MouseJointDef jd;
 			jd.bodyIdA = m_groundBodyId;
 			jd.bodyIdB = queryContext.bodyId;
@@ -120,6 +120,9 @@ void Sample::MouseUp(s2Vec2 p, int button)
 	{
 		s2World_DestroyJoint(m_mouseJointId);
 		m_mouseJointId = s2_nullJointId;
+
+		s2World_DestroyBody(m_groundBodyId);
+		m_groundBodyId = s2_nullBodyId;
 	}
 }
 
@@ -157,7 +160,7 @@ void Sample::Step(Settings& settings)
 
 	for (int32_t i = 0; i < 1; ++i)
 	{
-		s2World_Step2(m_worldId, timeStep, settings.m_velocityIterations, settings.m_positionIterations);
+		s2World_Step(m_worldId, timeStep, settings.m_velocityIterations, settings.m_positionIterations);
 	}
 	s2World_Draw(m_worldId, &g_draw.m_debugDraw);
 

@@ -23,10 +23,7 @@ struct Settings
 	bool m_drawFrictionImpulse = false;
 	bool m_drawCOMs = false;
 	bool m_drawStats = false;
-	bool m_drawProfile = false;
 	bool m_enableWarmStarting = true;
-	bool m_enableContinuous = true;
-	bool m_enableSleep = false;
 	bool m_pause = false;
 	bool m_singleStep = false;
 };

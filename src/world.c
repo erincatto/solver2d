@@ -131,7 +131,7 @@ static void s2Collide(s2World* world)
 	for (int i = 0; i < contactCapacity; ++i)
 	{
 		s2Contact* contact = world->contacts + i;
-		if (s2ObjectIsFree(&contact->object))
+		if (s2IsFree(&contact->object))
 		{
 			continue;
 		}
@@ -173,12 +173,19 @@ static void s2Solve(s2World* world, s2StepContext* context)
 	for (int i = 0; i < shapeCapacity; ++i)
 	{
 		s2Shape* shape = shapes + i;
-		if (s2ObjectIsFree(&shape->object))
+		if (s2IsFree(&shape->object))
+		{
+			continue;
+		}
+
+		if (shape->enlargedAABB == false)
 		{
 			continue;
 		}
 
 		s2BroadPhase_EnlargeProxy(broadPhase, shape->proxyKey, shape->fatAABB);
+
+		shape->enlargedAABB = false;
 	}
 
 	s2ValidateBroadphase(&world->broadPhase);
@@ -208,7 +215,7 @@ static void s2Solve2(s2World* world, s2StepContext* context)
 		for (int i = 0; i < shapeCapacity; ++i)
 		{
 			s2Shape* shape = shapes + i;
-			if (s2ObjectIsFree(&shape->object))
+			if (s2IsFree(&shape->object))
 			{
 				continue;
 			}

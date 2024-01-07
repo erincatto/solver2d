@@ -35,7 +35,6 @@ typedef struct s2ContactVelocityConstraint
 	s2Mat22 K;
 	float friction;
 	float restitution;
-	float tangentSpeed;
 	int32_t pointCount;
 } s2ContactVelocityConstraint;
 
@@ -50,43 +49,35 @@ typedef struct s2ContactPositionConstraint
 	int32_t pointCount;
 } s2ContactPositionConstraint;
 
-s2ContactSolver* s2CreateContactSolver(s2ContactSolverDef* def)
+s2ContactSolver s2CreateContactSolver(s2World* world, s2StepContext* context)
 {
-	s2StackAllocator* alloc = def->world->stackAllocator;
+	s2StackAllocator* alloc = world->stackAllocator;
+	s2ContactSolver solver = {0};
+	solver.world = world;
+	solver.context = context;
 
-	s2ContactSolver* solver = s2AllocateStackItem(alloc, sizeof(s2ContactSolver), "contact solver");
-	solver->context = def->context;
-	solver->contactList = def->contactList;
-	solver->contactCount = def->contactCount;
+	int contactCapacity = world->contactPool.capacity;
+	solver.positionConstraints =
+		s2AllocateStackItem(alloc, contactCapacity * sizeof(s2ContactPositionConstraint), "position constraints");
+	solver.velocityConstraints =
+		s2AllocateStackItem(alloc, contactCapacity * sizeof(s2ContactVelocityConstraint), "velocity constraints");
 
-	// These are allocated conservatively because some island contacts may not have contact points
-	solver->positionConstraints =
-		s2AllocateStackItem(alloc, solver->contactCount * sizeof(s2ContactPositionConstraint), "position constraints");
-	solver->velocityConstraints =
-		s2AllocateStackItem(alloc, solver->contactCount * sizeof(s2ContactVelocityConstraint), "velocity constraints");
-
-	solver->world = def->world;
-	solver->constraintCount = 0;
-	return solver;
-}
-
-void s2ContactSolver_Initialize(s2ContactSolver* solver)
-{
-	s2World* world = solver->world;
+	int constraintCount = 0;
 	s2Contact* contacts = world->contacts;
-	const s2StepContext* context = solver->context;
 	s2Body* bodies = world->bodies;
 
 	// Initialize position independent portions of the constraints.
-	int32_t constraintCount = 0;
-	int32_t contactIndex = solver->contactList;
-	while (contactIndex != S2_NULL_INDEX)
+	for (int i = 0; i < contactCapacity; ++i)
 	{
-		s2Contact* contact = contacts + contactIndex;
+		s2Contact* contact = contacts + i;
+
+		if (s2IsFree(&contact->object))
+		{
+			continue;
+		}
 
 		const s2Manifold* manifold = &contact->manifold;
 		int32_t pointCount = manifold->pointCount;
-
 		if (pointCount == 0)
 		{
 			continue;
@@ -97,7 +88,7 @@ void s2ContactSolver_Initialize(s2ContactSolver* solver)
 		s2Body* bodyA = bodies + indexA;
 		s2Body* bodyB = bodies + indexB;
 
-		s2ContactVelocityConstraint* vc = solver->velocityConstraints + constraintCount;
+		s2ContactVelocityConstraint* vc = solver.velocityConstraints + constraintCount;
 		vc->contact = contact;
 		vc->normal = manifold->normal;
 		vc->friction = contact->friction;
@@ -106,7 +97,7 @@ void s2ContactSolver_Initialize(s2ContactSolver* solver)
 		vc->K = s2Mat22_zero;
 		vc->normalMass = s2Mat22_zero;
 
-		s2ContactPositionConstraint* pc = solver->positionConstraints + constraintCount;
+		s2ContactPositionConstraint* pc = solver.positionConstraints + constraintCount;
 		pc->contact = contact;
 		pc->normal = manifold->normal;
 		pc->pointCount = pointCount;
@@ -206,11 +197,11 @@ void s2ContactSolver_Initialize(s2ContactSolver* solver)
 		constraintCount += 1;
 	}
 
-	solver->constraintCount = constraintCount;
+	solver.constraintCount = constraintCount;
 
 	for (int32_t i = 0; i < constraintCount; ++i)
 	{
-		s2ContactVelocityConstraint* vc = solver->velocityConstraints + i;
+		s2ContactVelocityConstraint* vc = solver.velocityConstraints + i;
 
 		const s2Contact* contact = vc->contact;
 
@@ -247,6 +238,14 @@ void s2ContactSolver_Initialize(s2ContactSolver* solver)
 		bodyB->linearVelocity = vB;
 		bodyB->angularVelocity = wB;
 	}
+
+	return solver;
+}
+
+void s2DestroyContactSolver(s2ContactSolver* solver, s2StackAllocator* alloc)
+{
+	s2FreeStackItem(alloc, solver->velocityConstraints);
+	s2FreeStackItem(alloc, solver->positionConstraints);
 }
 
 void s2ContactSolver_SolveVelocityConstraints(s2ContactSolver* solver)
@@ -296,7 +295,7 @@ void s2ContactSolver_SolveVelocityConstraints(s2ContactSolver* solver)
 			s2Vec2 dv = s2Sub(vrB, vrA);
 
 			// Compute tangent force
-			float vt = s2Dot(dv, tangent) - vc->tangentSpeed;
+			float vt = s2Dot(dv, tangent);
 			float lambda = vcp->tangentMass * (-vt);
 
 			// Clamp the accumulated force

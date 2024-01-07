@@ -56,16 +56,9 @@ typedef struct s2Body
 	// Rotational inertia about the center of mass.
 	float I, invI;
 
-	float linearDamping;
-	float angularDamping;
-	float gravityScale;
-
-	float sleepTime;
-
 	void* userData;
 	int16_t world;
 
-	bool isMarked;
 	bool enlargeAABB;
 } s2Body;
 
