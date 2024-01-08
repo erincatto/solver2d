@@ -36,6 +36,8 @@ s2BodyId s2World_CreateBody(s2WorldId worldId, const s2BodyDef* def)
 	b->localCenter = s2Vec2_zero;
 	b->linearVelocity = def->linearVelocity;
 	b->angularVelocity = def->angularVelocity;
+	b->linearVelocity0 = def->linearVelocity;
+	b->angularVelocity0 = def->angularVelocity;
 	b->deltaPosition = s2Vec2_zero;
 	b->deltaAngle = 0.0f;
 	b->force = s2Vec2_zero;

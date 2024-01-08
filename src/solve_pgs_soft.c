@@ -572,7 +572,7 @@ static void s2SolveVelocityConstraintsSticky(s2World* world, s2ContactConstraint
 }
 #endif
 
-void s2SolvePGSSoft(s2World* world, s2StepContext* context)
+void s2Solve_PGS_Soft(s2World* world, s2StepContext* context)
 {
 	s2Contact* contacts = world->contacts;
 	int contactCapacity = world->contactPool.capacity;

@@ -36,6 +36,9 @@ typedef struct s2Body
 	s2Vec2 linearVelocity;
 	float angularVelocity;
 
+	s2Vec2 linearVelocity0;
+	float angularVelocity0;
+
 	s2Vec2 deltaPosition;
 	float deltaAngle;
 

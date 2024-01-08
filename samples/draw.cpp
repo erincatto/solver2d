@@ -904,6 +904,7 @@ void Draw::Create()
 				   DrawTransformFcn,
 				   DrawPointFcn,
 				   DrawStringFcn,
+				   s2MakeColor(s2_colorSalmon, 1.0f),
 				   true,
 				   true,
 				   false,

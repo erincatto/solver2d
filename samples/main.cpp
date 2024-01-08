@@ -2,18 +2,17 @@
 // SPDX-License-Identifier: MIT
 
 #define _CRT_SECURE_NO_WARNINGS
-//#define IMGUI_DISABLE_OBSOLETE_FUNCTIONS 1
+// #define IMGUI_DISABLE_OBSOLETE_FUNCTIONS 1
 
 #if defined(_WIN32)
-#include <crtdbg.h>
+	#include <crtdbg.h>
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
+	#ifndef WIN32_LEAN_AND_MEAN
+		#define WIN32_LEAN_AND_MEAN
+	#endif
+
+	#include <windows.h>
 #endif
-
-#include <windows.h>
-#endif
-
 
 #include "draw.h"
 #include "sample.h"
@@ -32,23 +31,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#if defined(_WIN32)
-static int MyAllocHook(int allocType, void* userData, size_t size, int blockType, long requestNumber, const unsigned char* filename,
-					   int lineNumber)
-{
-	// This hook can help find leaks
-	if (size == 33660)
-	{
-		size += 0;
-	}
-
-	return 1;
-}
-#endif
-
 GLFWwindow* g_mainWindow = nullptr;
 static int32_t s_selection = 0;
-static Sample* s_sample = nullptr;
+static Sample* s_samples[s2_solverTypeCount];
 static Settings s_settings;
 static bool s_rightMouseDown = false;
 static s2Vec2 s_clickPointWS = s2Vec2_zero;
@@ -81,8 +66,25 @@ static void SortTests()
 
 static void RestartTest()
 {
-	delete s_sample;
-	s_sample = g_sampleEntries[s_settings.m_sampleIndex].createFcn(s_settings);
+	s_settings.m_sampleIndex = s_selection;
+	for (int i = 0; i < s2_solverTypeCount; ++i)
+	{
+		if (s_samples[i] != nullptr)
+		{
+			delete s_samples[i];
+			s_samples[i] = nullptr;
+		}
+	}
+
+	s_settings.m_restart = true;
+
+	for (int i = 0; i < s2_solverTypeCount; ++i)
+	{
+		if (s_settings.m_enablesSolvers[i])
+		{
+			s_samples[i] = g_sampleEntries[s_settings.m_sampleIndex].createFcn(s_settings, s2SolverType(i));
+		}
+	}
 }
 
 static void CreateUI(GLFWwindow* window, const char* glslVersion)
@@ -215,19 +217,29 @@ static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, i
 
 			case GLFW_KEY_TAB:
 				g_draw.m_showUI = !g_draw.m_showUI;
+				break;
 
 			default:
-				if (s_sample)
+				for (int i = 0; i < s2_solverTypeCount; ++i)
 				{
-					s_sample->Keyboard(key);
+					if (s_samples[i] != nullptr)
+					{
+						s_samples[i]->Keyboard(key);
+					}
 				}
+				break;
 		}
 	}
 	else if (action == GLFW_RELEASE)
 	{
-		s_sample->KeyboardUp(key);
+		for (int i = 0; i < s2_solverTypeCount; ++i)
+		{
+			if (s_samples[i] != nullptr)
+			{
+				s_samples[i]->KeyboardUp(key);
+			}
+		}
 	}
-	// else GLFW_REPEAT
 }
 
 static void CharCallback(GLFWwindow* window, unsigned int c)
@@ -254,12 +266,24 @@ static void MouseButtonCallback(GLFWwindow* window, int32_t button, int32_t acti
 		s2Vec2 pw = g_camera.ConvertScreenToWorld(ps);
 		if (action == GLFW_PRESS)
 		{
-			s_sample->MouseDown(pw, button, mods);
+			for (int i = 0; i < s2_solverTypeCount; ++i)
+			{
+				if (s_samples[i] != nullptr)
+				{
+					s_samples[i]->MouseDown(pw, button, mods);
+				}
+			}
 		}
 
 		if (action == GLFW_RELEASE)
 		{
-			s_sample->MouseUp(pw, button);
+			for (int i = 0; i < s2_solverTypeCount; ++i)
+			{
+				if (s_samples[i] != nullptr)
+				{
+					s_samples[i]->MouseUp(pw, button);
+				}
+			}
 		}
 	}
 	else if (button == GLFW_MOUSE_BUTTON_2)
@@ -284,7 +308,13 @@ static void MouseMotionCallback(GLFWwindow* window, double xd, double yd)
 	ImGui_ImplGlfw_CursorPosCallback(window, ps.x, ps.y);
 
 	s2Vec2 pw = g_camera.ConvertScreenToWorld(ps);
-	s_sample->MouseMove(pw);
+	for (int i = 0; i < s2_solverTypeCount; ++i)
+	{
+		if (s_samples[i] != nullptr)
+		{
+			s_samples[i]->MouseMove(pw);
+		}
+	}
 
 	if (s_rightMouseDown)
 	{
@@ -313,120 +343,147 @@ static void ScrollCallback(GLFWwindow* window, double dx, double dy)
 	}
 }
 
-static void UpdateUI()
+static void UpdateUI(s2Color* solverColors)
 {
 	float menuWidth = 180.0f;
-	if (g_draw.m_showUI)
+	if (g_draw.m_showUI == false)
 	{
-		ImGui::SetNextWindowPos({g_camera.m_width - menuWidth - 10.0f, 10.0f});
-		ImGui::SetNextWindowSize({menuWidth, g_camera.m_height - 20.0f});
+		return;
+	}
 
-		ImGui::Begin("Tools", &g_draw.m_showUI, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+	ImGui::SetNextWindowPos({g_camera.m_width - menuWidth - 10.0f, 10.0f});
+	ImGui::SetNextWindowSize({menuWidth, g_camera.m_height - 20.0f});
 
-		if (ImGui::BeginTabBar("ControlTabs", ImGuiTabBarFlags_None))
+	ImGui::Begin("Tools", &g_draw.m_showUI, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+
+	if (ImGui::BeginTabBar("ControlTabs", ImGuiTabBarFlags_None))
+	{
+		if (ImGui::BeginTabItem("Controls"))
 		{
-			if (ImGui::BeginTabItem("Controls"))
+			ImGui::SliderInt("Vel Iters", &s_settings.m_velocityIterations, 0, 50);
+			ImGui::SliderInt("Pos Iters", &s_settings.m_positionIterations, 0, 50);
+			ImGui::SliderFloat("Hertz", &s_settings.m_hertz, 5.0f, 120.0f, "%.0f hz");
+			ImGui::Checkbox("Warm Starting", &s_settings.m_enableWarmStarting);
+
+			ImGui::Separator();
+
+			s2Color c = solverColors[s2_solverPGS_NGS_Block];
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{c.r, c.g, c.b, c.a});
+			ImGui::Checkbox("PGS NGS Block", &s_settings.m_enablesSolvers[s2_solverPGS_NGS_Block]);
+			ImGui::PopStyleColor();
+
+			c = solverColors[s2_solverPGS_NGS];
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{c.r, c.g, c.b, c.a});
+			ImGui::Checkbox("PGS NGS", &s_settings.m_enablesSolvers[s2_solverPGS_NGS]);
+			ImGui::PopStyleColor();
+
+			c = solverColors[s2_solverPGS_Soft];
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{c.r, c.g, c.b, c.a});
+			ImGui::Checkbox("PGS Soft", &s_settings.m_enablesSolvers[s2_solverPGS_Soft]);
+			ImGui::PopStyleColor();
+
+			c = solverColors[s2_solverXPBD];
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{c.r, c.g, c.b, c.a});
+			ImGui::Checkbox("XPBD", &s_settings.m_enablesSolvers[s2_solverXPBD]);
+			ImGui::PopStyleColor();
+
+			ImGui::Separator();
+
+			ImGui::Checkbox("Shapes", &s_settings.m_drawShapes);
+			ImGui::Checkbox("Joints", &s_settings.m_drawJoints);
+			ImGui::Checkbox("AABBs", &s_settings.m_drawAABBs);
+			ImGui::Checkbox("Contact Points", &s_settings.m_drawContactPoints);
+			ImGui::Checkbox("Contact Normals", &s_settings.m_drawContactNormals);
+			ImGui::Checkbox("Contact Impulses", &s_settings.m_drawContactImpulse);
+			ImGui::Checkbox("Friction Impulses", &s_settings.m_drawFrictionImpulse);
+			ImGui::Checkbox("Center of Masses", &s_settings.m_drawCOMs);
+			ImGui::Checkbox("Statistics", &s_settings.m_drawStats);
+
+			ImVec2 button_sz = ImVec2(-1, 0);
+			if (ImGui::Button("Pause (P)", button_sz))
 			{
-				ImGui::SliderInt("Vel Iters", &s_settings.m_velocityIterations, 0, 50);
-				ImGui::SliderInt("Pos Iters", &s_settings.m_positionIterations, 0, 50);
-				ImGui::SliderFloat("Hertz", &s_settings.m_hertz, 5.0f, 120.0f, "%.0f hz");
-
-				ImGui::Separator();
-
-				ImGui::Checkbox("Warm Starting", &s_settings.m_enableWarmStarting);
-
-				ImGui::Separator();
-
-				ImGui::Checkbox("Shapes", &s_settings.m_drawShapes);
-				ImGui::Checkbox("Joints", &s_settings.m_drawJoints);
-				ImGui::Checkbox("AABBs", &s_settings.m_drawAABBs);
-				ImGui::Checkbox("Contact Points", &s_settings.m_drawContactPoints);
-				ImGui::Checkbox("Contact Normals", &s_settings.m_drawContactNormals);
-				ImGui::Checkbox("Contact Impulses", &s_settings.m_drawContactImpulse);
-				ImGui::Checkbox("Friction Impulses", &s_settings.m_drawFrictionImpulse);
-				ImGui::Checkbox("Center of Masses", &s_settings.m_drawCOMs);
-				ImGui::Checkbox("Statistics", &s_settings.m_drawStats);
-
-				ImVec2 button_sz = ImVec2(-1, 0);
-				if (ImGui::Button("Pause (P)", button_sz))
-				{
-					s_settings.m_pause = !s_settings.m_pause;
-				}
-
-				if (ImGui::Button("Single Step (O)", button_sz))
-				{
-					s_settings.m_singleStep = !s_settings.m_singleStep;
-				}
-
-				if (ImGui::Button("Restart (R)", button_sz))
-				{
-					RestartTest();
-				}
-
-				if (ImGui::Button("Quit", button_sz))
-				{
-					glfwSetWindowShouldClose(g_mainWindow, GL_TRUE);
-				}
-
-				ImGui::EndTabItem();
+				s_settings.m_pause = !s_settings.m_pause;
 			}
 
-			ImGuiTreeNodeFlags leafNodeFlags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick;
-			leafNodeFlags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-
-			ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick;
-
-			if (ImGui::BeginTabItem("Tests"))
+			if (ImGui::Button("Single Step (O)", button_sz))
 			{
-				int categoryIndex = 0;
-				const char* category = g_sampleEntries[categoryIndex].category;
-				int i = 0;
-				while (i < g_sampleCount)
-				{
-					bool categorySelected = strcmp(category, g_sampleEntries[s_settings.m_sampleIndex].category) == 0;
-					ImGuiTreeNodeFlags nodeSelectionFlags = categorySelected ? ImGuiTreeNodeFlags_Selected : 0;
-					bool nodeOpen = ImGui::TreeNodeEx(category, nodeFlags | nodeSelectionFlags);
-
-					if (nodeOpen)
-					{
-						while (i < g_sampleCount && strcmp(category, g_sampleEntries[i].category) == 0)
-						{
-							ImGuiTreeNodeFlags selectionFlags = 0;
-							if (s_settings.m_sampleIndex == i)
-							{
-								selectionFlags = ImGuiTreeNodeFlags_Selected;
-							}
-							ImGui::TreeNodeEx((void*)(intptr_t)i, leafNodeFlags | selectionFlags, "%s", g_sampleEntries[i].name);
-							if (ImGui::IsItemClicked())
-							{
-								s_selection = i;
-							}
-							++i;
-						}
-						ImGui::TreePop();
-					}
-					else
-					{
-						while (i < g_sampleCount && strcmp(category, g_sampleEntries[i].category) == 0)
-						{
-							++i;
-						}
-					}
-
-					if (i < g_sampleCount)
-					{
-						category = g_sampleEntries[i].category;
-						categoryIndex = i;
-					}
-				}
-				ImGui::EndTabItem();
+				s_settings.m_singleStep = !s_settings.m_singleStep;
 			}
-			ImGui::EndTabBar();
+
+			if (ImGui::Button("Restart (R)", button_sz))
+			{
+				RestartTest();
+			}
+
+			if (ImGui::Button("Quit", button_sz))
+			{
+				glfwSetWindowShouldClose(g_mainWindow, GL_TRUE);
+			}
+
+			ImGui::EndTabItem();
 		}
 
-		ImGui::End();
+		ImGuiTreeNodeFlags leafNodeFlags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick;
+		leafNodeFlags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
 
-		s_sample->UpdateUI();
+		ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick;
+
+		if (ImGui::BeginTabItem("Tests"))
+		{
+			int categoryIndex = 0;
+			const char* category = g_sampleEntries[categoryIndex].category;
+			int i = 0;
+			while (i < g_sampleCount)
+			{
+				bool categorySelected = strcmp(category, g_sampleEntries[s_settings.m_sampleIndex].category) == 0;
+				ImGuiTreeNodeFlags nodeSelectionFlags = categorySelected ? ImGuiTreeNodeFlags_Selected : 0;
+				bool nodeOpen = ImGui::TreeNodeEx(category, nodeFlags | nodeSelectionFlags);
+
+				if (nodeOpen)
+				{
+					while (i < g_sampleCount && strcmp(category, g_sampleEntries[i].category) == 0)
+					{
+						ImGuiTreeNodeFlags selectionFlags = 0;
+						if (s_settings.m_sampleIndex == i)
+						{
+							selectionFlags = ImGuiTreeNodeFlags_Selected;
+						}
+						ImGui::TreeNodeEx((void*)(intptr_t)i, leafNodeFlags | selectionFlags, "%s", g_sampleEntries[i].name);
+						if (ImGui::IsItemClicked())
+						{
+							s_selection = i;
+						}
+						++i;
+					}
+					ImGui::TreePop();
+				}
+				else
+				{
+					while (i < g_sampleCount && strcmp(category, g_sampleEntries[i].category) == 0)
+					{
+						++i;
+					}
+				}
+
+				if (i < g_sampleCount)
+				{
+					category = g_sampleEntries[i].category;
+					categoryIndex = i;
+				}
+			}
+			ImGui::EndTabItem();
+		}
+		ImGui::EndTabBar();
+	}
+
+	ImGui::End();
+
+	for (int i = 0; i < s2_solverTypeCount; ++i)
+	{
+		if (s_samples[i] != nullptr)
+		{
+			s_samples[i]->UpdateUI();
+		}
 	}
 }
 
@@ -437,26 +494,6 @@ int main(int, char**)
 	// Enable memory-leak reports
 	_CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_DEBUG | _CRTDBG_MODE_FILE);
 	_CrtSetReportFile(_CRT_WARN, _CRTDBG_FILE_STDERR);
-	//_CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
-	//_CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDOUT);
-	//_CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
-	//_CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDOUT);
-	{
-		// Get the current bits
-		// int tmp = _CrtSetDbgFlag(_CRTDBG_REPORT_FLAG);
-
-		// Clear the upper 16 bits and OR in the desired frequency
-		// tmp = (tmp & 0x0000FFFF) | _CRTDBG_CHECK_EVERY_16_DF;
-
-		// Set the new bits
-		//_CrtSetDbgFlag(tmp);
-
-		//_CrtSetDbgFlag(_CRTDBG_CHECK_ALWAYS_DF | _CRTDBG_DELAY_FREE_MEM_DF | _CRTDBG_CHECK_CRT_DF | _CRTDBG_LEAK_CHECK_DF);
-		//_CrtSetDbgFlag(_CRTDBG_CHECK_ALWAYS_DF | _CRTDBG_DELAY_FREE_MEM_DF | _CRTDBG_LEAK_CHECK_DF | _CrtSetDbgFlag(_CRTDBG_REPORT_FLAG));
-		//_CrtSetDbgFlag(_CRTDBG_DELAY_FREE_MEM_DF | _CrtSetDbgFlag(_CRTDBG_REPORT_FLAG));
-	}
-	_CrtSetAllocHook(MyAllocHook);
-	//_CrtSetBreakAlloc(196);
 #endif
 
 	char buffer[128];
@@ -503,12 +540,13 @@ int main(int, char**)
 	bool fullscreen = false;
 	if (fullscreen)
 	{
-		g_mainWindow = glfwCreateWindow(int(1920 * s_windowScale), int(1080 * s_windowScale), buffer, glfwGetPrimaryMonitor(), nullptr);
+		g_mainWindow =
+			glfwCreateWindow(int(1920 * s_windowScale), int(1080 * s_windowScale), buffer, glfwGetPrimaryMonitor(), nullptr);
 	}
 	else
 	{
-		g_mainWindow =
-			glfwCreateWindow(int(g_camera.m_width * s_windowScale), int(g_camera.m_height * s_windowScale), buffer, nullptr, nullptr);
+		g_mainWindow = glfwCreateWindow(int(g_camera.m_width * s_windowScale), int(g_camera.m_height * s_windowScale), buffer,
+										nullptr, nullptr);
 	}
 
 	if (g_mainWindow == nullptr)
@@ -549,7 +587,24 @@ int main(int, char**)
 
 	s_settings.m_sampleIndex = S2_CLAMP(s_settings.m_sampleIndex, 0, g_sampleCount - 1);
 	s_selection = s_settings.m_sampleIndex;
-	s_sample = g_sampleEntries[s_settings.m_sampleIndex].createFcn(s_settings);
+
+	float colorAlpha = 1.0f;
+	s2Color solverColors[s2_solverTypeCount] = {
+		s2MakeColor(s2_colorBlueViolet, colorAlpha),
+		s2MakeColor(s2_colorDodgerBlue, colorAlpha),
+		s2MakeColor(s2_colorCoral, colorAlpha),
+		s2MakeColor(s2_colorSpringGreen, colorAlpha),
+	};
+
+	static_assert(S2_ARRAY_COUNT(solverColors) == s2_solverTypeCount);
+
+	for (int i = 0; i < s2_solverTypeCount; ++i)
+	{
+		if (s_settings.m_enablesSolvers[i])
+		{
+			s_samples[i] = g_sampleEntries[s_settings.m_sampleIndex].createFcn(s_settings, s2SolverType(i));
+		}
+	}
 
 	glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
 
@@ -609,24 +664,37 @@ int main(int, char**)
 		{
 			const SampleEntry& entry = g_sampleEntries[s_settings.m_sampleIndex];
 			sprintf(buffer, "%s : %s", entry.category, entry.name);
-			s_sample->DrawTitle(buffer);
+
+			for (int i = 0; i < s2_solverTypeCount; ++i)
+			{
+				if (s_samples[i] != nullptr)
+				{
+					s_samples[i]->DrawTitle(buffer);
+				}
+			}
 		}
 
-		s_sample->Step(s_settings);
+		for (int i = 0; i < s2_solverTypeCount; ++i)
+		{
+			if (s_samples[i] != nullptr)
+			{
+				s_samples[i]->Step(s_settings, solverColors[i]);
+			}
+		}
 
 		g_draw.Flush();
 
-		UpdateUI();
+		UpdateUI(solverColors);
 
-		// ImGui::ShowDemoWindow();
+		//ImGui::ShowDemoWindow();
 
 		// if (g_draw.m_showUI)
 		{
 			sprintf(buffer, "%.1f ms", 1000.0f * frameTime);
 
 			ImGui::Begin("Overlay", nullptr,
-						ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize |
-							ImGuiWindowFlags_NoScrollbar);
+						 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize |
+							 ImGuiWindowFlags_NoScrollbar);
 			ImGui::SetCursorPos(ImVec2(5.0f, g_camera.m_height - 20.0f));
 			ImGui::TextColored(ImColor(153, 230, 153, 255), buffer);
 			ImGui::End();
@@ -640,8 +708,25 @@ int main(int, char**)
 		if (s_selection != s_settings.m_sampleIndex)
 		{
 			s_settings.m_sampleIndex = s_selection;
-			delete s_sample;
-			s_sample = g_sampleEntries[s_settings.m_sampleIndex].createFcn(s_settings);
+			for (int i = 0; i < s2_solverTypeCount; ++i)
+			{
+				if (s_samples[i] != nullptr)
+				{
+					delete s_samples[i];
+					s_samples[i] = nullptr;
+				}
+			}
+
+			s_settings.m_restart = false;
+
+			for (int i = 0; i < s2_solverTypeCount; ++i)
+			{
+				if (s_settings.m_enablesSolvers[i])
+				{
+					s_samples[i] = g_sampleEntries[s_settings.m_sampleIndex].createFcn(s_settings, s2SolverType(i));
+				}
+			}
+
 			g_camera.ResetView();
 		}
 
@@ -668,8 +753,14 @@ int main(int, char**)
 		++frame;
 	}
 
-	delete s_sample;
-	s_sample = nullptr;
+	for (int i = 0; i < s2_solverTypeCount; ++i)
+	{
+		if (s_samples[i] != nullptr)
+		{
+			delete s_samples[i];
+			s_samples[i] = nullptr;
+		}
+	}
 
 	g_draw.Destroy();
 

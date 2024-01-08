@@ -42,6 +42,7 @@ typedef struct s2DebugDraw
 	/// Draw a string.
 	void (*DrawString)(s2Vec2 p, const char* s, void* context);
 
+	s2Color dynamicBodyColor;
 	bool drawShapes;
 	bool drawJoints;
 	bool drawAABBs;

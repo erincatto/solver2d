@@ -44,11 +44,11 @@ inline float RandomFloat(float lo, float hi)
 class Sample
 {
   public:
-	Sample(const Settings& settings);
+	Sample(const Settings& settings, s2SolverType solverType);
 	virtual ~Sample();
 
 	void DrawTitle(const char* string);
-	virtual void Step(Settings& settings);
+	virtual void Step(Settings& settings, s2Color bodyColor);
 	virtual void UpdateUI()
 	{
 	}
@@ -62,7 +62,7 @@ class Sample
 	virtual void MouseUp(s2Vec2 p, int button);
 	virtual void MouseMove(s2Vec2 p);
 
-
+	s2SolverType m_solverType;
 	s2BodyId m_groundBodyId;
 	int m_textLine;
 	s2WorldId m_worldId;
@@ -71,7 +71,7 @@ class Sample
 	int m_textIncrement;
 };
 
-typedef Sample* SampleCreateFcn(const Settings& settings);
+typedef Sample* SampleCreateFcn(const Settings& settings, s2SolverType solverType);
 
 int RegisterSample(const char* category, const char* name, SampleCreateFcn* fcn);
 

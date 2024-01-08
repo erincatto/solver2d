@@ -67,15 +67,18 @@ typedef struct s2RayCastOutput
 
 typedef enum s2SolverType
 {
+	s2_solverPGS_NGS_Block = 0,
 	s2_solverPGS_NGS,
 	s2_solverPGS_Soft,
-	s2_solverTGS_Soft,
-	s2_solverTGS_Soft_Sticky,
+	s2_solverXPBD,
+	//s2_solverTGS_Soft,
+	//s2_solverTGS_Soft_Sticky,
+	s2_solverTypeCount,
 } s2SolverType;
 
 typedef struct s2WorldDef
 {
-	s2SolverType solverType;
+	enum s2SolverType solverType;
 	s2Vec2 gravity;
 	float restitutionThreshold;
 	bool enableSleep;
@@ -116,7 +119,7 @@ typedef struct s2ShapeDef
 static inline s2WorldDef s2DefaultWorldDef(void)
 {
 	s2WorldDef def = {0};
-	def.solverType = s2_solverPGS_NGS;
+	def.solverType = s2_solverPGS_NGS_Block;
 	def.gravity = S2_LITERAL(s2Vec2){0.0f, -10.0f};
 	def.restitutionThreshold = 1.0f;
 	def.bodyCapacity = 8;

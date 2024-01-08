@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "sample.h"
+#include "settings.h"
 
 #include "solver2d/solver2d.h"
 #include "solver2d/geometry.h"
@@ -12,9 +13,15 @@
 class SingleBox : public Sample
 {
 public:
-	SingleBox(const Settings& settings)
-		: Sample(settings)
+	SingleBox(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
 	{
+		if (settings.m_restart == false)
+		{
+			g_camera.m_center = {0.0f, 3.0f};
+			g_camera.m_zoom = 0.2f;
+		}
+
 		float extent = 1.0f;
 
 		s2BodyDef bodyDef = s2DefaultBodyDef();
@@ -29,15 +36,15 @@ public:
 		bodyDef.type = s2_dynamicBody;
 
 		s2Polygon box = s2MakeBox(extent, extent);
-		bodyDef.position = {0.0f, 2.0f};
+		bodyDef.position = {0.0f, 4.0f};
 		s2BodyId bodyId = s2World_CreateBody(m_worldId, &bodyDef);
 
 		s2Body_CreatePolygon(bodyId, &shapeDef, &box);
 	}
 
-	static Sample* Create(const Settings& settings)
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
 	{
-		return new SingleBox(settings);
+		return new SingleBox(settings, solverType);
 	}
 };
 
@@ -46,8 +53,8 @@ static int sampleSingleBox = RegisterSample("Behavior", "Single Box", SingleBox:
 class HighMassRatio : public Sample
 {
   public:
-	HighMassRatio(const Settings& settings)
-		: Sample(settings)
+	HighMassRatio(const Settings& settings, s2SolverType solverType)
+		  : Sample(settings, solverType)
 	{
 		float extent = 1.0f;
 
@@ -104,9 +111,9 @@ class HighMassRatio : public Sample
 #endif
 	}
 
-	static Sample* Create(const Settings& settings)
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
 	{
-		return new HighMassRatio(settings);
+		return new HighMassRatio(settings, solverType);
 	}
 };
 
@@ -116,10 +123,9 @@ static int sampleHighMassRatio = RegisterSample("Behavior", "High Mass Ratio", H
 class Friction : public Sample
 {
   public:
-	Friction(const Settings& settings)
-		: Sample(settings)
+	Friction(const Settings& settings, s2SolverType solverType)
+		  : Sample(settings, solverType)
 	{
-
 		{
 			s2BodyDef bodyDef = s2DefaultBodyDef();
 			s2BodyId groundId = s2World_CreateBody(m_worldId, &bodyDef);
@@ -167,9 +173,9 @@ class Friction : public Sample
 		}
 	}
 
-	static Sample* Create(const Settings& settings)
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
 	{
-		return new Friction(settings);
+		return new Friction(settings, solverType);
 	}
 };
 

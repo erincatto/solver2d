@@ -74,6 +74,8 @@ s2WorldId s2CreateWorld(const s2WorldDef* def)
 	world->blockAllocator = s2CreateBlockAllocator();
 	world->stackAllocator = s2CreateStackAllocator(def->stackAllocatorCapacity);
 
+	world->solverType = def->solverType;
+
 	s2CreateBroadPhase(&world->broadPhase);
 
 	// pools
@@ -180,11 +182,30 @@ void s2World_Step(s2WorldId worldId, float timeStep, int velocityIterations, int
 	context.bodies = world->bodies;
 	context.bodyCapacity = world->bodyPool.capacity;
 
-	//s2SolvePGS_NGS_Block(world, &context);
-	//s2SolvePGS_NGS(world, &context);
-	s2SolvePGSSoft(world, &context);
-	// s2SolveSoftTGS(world, context);
-	// s2SolveStickyTGS(world, context);
+	if (timeStep > 0.0f)
+	{
+		switch (world->solverType)
+		{
+			case s2_solverPGS_NGS_Block:
+				s2Solve_PGS_NGS_Block(world, &context);
+				break;
+
+			case s2_solverPGS_NGS:
+				s2Solve_PGS_NGS(world, &context);
+				break;
+
+			case s2_solverPGS_Soft:
+				s2Solve_PGS_Soft(world, &context);
+				break;
+
+			case s2_solverXPBD:
+				s2Solve_XPDB(world, &context);
+				break;
+
+			default:
+				break;
+		}
+	}
 
 	// Stage 4: Update transforms and broad-phase
 	int bodyCapacity = world->bodyPool.capacity;
@@ -326,7 +347,7 @@ void s2World_Draw(s2WorldId worldId, s2DebugDraw* draw)
 				}
 				else
 				{
-					s2DrawShape(draw, shape, xf, (s2Color){0.9f, 0.7f, 0.7f, 1.0f});
+					s2DrawShape(draw, shape, xf, draw->dynamicBodyColor);
 				}
 
 				shapeIndex = shape->nextShapeIndex;

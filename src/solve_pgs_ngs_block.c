@@ -998,7 +998,7 @@ static void s2ContactSolver_SolvePositionConstraintsBlock(s2ContactSolver* solve
 	}
 }
 
-void s2SolvePGS_NGS_Block(s2World* world, s2StepContext* context)
+void s2Solve_PGS_NGS_Block(s2World* world, s2StepContext* context)
 {
 	s2Body* bodies = world->bodies;
 	s2Joint* joints = world->joints;

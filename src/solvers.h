@@ -48,6 +48,8 @@ typedef struct s2ContactConstraint
 	s2ContactConstraintPoint points[2];
 	s2Vec2 normal;
 	float friction;
+	float kinematicFriction;
+	float restitution;
 	int pointCount;
 } s2ContactConstraint;
 
@@ -57,8 +59,9 @@ void s2IntegratePositions(s2World* world, float h);
 void s2WarmStartContacts(s2World* world, s2ContactConstraint* constraints, int constraintCount);
 void s2StoreContactImpulses(s2ContactConstraint* constraints, int constraintCount);
 
-void s2SolvePGS_NGS_Block(s2World* world, s2StepContext* stepContext);
-void s2SolvePGS_NGS(s2World* world, s2StepContext* context);
-void s2SolvePGSSoft(s2World* world, s2StepContext* stepContext);
+void s2Solve_PGS_NGS_Block(s2World* world, s2StepContext* stepContext);
+void s2Solve_PGS_NGS(s2World* world, s2StepContext* context);
+void s2Solve_PGS_Soft(s2World* world, s2StepContext* stepContext);
+void s2Solve_XPDB(s2World* world, s2StepContext* stepContext);
 //void s2SolveTGSSoft(s2World* world, s2StepContext* stepContext);
 //void s2SolveTGSSticky(s2World* world, s2StepContext* stepContext);

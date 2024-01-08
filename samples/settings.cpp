@@ -116,4 +116,6 @@ void Settings::Load()
 	}
 
 	free(data);
+
+	m_enablesSolvers[0] = true;
 }

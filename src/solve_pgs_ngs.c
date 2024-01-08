@@ -241,7 +241,7 @@ static void s2SolveContactPosition(s2World* world, s2ContactConstraint* constrai
 	}
 }
 
-void s2SolvePGS_NGS(s2World* world, s2StepContext* context)
+void s2Solve_PGS_NGS(s2World* world, s2StepContext* context)
 {
 	s2Contact* contacts = world->contacts;
 	int contactCapacity = world->contactPool.capacity;

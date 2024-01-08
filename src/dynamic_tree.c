@@ -813,10 +813,6 @@ void s2DynamicTree_EnlargeProxy(s2DynamicTree* tree, int32_t proxyId, s2Box aabb
 {
 	s2TreeNode* nodes = tree->nodes;
 
-	S2_ASSERT(-s2_huge < aabb.lowerBound.x && aabb.lowerBound.x < s2_huge);
-	S2_ASSERT(-s2_huge < aabb.lowerBound.y && aabb.lowerBound.y < s2_huge);
-	S2_ASSERT(-s2_huge < aabb.upperBound.x && aabb.upperBound.x < s2_huge);
-	S2_ASSERT(-s2_huge < aabb.upperBound.y && aabb.upperBound.y < s2_huge);
 	S2_ASSERT(0 <= proxyId && proxyId < tree->nodeCapacity);
 	S2_ASSERT(s2IsLeaf(tree->nodes + proxyId));
 

@@ -3,17 +3,21 @@
 
 #pragma once
 
+#include "solver2d/types.h"
+
 struct Settings
 {
 	void Save();
 	void Load();
 
 	int m_sampleIndex = 0;
-	int m_windowWidth = 1280;
-	int m_windowHeight = 720;
+	int m_windowWidth = 1920;
+	int m_windowHeight = 1080;
 	float m_hertz = 60.0f;
 	int m_velocityIterations = 8;
 	int m_positionIterations = 3;
+	bool m_enablesSolvers[s2_solverTypeCount] = {};
+	bool m_enableWarmStarting = true;
 	bool m_drawShapes = true;
 	bool m_drawJoints = true;
 	bool m_drawAABBs = false;
@@ -23,7 +27,7 @@ struct Settings
 	bool m_drawFrictionImpulse = false;
 	bool m_drawCOMs = false;
 	bool m_drawStats = false;
-	bool m_enableWarmStarting = true;
 	bool m_pause = false;
 	bool m_singleStep = false;
+	bool m_restart = false;
 };

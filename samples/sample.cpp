@@ -14,15 +14,17 @@
 #include <stdio.h>
 #include <string.h>
 
-Sample::Sample(const Settings& settings)
+Sample::Sample(const Settings& settings, s2SolverType solverType)
 {
 	s2Vec2 gravity = {0.0f, -10.0f};
 
 	s2WorldDef worldDef = s2DefaultWorldDef();
+	worldDef.solverType = solverType;
 	worldDef.bodyCapacity = 4;
 	worldDef.contactCapacity = 4;
 	worldDef.stackAllocatorCapacity = 20 * 1024;
 
+	m_solverType = solverType;
 	m_worldId = s2CreateWorld(&worldDef);
 	m_textLine = 30;
 	m_textIncrement = 18;
@@ -134,7 +136,7 @@ void Sample::MouseMove(s2Vec2 p)
 	}
 }
 
-void Sample::Step(Settings& settings)
+void Sample::Step(Settings& settings, s2Color bodyColor)
 {
 	float timeStep = settings.m_hertz > 0.0f ? 1.0f / settings.m_hertz : float(0.0f);
 
@@ -153,6 +155,8 @@ void Sample::Step(Settings& settings)
 		m_textLine += m_textIncrement;
 	}
 
+	bodyColor.a = 0.6f;
+	g_draw.m_debugDraw.dynamicBodyColor = bodyColor;
 	g_draw.m_debugDraw.drawShapes = settings.m_drawShapes;
 	g_draw.m_debugDraw.drawJoints = settings.m_drawJoints;
 	g_draw.m_debugDraw.drawAABBs = settings.m_drawAABBs;
@@ -162,7 +166,11 @@ void Sample::Step(Settings& settings)
 	{
 		s2World_Step(m_worldId, timeStep, settings.m_velocityIterations, settings.m_positionIterations);
 	}
-	s2World_Draw(m_worldId, &g_draw.m_debugDraw);
+
+	if (settings.m_enablesSolvers[m_solverType])
+	{
+		s2World_Draw(m_worldId, &g_draw.m_debugDraw);
+	}
 
 	if (timeStep > 0.0f)
 	{
