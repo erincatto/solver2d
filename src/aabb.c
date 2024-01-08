@@ -65,7 +65,7 @@ s2RayCastOutput s2AABB_RayCast(s2Box a, s2Vec2 p1, s2Vec2 p2)
 		}
 
 		// Pull the max down
-		tmax = B2_MIN(tmax, t2);
+		tmax = S2_MIN(tmax, t2);
 
 		if (tmin > tmax)
 		{
@@ -108,7 +108,7 @@ s2RayCastOutput s2AABB_RayCast(s2Box a, s2Vec2 p1, s2Vec2 p2)
 		}
 
 		// Pull the max down
-		tmax = B2_MIN(tmax, t2);
+		tmax = S2_MIN(tmax, t2);
 
 		if (tmin > tmax)
 		{

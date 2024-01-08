@@ -13,8 +13,10 @@
 
 #ifdef __cplusplus
 #define S2_LITERAL(T) T
+#define S2_ZERO_INIT {}
 #else
 #define S2_LITERAL(T) (T)
+#define S2_ZERO_INIT {0}
 #endif
 
 #define S2_ARRAY_COUNT(A) (int)(sizeof(A) / sizeof(A[0]))
@@ -118,7 +120,7 @@ typedef struct s2ShapeDef
 
 static inline s2WorldDef s2DefaultWorldDef(void)
 {
-	s2WorldDef def = {0};
+	s2WorldDef def = S2_ZERO_INIT;
 	def.solverType = s2_solverPGS_NGS_Block;
 	def.gravity = S2_LITERAL(s2Vec2){0.0f, -10.0f};
 	def.restitutionThreshold = 1.0f;
@@ -132,7 +134,7 @@ static inline s2WorldDef s2DefaultWorldDef(void)
 
 static inline s2BodyDef s2DefaultBodyDef(void)
 {
-	s2BodyDef def = {0};
+	s2BodyDef def = S2_ZERO_INIT;
 	def.type = s2_staticBody;
 	def.position = S2_LITERAL(s2Vec2){0.0f, 0.0f};
 	def.angle = 0.0f;
@@ -144,7 +146,7 @@ static inline s2BodyDef s2DefaultBodyDef(void)
 
 static inline struct s2ShapeDef s2DefaultShapeDef(void)
 {
-	s2ShapeDef def = {0};
+	s2ShapeDef def = S2_ZERO_INIT;
 	def.friction = 0.6f;
 	def.restitution = 0.0f;
 	def.density = 1.0f;

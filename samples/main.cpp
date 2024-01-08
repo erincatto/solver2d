@@ -526,7 +526,7 @@ int main(int, char**)
 	// MSAA
 	glfwWindowHint(GLFW_SAMPLES, 4);
 
-	sprintf(buffer, "Solver2D");
+	snprintf(buffer, 128, "Solver2D");
 
 	if (GLFWmonitor* primaryMonitor = glfwGetPrimaryMonitor())
 	{
@@ -663,7 +663,7 @@ int main(int, char**)
 		if (g_draw.m_showUI)
 		{
 			const SampleEntry& entry = g_sampleEntries[s_settings.m_sampleIndex];
-			sprintf(buffer, "%s : %s", entry.category, entry.name);
+			snprintf(buffer, 128, "%s : %s", entry.category, entry.name);
 
 			for (int i = 0; i < s2_solverTypeCount; ++i)
 			{
@@ -690,13 +690,13 @@ int main(int, char**)
 
 		// if (g_draw.m_showUI)
 		{
-			sprintf(buffer, "%.1f ms", 1000.0f * frameTime);
+			snprintf(buffer, 128, "%.1f ms", 1000.0f * frameTime);
 
 			ImGui::Begin("Overlay", nullptr,
 						 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize |
 							 ImGuiWindowFlags_NoScrollbar);
 			ImGui::SetCursorPos(ImVec2(5.0f, g_camera.m_height - 20.0f));
-			ImGui::TextColored(ImColor(153, 230, 153, 255), buffer);
+			ImGui::TextColored(ImColor(153, 230, 153, 255), "%s", buffer);
 			ImGui::End();
 		}
 

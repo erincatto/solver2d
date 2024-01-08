@@ -96,7 +96,7 @@ s2Hull s2ComputeHull(const s2Vec2* points, int32_t count)
 		return hull;
 	}
 
-	count = B2_MIN(count, s2_maxPolygonVertices);
+	count = S2_MIN(count, s2_maxPolygonVertices);
 
 	s2Box aabb = {{FLT_MAX, FLT_MAX}, {-FLT_MAX, -FLT_MAX}};
 

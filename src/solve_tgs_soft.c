@@ -740,7 +740,5 @@ void s2SolveGraphStickyTGS(s2World* world, const s2StepContext* stepContext)
 		s2SolveVelocityConstraintsSticky(world, constraints, constraintCount, 0.0f, 0.0f);
 	}
 
-	s2FinalizeSolve(world);
-
 	s2FreeStackItem(world->stackAllocator, constraints);
 }
