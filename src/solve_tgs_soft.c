@@ -6,6 +6,7 @@
 #include "body.h"
 #include "contact.h"
 #include "core.h"
+#include "joint.h"
 #include "shape.h"
 #include "solvers.h"
 #include "stack_allocator.h"
@@ -18,7 +19,7 @@
 
 #define maxBaumgarteVelocity 3.0f
 
-static void s2IntegrateDeltaTransform(s2World* world, float h)
+static void s2UpdatePositionDeltas(s2World* world, float h)
 {
 	s2Body* bodies = world->bodies;
 	int bodyCapacity = world->bodyPool.capacity;
@@ -41,7 +42,7 @@ static void s2IntegrateDeltaTransform(s2World* world, float h)
 	}
 }
 
-static void s2UpdatePositions(s2World* world)
+static void s2FinalizePositions(s2World* world)
 {
 	s2Body* bodies = world->bodies;
 	int bodyCapacity = world->bodyPool.capacity;
@@ -64,7 +65,8 @@ static void s2UpdatePositions(s2World* world)
 	}
 }
 
-static void s2InitializeSoftConstraints(s2World* world, float h, s2ContactConstraint* constraints, int constraintCount)
+// todo same as PGS
+static void s2PrepareSoftContacts(s2World* world, s2ContactConstraint* constraints, int constraintCount, float h)
 {
 	s2Body* bodies = world->bodies;
 
@@ -150,9 +152,7 @@ static void s2InitializeSoftConstraints(s2World* world, float h, s2ContactConstr
 			// cp->gamma = 0.0f;
 			// cp->bias = (0.2f / h) * mp->separation;
 
-			// TODO_ERIN this can be expanded
 			cp->normalMass = kNormal > 0.0f ? 1.0f / kNormal : 0.0f;
-			//cp->normalMass = 1.0f / (kNormal + cp->gamma);
 
 			float c = h * omega * (2.0f * zeta + h * omega);
 			cp->impulseCoefficient = 1.0f / (1.0f + c);
@@ -177,6 +177,7 @@ static void s2InitializeSoftConstraints(s2World* world, float h, s2ContactConstr
 	}
 }
 
+#if 0
 static void s2InitializeStickyConstraints(s2World* world, s2ContactConstraint* constraints, int constraintCount)
 {
 	s2Body* bodies = world->bodies;
@@ -314,8 +315,9 @@ static void s2InitializeStickyConstraints(s2World* world, s2ContactConstraint* c
 		manifold->frictionPersisted = true;
 	}
 }
+#endif
 
-static void s2SolveVelocityConstraintsSoft(s2World* world, s2ContactConstraint* constraints, int constraintCount, float inv_dt, bool useBias)
+static void s2SolveContactVelocities_TGS_Soft(s2World* world, s2ContactConstraint* constraints, int constraintCount, float inv_dt, bool useBias)
 {
 	s2Body* bodies = world->bodies;
 
@@ -350,16 +352,16 @@ static void s2SolveVelocityConstraintsSoft(s2World* world, s2ContactConstraint* 
 		{
 			s2ContactConstraintPoint* cp = constraint->points + j;
 
-			// Relative velocity at contact
-			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, cp->rB));
-			s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, cp->rA));
-			s2Vec2 dv = s2Sub(vrB, vrA);
+			// Approximate change in anchor points
+			s2Vec2 drA = s2CrossSV(daA, cp->rA);
+			s2Vec2 drB = s2CrossSV(daB, cp->rB);
 
 			// Compute change in separation
-			s2Vec2 prB = s2Add(dpB, s2CrossSV(daB, cp->rB));
-			s2Vec2 prA = s2Add(dpA, s2CrossSV(daA, cp->rA));
+			s2Vec2 prA = s2Add(dpA, drA);
+			s2Vec2 prB = s2Add(dpB, drB);
 			float ds = s2Dot(s2Sub(prB, prA), normal);
 			float s = cp->separation + ds;
+
 			float bias = 0.0f;
 			float massScale = 1.0f;
 			float impulseScale = 0.0f;
@@ -371,15 +373,21 @@ static void s2SolveVelocityConstraintsSoft(s2World* world, s2ContactConstraint* 
 			else if (useBias)
 			{
 				bias = S2_MAX(cp->biasCoefficient * s, -maxBaumgarteVelocity);
-				//bias = cp->biasCoefficient * s;
 				massScale = cp->massCoefficient;
 				impulseScale = cp->impulseCoefficient;
 			}
 			
+			// Current anchors
+			s2Vec2 rA = s2Add(cp->rA, drA);
+			s2Vec2 rB = s2Add(cp->rB, drB);
+
+			// Relative velocity at contact
+			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rB));
+			s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, rA));
+			float vn = s2Dot(s2Sub(vrB, vrA), normal);
+
 			// Compute normal impulse
-			float vn = s2Dot(dv, normal);
 			float impulse = -cp->normalMass * massScale * (vn + bias) - impulseScale * cp->normalImpulse;
-			//float impulse = -cp->normalMass * (vn + bias + cp->gamma * cp->normalImpulse);
 
 			// Clamp the accumulated impulse
 			float newImpulse = S2_MAX(cp->normalImpulse + impulse, 0.0f);
@@ -399,23 +407,26 @@ static void s2SolveVelocityConstraintsSoft(s2World* world, s2ContactConstraint* 
 		{
 			s2ContactConstraintPoint* cp = constraint->points + j;
 
+			// Approximate anchor points
+			s2Vec2 rA = s2Add(cp->rA, s2CrossSV(daA, cp->rA));
+			s2Vec2 rB = s2Add(cp->rB, s2CrossSV(daB, cp->rB));
+
 			// Relative velocity at contact
 			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, cp->rB));
 			s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, cp->rA));
-			s2Vec2 dv = s2Sub(vrB, vrA);
+			float vt = s2Dot(s2Sub(vrB, vrA), tangent);
 
 			// Compute tangent force
-			float vt = s2Dot(dv, tangent);
-			float lambda = cp->tangentMass * (-vt);
+			float impulse = -cp->tangentMass * vt;
 
 			// Clamp the accumulated force
 			float maxFriction = friction * cp->normalImpulse;
-			float newImpulse = S2_CLAMP(cp->tangentImpulse + lambda, -maxFriction, maxFriction);
-			lambda = newImpulse - cp->tangentImpulse;
+			float newImpulse = S2_CLAMP(cp->tangentImpulse + impulse, -maxFriction, maxFriction);
+			impulse = newImpulse - cp->tangentImpulse;
 			cp->tangentImpulse = newImpulse;
 
 			// Apply contact impulse
-			s2Vec2 P = s2MulSV(lambda, tangent);
+			s2Vec2 P = s2MulSV(impulse, tangent);
 
 			vA = s2MulSub(vA, mA, P);
 			wA -= iA * s2Cross(cp->rA, P);
@@ -431,6 +442,7 @@ static void s2SolveVelocityConstraintsSoft(s2World* world, s2ContactConstraint* 
 	}
 }
 
+#if 0
 static void s2SolveVelocityConstraintsSticky(s2World* world, s2ContactConstraint* constraints, int constraintCount, float minSeparation,
 											 float invh)
 {
@@ -569,128 +581,111 @@ static void s2SolveVelocityConstraintsSticky(s2World* world, s2ContactConstraint
 		bodyB->angularVelocity = wB;
 	}
 }
+#endif
 
-#if 0
-void s2SolveGraphSoftPGS(s2World* world, const s2StepContext* stepContext)
+void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
 {
-	s2Graph* graph = &world->graph;
-	s2GraphColor* colors = graph->colors;
+	s2Contact* contacts = world->contacts;
+	int contactCapacity = world->contactPool.capacity;
+
+	s2Joint* joints = world->joints;
+	int jointCapacity = world->jointPool.capacity;
+
+	s2ContactConstraint* constraints =
+		s2AllocateStackItem(world->stackAllocator, contactCapacity * sizeof(s2ContactConstraint), "constraint");
 
 	int constraintCount = 0;
-	for (int i = 0; i < s2_graphColorCount; ++i)
+	for (int i = 0; i < contactCapacity; ++i)
 	{
-		constraintCount += s2Array(colors[i].contactArray).count;
-	}
-
-	s2ContactConstraint* constraints = s2AllocateStackItem(world->stackAllocator, constraintCount * sizeof(s2ContactConstraint), "constraint");
-	int base = 0;
-
-	for (int i = 0; i < s2_graphColorCount; ++i)
-	{
-		colors[i].constraints = constraints + base;
-		base += s2Array(colors[i].contactArray).count;
-	}
-
-	S2_ASSERT(base == constraintCount);
-
-	int velocityIterations = stepContext->velocityIterations;
-	int positionIterations = stepContext->positionIterations;
-	float h = stepContext->dt;
-
-	s2IntegrateVelocities(world, h);
-
-	for (int i = 0; i < s2_graphColorCount; ++i)
-	{
-		s2InitializeSoftConstraints(world, colors + i, h, true);
-	}
-
-	for (int iter = 0; iter < velocityIterations; ++iter)
-	{
-		for (int i = 0; i < s2_graphColorCount; ++i)
+		s2Contact* contact = contacts + i;
+		if (s2IsFree(&contact->object))
 		{
-			s2SolveVelocityConstraintsSoft(world, colors + i, stepContext->inv_dt, true);
+			continue;
 		}
-	}
-	
-	s2IntegratePositions(world, h);
 
-	for (int iter = 0; iter < positionIterations; ++iter)
-	{
-		for (int i = 0; i < s2_graphColorCount; ++i)
+		if (contact->manifold.pointCount == 0)
 		{
-			s2SolveVelocityConstraintsSoft(world, colors + i, stepContext->inv_dt, false);
+			continue;
 		}
+
+		constraints[constraintCount].contact = contact;
+		constraints[constraintCount].contact->manifold.constraintIndex = constraintCount;
+		constraintCount += 1;
 	}
-
-	s2StoreContactImpulses(constraints, constraintCount);
-
-	s2FreeStackItem(world->stackAllocator, constraints);
-}
-
-void s2SolveGraphSoftTGS(s2World* world, const s2StepContext* stepContext)
-{
-	s2Graph* graph = &world->graph;
-	s2GraphColor* colors = graph->colors;
-
-	int constraintCount = 0;
-	for (int i = 0; i < s2_graphColorCount; ++i)
-	{
-		constraintCount += s2Array(colors[i].contactArray).count;
-	}
-
-	s2ContactConstraint* constraints = s2AllocateStackItem(world->stackAllocator, constraintCount * sizeof(s2ContactConstraint), "constraint");
-	int base = 0;
-
-	for (int i = 0; i < s2_graphColorCount; ++i)
-	{
-		colors[i].constraints = constraints + base;
-		base += s2Array(colors[i].contactArray).count;
-	}
-
-	S2_ASSERT(base == constraintCount);
 
 	// Full step apply gravity
-	s2IntegrateVelocities(world, stepContext->dt);
-
-	for (int i = 0; i < s2_graphColorCount; ++i)
-	{
-		bool warmStart = true;
-		s2InitializeSoftConstraints(world, colors + i, stepContext->dt, warmStart);
-	}
+	s2IntegrateVelocities(world, context->dt);
 	
-	int substepCount = stepContext->velocityIterations;
-	float h = stepContext->dt / substepCount;
+	s2PrepareSoftContacts(world, constraints, constraintCount, context->dt);
+	
+	for (int i = 0; i < jointCapacity; ++i)
+	{
+		s2Joint* joint = joints + i;
+		if (s2IsFree(&joint->object))
+		{
+			continue;
+		}
+
+		// todo soft
+		s2PrepareJoint(joint, context);
+	}
+
+	int substepCount = context->velocityIterations;
+	float h = context->dt / substepCount;
 	float inv_h = 1.0f / h;
 
 	for (int substep = 0; substep < substepCount; ++substep)
 	{
-		// One constraint iteration
-		for (int i = 0; i < s2_graphColorCount; ++i)
+		for (int i = 0; i < jointCapacity; ++i)
 		{
-			bool useBias = true;
-			s2SolveVelocityConstraintsSoft(world, colors + i, inv_h, useBias);
+			s2Joint* joint = joints + i;
+			if (s2IsFree(&joint->object))
+			{
+				continue;
+			}
+
+			// todo soft
+			s2SolveJointVelocity(joint, context);
 		}
 
-		s2IntegrateDeltaTransform(world, h);
+		// One constraint iteration
+		bool useBias = true;
+		s2SolveContactVelocities_TGS_Soft(world, constraints, constraintCount, inv_h, useBias);
+
+		// Update position deltas
+		s2UpdatePositionDeltas(world, h);
 	}
 
-	s2UpdatePositions(world);
+	// Update positions using deltas
+	s2FinalizePositions(world);
 
-	int positionIterations = stepContext->positionIterations;
+	int positionIterations = context->positionIterations;
 	for (int iter = 0; iter < positionIterations; ++iter)
 	{
+		for (int i = 0; i < jointCapacity; ++i)
+		{
+			s2Joint* joint = joints + i;
+			if (s2IsFree(&joint->object))
+			{
+				continue;
+			}
+
+			// todo relax soft
+			s2SolveJointPosition(joint, context);
+		}
+
 		bool useBias = false;
-		s2SolveVelocityConstraintsSoft(world, 0.0f, useBias);
+		s2SolveContactVelocities_TGS_Soft(world, constraints, constraintCount, 0.0f, useBias);
 	}
 
 	s2StoreContactImpulses(constraints, constraintCount);
 
 	s2FreeStackItem(world->stackAllocator, constraints);
 }
-#endif
 
+#if 0
 // Sticky
-void s2SolveGraphStickyTGS(s2World* world, const s2StepContext* stepContext)
+void s2SolveGraphStickyTGS(s2World* world, const s2StepContext* context)
 {
 	s2Contact* contacts = world->contacts;
 	int contactCapacity = world->contactPool.capacity;
@@ -716,24 +711,24 @@ void s2SolveGraphStickyTGS(s2World* world, const s2StepContext* stepContext)
 		constraintCount += 1;
 	}
 
-	s2IntegrateVelocities(world, stepContext->dt);
+	s2IntegrateVelocities(world, context->dt);
 
 	s2InitializeStickyConstraints(world, constraints, constraintCount);
 
-	int substepCount = stepContext->velocityIterations;
-	float h = stepContext->dt / substepCount;
-	float invh = substepCount / stepContext->dt;
+	int substepCount = context->velocityIterations;
+	float h = context->dt / substepCount;
+	float invh = substepCount / context->dt;
 
 	for (int substep = 0; substep < substepCount; ++substep)
 	{
 		// One constraint iteration
 		s2SolveVelocityConstraintsSticky(world, constraints, constraintCount, -s2_huge, invh);
-		s2IntegrateDeltaTransform(world, h);
+		s2UpdatePositionDeltas(world, h);
 	}
 
-	s2UpdatePositions(world);
+	s2FinalizePositions(world);
 
-	int positionIterations = stepContext->positionIterations;
+	int positionIterations = context->positionIterations;
 	for (int iter = 0; iter < positionIterations; ++iter)
 	{
 		// relax constraints
@@ -742,3 +737,4 @@ void s2SolveGraphStickyTGS(s2World* world, const s2StepContext* stepContext)
 
 	s2FreeStackItem(world->stackAllocator, constraints);
 }
+#endif

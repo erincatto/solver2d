@@ -72,23 +72,23 @@ s2WorldId s2CreateWorld(const s2WorldDef* def)
 	world->index = id.index;
 
 	world->blockAllocator = s2CreateBlockAllocator();
-	world->stackAllocator = s2CreateStackAllocator(def->stackAllocatorCapacity);
+	world->stackAllocator = s2CreateStackAllocator(1024 * 1024);
 
 	world->solverType = def->solverType;
 
 	s2CreateBroadPhase(&world->broadPhase);
 
 	// pools
-	world->bodyPool = s2CreatePool(sizeof(s2Body), S2_MAX(def->bodyCapacity, 1));
+	world->bodyPool = s2CreatePool(sizeof(s2Body), S2_MAX(4, 1));
 	world->bodies = (s2Body*)world->bodyPool.memory;
 
-	world->shapePool = s2CreatePool(sizeof(s2Shape), S2_MAX(def->shapeCapacity, 1));
+	world->shapePool = s2CreatePool(sizeof(s2Shape), S2_MAX(4, 1));
 	world->shapes = (s2Shape*)world->shapePool.memory;
 
-	world->contactPool = s2CreatePool(sizeof(s2Contact), S2_MAX(def->contactCapacity, 1));
+	world->contactPool = s2CreatePool(sizeof(s2Contact), S2_MAX(4, 1));
 	world->contacts = (s2Contact*)world->contactPool.memory;
 
-	world->jointPool = s2CreatePool(sizeof(s2Joint), S2_MAX(def->jointCapacity, 1));
+	world->jointPool = s2CreatePool(sizeof(s2Joint), S2_MAX(4, 1));
 	world->joints = (s2Joint*)world->jointPool.memory;
 
 	world->stepId = 0;
@@ -96,8 +96,8 @@ s2WorldId s2CreateWorld(const s2WorldDef* def)
 	// Globals start at 0. It should be fine for this to roll over.
 	world->revision += 1;
 
-	world->gravity = def->gravity;
-	world->restitutionThreshold = def->restitutionThreshold;
+	world->gravity = (s2Vec2){0.0f, -10.0f};
+	world->restitutionThreshold = 1.0f;
 
 	id.revision = world->revision;
 
@@ -200,6 +200,10 @@ void s2World_Step(s2WorldId worldId, float timeStep, int velocityIterations, int
 
 			case s2_solverXPBD:
 				s2Solve_XPDB(world, &context);
+				break;
+
+			case s2_solverTGS_Soft:
+				s2Solve_TGS_Soft(world, &context);
 				break;
 
 			default:

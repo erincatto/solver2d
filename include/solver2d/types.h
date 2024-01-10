@@ -12,11 +12,16 @@
 #include <stdint.h>
 
 #ifdef __cplusplus
-#define S2_LITERAL(T) T
-#define S2_ZERO_INIT {}
+	#define S2_LITERAL(T) T
+	#define S2_ZERO_INIT                                                                                                         \
+		{                                                                                                                        \
+		}
 #else
-#define S2_LITERAL(T) (T)
-#define S2_ZERO_INIT {0}
+	#define S2_LITERAL(T) (T)
+	#define S2_ZERO_INIT                                                                                                         \
+		{                                                                                                                        \
+			0                                                                                                                    \
+		}
 #endif
 
 #define S2_ARRAY_COUNT(A) (int)(sizeof(A) / sizeof(A[0]))
@@ -73,23 +78,19 @@ typedef enum s2SolverType
 	s2_solverPGS_NGS,
 	s2_solverPGS_Soft,
 	s2_solverXPBD,
-	//s2_solverTGS_Soft,
-	//s2_solverTGS_Soft_Sticky,
+	s2_solverTGS_Soft,
+	// s2_solverTGS_Soft_Sticky,
 	s2_solverTypeCount,
 } s2SolverType;
 
 typedef struct s2WorldDef
 {
 	enum s2SolverType solverType;
-	s2Vec2 gravity;
-	float restitutionThreshold;
-	bool enableSleep;
-	int32_t bodyCapacity;
-	int32_t shapeCapacity;
-	int32_t contactCapacity;
-	int32_t jointCapacity;
-	int32_t stackAllocatorCapacity;
 } s2WorldDef;
+
+static const s2WorldDef s2_defaultWorldDef = {
+	s2_solverPGS_NGS_Block,
+};
 
 typedef enum s2BodyType
 {
@@ -101,14 +102,22 @@ typedef enum s2BodyType
 
 typedef struct s2BodyDef
 {
-	enum s2BodyType type;
+	s2BodyType type;
 	s2Vec2 position;
 	float angle;
 	s2Vec2 linearVelocity;
 	float angularVelocity;
 	void* userData;
-
 } s2BodyDef;
+
+static const s2BodyDef s2_defaultBodyDef = {
+	s2_staticBody, // type
+	{0.0f, 0.0f},  // position
+	0.0f,		   // angle
+	{0.0f, 0.0f},  // linearVelocity
+	0.0f,		   // angularVelocity
+	NULL,		   // userData
+};
 
 typedef struct s2ShapeDef
 {
@@ -118,17 +127,17 @@ typedef struct s2ShapeDef
 	float density;
 } s2ShapeDef;
 
+static const s2ShapeDef s2_defaultShapeDef = {
+	NULL, // userData
+	0.6f, // friction
+	0.0f, // restitution
+	1.0f, // density
+};
+
 static inline s2WorldDef s2DefaultWorldDef(void)
 {
 	s2WorldDef def = S2_ZERO_INIT;
 	def.solverType = s2_solverPGS_NGS_Block;
-	def.gravity = S2_LITERAL(s2Vec2){0.0f, -10.0f};
-	def.restitutionThreshold = 1.0f;
-	def.bodyCapacity = 8;
-	def.shapeCapacity = 8;
-	def.contactCapacity = 8;
-	def.jointCapacity = 8;
-	def.stackAllocatorCapacity = 1024 * 1024;
 	return def;
 }
 

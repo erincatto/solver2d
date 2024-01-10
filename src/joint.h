@@ -94,8 +94,14 @@ typedef struct s2Joint
 	bool collideConnected;
 } s2Joint;
 
-void s2PrepareJoint(s2Joint* joint, s2StepContext* data);
-void s2SolveJointVelocity(s2Joint* joint, s2StepContext* data);
-void s2SolveJointPosition(s2Joint* joint, s2StepContext* data);
+void s2PrepareJoint(s2Joint* joint, s2StepContext* context);
+void s2SolveJointVelocity(s2Joint* joint, s2StepContext* context);
+void s2SolveJointPosition(s2Joint* joint, s2StepContext* context);
+
+void s2PrepareJoint_Soft(s2Joint* joint, s2StepContext* context);
+void s2SolveJointVelocity_Soft(s2Joint* joint, s2StepContext* context, bool useBias);
+
+void s2PrepareJoint_XPBD(s2Joint* joint, s2StepContext* context);
+void s2SolveJointVelocity_XPBD(s2Joint* joint, s2StepContext* context);
 
 void s2DrawJoint(s2DebugDraw* draw, s2World* world, s2Joint* joint);

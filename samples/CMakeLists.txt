@@ -63,7 +63,7 @@ set(S2D_SAMPLES
 	settings.h
 	settings.cpp
 
-	collection/sample_behavior.cpp
+	collection/sample_contact.cpp
 )
 
 add_executable(samples ${S2D_SAMPLES})

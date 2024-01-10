@@ -276,6 +276,358 @@ void s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
 	bodyB->angle = aB;
 }
 
+void s2PrepareRevolute_Soft(s2Joint* base, s2StepContext* context)
+{
+	S2_ASSERT(base->type == s2_revoluteJoint);
+
+	int32_t indexA = base->edges[0].bodyIndex;
+	int32_t indexB = base->edges[1].bodyIndex;
+	S2_ASSERT(0 <= indexA && indexA < context->bodyCapacity);
+	S2_ASSERT(0 <= indexB && indexB < context->bodyCapacity);
+
+	s2Body* bodyA = context->bodies + indexA;
+	s2Body* bodyB = context->bodies + indexB;
+	S2_ASSERT(bodyA->object.index == bodyA->object.next);
+	S2_ASSERT(bodyB->object.index == bodyB->object.next);
+
+	s2RevoluteJoint* joint = &base->revoluteJoint;
+	joint->localCenterA = bodyA->localCenter;
+	joint->invMassA = bodyA->invMass;
+	joint->invIA = bodyA->invI;
+
+	joint->localCenterB = bodyB->localCenter;
+	joint->invMassB = bodyB->invMass;
+	joint->invIB = bodyB->invI;
+
+	float aA = bodyA->angle;
+	s2Vec2 vA = bodyA->linearVelocity;
+	float wA = bodyA->angularVelocity;
+
+	float aB = bodyB->angle;
+	s2Vec2 vB = bodyB->linearVelocity;
+	float wB = bodyB->angularVelocity;
+
+	s2Rot qA = s2MakeRot(aA);
+	s2Rot qB = s2MakeRot(aB);
+
+	joint->rA = s2RotateVector(qA, s2Sub(base->localAnchorA, joint->localCenterA));
+	joint->rB = s2RotateVector(qB, s2Sub(base->localAnchorB, joint->localCenterB));
+
+	// J = [-I -r1_skew I r2_skew]
+	// r_skew = [-ry; rx]
+
+	// Matlab
+	// K = [ mA+r1y^2*iA+mB+r2y^2*iB,  -r1y*iA*r1x-r2y*iB*r2x]
+	//     [  -r1y*iA*r1x-r2y*iB*r2x, mA+r1x^2*iA+mB+r2x^2*iB]
+
+	float mA = joint->invMassA, mB = joint->invMassB;
+	float iA = joint->invIA, iB = joint->invIB;
+
+	joint->K.cx.x = mA + mB + joint->rA.y * joint->rA.y * iA + joint->rB.y * joint->rB.y * iB;
+	joint->K.cy.x = -joint->rA.y * joint->rA.x * iA - joint->rB.y * joint->rB.x * iB;
+	joint->K.cx.y = joint->K.cy.x;
+	joint->K.cy.y = mA + mB + joint->rA.x * joint->rA.x * iA + joint->rB.x * joint->rB.x * iB;
+
+	joint->axialMass = iA + iB;
+	bool fixedRotation;
+	if (joint->axialMass > 0.0f)
+	{
+		joint->axialMass = 1.0f / joint->axialMass;
+		fixedRotation = false;
+	}
+	else
+	{
+		fixedRotation = true;
+	}
+
+	joint->angle = aB - aA - joint->referenceAngle;
+	if (joint->enableLimit == false || fixedRotation)
+	{
+		joint->lowerImpulse = 0.0f;
+		joint->upperImpulse = 0.0f;
+	}
+
+	if (joint->enableMotor == false || fixedRotation)
+	{
+		joint->motorImpulse = 0.0f;
+	}
+
+	float axialImpulse = joint->motorImpulse + joint->lowerImpulse - joint->upperImpulse;
+	s2Vec2 P = {joint->impulse.x, joint->impulse.y};
+
+	vA = s2MulSub(vA, mA, P);
+	wA -= iA * (s2Cross(joint->rA, P) + axialImpulse);
+
+	vB = s2MulAdd(vB, mB, P);
+	wB += iB * (s2Cross(joint->rB, P) + axialImpulse);
+
+	bodyA->linearVelocity = vA;
+	bodyA->angularVelocity = wA;
+	bodyB->linearVelocity = vB;
+	bodyB->angularVelocity = wB;
+}
+
+void s2SolveRevoluteVelocity_Soft(s2Joint* base, s2StepContext* context, bool useBias)
+{
+	S2_ASSERT(base->type == s2_revoluteJoint);
+
+	s2RevoluteJoint* joint = &base->revoluteJoint;
+
+	s2Body* bodyA = context->bodies + base->edges[0].bodyIndex;
+	s2Body* bodyB = context->bodies + base->edges[1].bodyIndex;
+
+	s2Vec2 vA = bodyA->linearVelocity;
+	float wA = bodyA->angularVelocity;
+	s2Vec2 vB = bodyB->linearVelocity;
+	float wB = bodyB->angularVelocity;
+
+	float mA = joint->invMassA, mB = joint->invMassB;
+	float iA = joint->invIA, iB = joint->invIB;
+
+	bool fixedRotation = (iA + iB == 0.0f);
+
+	// Solve motor constraint.
+	if (joint->enableMotor && fixedRotation == false)
+	{
+		float Cdot = wB - wA - joint->motorSpeed;
+		float impulse = -joint->axialMass * Cdot;
+		float oldImpulse = joint->motorImpulse;
+		float maxImpulse = context->dt * joint->maxMotorTorque;
+		joint->motorImpulse = S2_CLAMP(joint->motorImpulse + impulse, -maxImpulse, maxImpulse);
+		impulse = joint->motorImpulse - oldImpulse;
+
+		wA -= iA * impulse;
+		wB += iB * impulse;
+	}
+
+	if (joint->enableLimit && fixedRotation == false)
+	{
+		// Lower limit
+		{
+			float C = joint->angle - joint->lowerAngle;
+			float Cdot = wB - wA;
+			float impulse = -joint->axialMass * (Cdot + S2_MAX(C, 0.0f) * context->inv_dt);
+			float oldImpulse = joint->lowerImpulse;
+			joint->lowerImpulse = S2_MAX(joint->lowerImpulse + impulse, 0.0f);
+			impulse = joint->lowerImpulse - oldImpulse;
+
+			wA -= iA * impulse;
+			wB += iB * impulse;
+		}
+
+		// Upper limit
+		// Note: signs are flipped to keep C positive when the constraint is satisfied.
+		// This also keeps the impulse positive when the limit is active.
+		{
+			float C = joint->upperAngle - joint->angle;
+			float Cdot = wA - wB;
+			float impulse = -joint->axialMass * (Cdot + S2_MAX(C, 0.0f) * context->inv_dt);
+			float oldImpulse = joint->upperImpulse;
+			joint->upperImpulse = S2_MAX(joint->upperImpulse + impulse, 0.0f);
+			impulse = joint->upperImpulse - oldImpulse;
+
+			wA += iA * impulse;
+			wB -= iB * impulse;
+		}
+	}
+
+	// Solve point-to-point constraint
+	{
+		s2Vec2 Cdot = s2Sub(s2Add(vB, s2CrossSV(wB, joint->rB)), s2Add(vA, s2CrossSV(wA, joint->rA)));
+		s2Vec2 impulse = s2Solve22(joint->K, s2Neg(Cdot));
+
+		joint->impulse.x += impulse.x;
+		joint->impulse.y += impulse.y;
+
+		vA = s2MulSub(vA, mA, impulse);
+		wA -= iA * s2Cross(joint->rA, impulse);
+
+		vB = s2MulAdd(vB, mB, impulse);
+		wB += iB * s2Cross(joint->rB, impulse);
+	}
+
+	bodyA->linearVelocity = vA;
+	bodyA->angularVelocity = wA;
+	bodyB->linearVelocity = vB;
+	bodyB->angularVelocity = wB;
+}
+
+void s2PrepareRevolute_XPBD(s2Joint* base, s2StepContext* context)
+{
+	S2_ASSERT(base->type == s2_revoluteJoint);
+
+	int32_t indexA = base->edges[0].bodyIndex;
+	int32_t indexB = base->edges[1].bodyIndex;
+	S2_ASSERT(0 <= indexA && indexA < context->bodyCapacity);
+	S2_ASSERT(0 <= indexB && indexB < context->bodyCapacity);
+
+	s2Body* bodyA = context->bodies + indexA;
+	s2Body* bodyB = context->bodies + indexB;
+	S2_ASSERT(bodyA->object.index == bodyA->object.next);
+	S2_ASSERT(bodyB->object.index == bodyB->object.next);
+
+	s2RevoluteJoint* joint = &base->revoluteJoint;
+	joint->localCenterA = bodyA->localCenter;
+	joint->invMassA = bodyA->invMass;
+	joint->invIA = bodyA->invI;
+
+	joint->localCenterB = bodyB->localCenter;
+	joint->invMassB = bodyB->invMass;
+	joint->invIB = bodyB->invI;
+
+	float aA = bodyA->angle;
+	s2Vec2 vA = bodyA->linearVelocity;
+	float wA = bodyA->angularVelocity;
+
+	float aB = bodyB->angle;
+	s2Vec2 vB = bodyB->linearVelocity;
+	float wB = bodyB->angularVelocity;
+
+	s2Rot qA = s2MakeRot(aA);
+	s2Rot qB = s2MakeRot(aB);
+
+	joint->rA = s2RotateVector(qA, s2Sub(base->localAnchorA, joint->localCenterA));
+	joint->rB = s2RotateVector(qB, s2Sub(base->localAnchorB, joint->localCenterB));
+
+	// J = [-I -r1_skew I r2_skew]
+	// r_skew = [-ry; rx]
+
+	// Matlab
+	// K = [ mA+r1y^2*iA+mB+r2y^2*iB,  -r1y*iA*r1x-r2y*iB*r2x]
+	//     [  -r1y*iA*r1x-r2y*iB*r2x, mA+r1x^2*iA+mB+r2x^2*iB]
+
+	float mA = joint->invMassA, mB = joint->invMassB;
+	float iA = joint->invIA, iB = joint->invIB;
+
+	joint->K.cx.x = mA + mB + joint->rA.y * joint->rA.y * iA + joint->rB.y * joint->rB.y * iB;
+	joint->K.cy.x = -joint->rA.y * joint->rA.x * iA - joint->rB.y * joint->rB.x * iB;
+	joint->K.cx.y = joint->K.cy.x;
+	joint->K.cy.y = mA + mB + joint->rA.x * joint->rA.x * iA + joint->rB.x * joint->rB.x * iB;
+
+	joint->axialMass = iA + iB;
+	bool fixedRotation;
+	if (joint->axialMass > 0.0f)
+	{
+		joint->axialMass = 1.0f / joint->axialMass;
+		fixedRotation = false;
+	}
+	else
+	{
+		fixedRotation = true;
+	}
+
+	joint->angle = aB - aA - joint->referenceAngle;
+	if (joint->enableLimit == false || fixedRotation)
+	{
+		joint->lowerImpulse = 0.0f;
+		joint->upperImpulse = 0.0f;
+	}
+
+	if (joint->enableMotor == false || fixedRotation)
+	{
+		joint->motorImpulse = 0.0f;
+	}
+
+	float axialImpulse = joint->motorImpulse + joint->lowerImpulse - joint->upperImpulse;
+	s2Vec2 P = {joint->impulse.x, joint->impulse.y};
+
+	vA = s2MulSub(vA, mA, P);
+	wA -= iA * (s2Cross(joint->rA, P) + axialImpulse);
+
+	vB = s2MulAdd(vB, mB, P);
+	wB += iB * (s2Cross(joint->rB, P) + axialImpulse);
+
+	bodyA->linearVelocity = vA;
+	bodyA->angularVelocity = wA;
+	bodyB->linearVelocity = vB;
+	bodyB->angularVelocity = wB;
+}
+
+void s2SolveRevoluteVelocity_XPBD(s2Joint* base, s2StepContext* context)
+{
+	S2_ASSERT(base->type == s2_revoluteJoint);
+
+	s2RevoluteJoint* joint = &base->revoluteJoint;
+
+	s2Body* bodyA = context->bodies + base->edges[0].bodyIndex;
+	s2Body* bodyB = context->bodies + base->edges[1].bodyIndex;
+
+	s2Vec2 vA = bodyA->linearVelocity;
+	float wA = bodyA->angularVelocity;
+	s2Vec2 vB = bodyB->linearVelocity;
+	float wB = bodyB->angularVelocity;
+
+	float mA = joint->invMassA, mB = joint->invMassB;
+	float iA = joint->invIA, iB = joint->invIB;
+
+	bool fixedRotation = (iA + iB == 0.0f);
+
+	// Solve motor constraint.
+	if (joint->enableMotor && fixedRotation == false)
+	{
+		float Cdot = wB - wA - joint->motorSpeed;
+		float impulse = -joint->axialMass * Cdot;
+		float oldImpulse = joint->motorImpulse;
+		float maxImpulse = context->dt * joint->maxMotorTorque;
+		joint->motorImpulse = S2_CLAMP(joint->motorImpulse + impulse, -maxImpulse, maxImpulse);
+		impulse = joint->motorImpulse - oldImpulse;
+
+		wA -= iA * impulse;
+		wB += iB * impulse;
+	}
+
+	if (joint->enableLimit && fixedRotation == false)
+	{
+		// Lower limit
+		{
+			float C = joint->angle - joint->lowerAngle;
+			float Cdot = wB - wA;
+			float impulse = -joint->axialMass * (Cdot + S2_MAX(C, 0.0f) * context->inv_dt);
+			float oldImpulse = joint->lowerImpulse;
+			joint->lowerImpulse = S2_MAX(joint->lowerImpulse + impulse, 0.0f);
+			impulse = joint->lowerImpulse - oldImpulse;
+
+			wA -= iA * impulse;
+			wB += iB * impulse;
+		}
+
+		// Upper limit
+		// Note: signs are flipped to keep C positive when the constraint is satisfied.
+		// This also keeps the impulse positive when the limit is active.
+		{
+			float C = joint->upperAngle - joint->angle;
+			float Cdot = wA - wB;
+			float impulse = -joint->axialMass * (Cdot + S2_MAX(C, 0.0f) * context->inv_dt);
+			float oldImpulse = joint->upperImpulse;
+			joint->upperImpulse = S2_MAX(joint->upperImpulse + impulse, 0.0f);
+			impulse = joint->upperImpulse - oldImpulse;
+
+			wA += iA * impulse;
+			wB -= iB * impulse;
+		}
+	}
+
+	// Solve point-to-point constraint
+	{
+		s2Vec2 Cdot = s2Sub(s2Add(vB, s2CrossSV(wB, joint->rB)), s2Add(vA, s2CrossSV(wA, joint->rA)));
+		s2Vec2 impulse = s2Solve22(joint->K, s2Neg(Cdot));
+
+		joint->impulse.x += impulse.x;
+		joint->impulse.y += impulse.y;
+
+		vA = s2MulSub(vA, mA, impulse);
+		wA -= iA * s2Cross(joint->rA, impulse);
+
+		vB = s2MulAdd(vB, mB, impulse);
+		wB += iB * s2Cross(joint->rB, impulse);
+	}
+
+	bodyA->linearVelocity = vA;
+	bodyA->angularVelocity = wA;
+	bodyB->linearVelocity = vB;
+	bodyB->angularVelocity = wB;
+}
+
 void s2RevoluteJoint_EnableLimit(s2JointId jointId, bool enableLimit)
 {
 	s2World* world = s2GetWorldFromIndex(jointId.world);

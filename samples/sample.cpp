@@ -20,9 +20,6 @@ Sample::Sample(const Settings& settings, s2SolverType solverType)
 
 	s2WorldDef worldDef = s2DefaultWorldDef();
 	worldDef.solverType = solverType;
-	worldDef.bodyCapacity = 4;
-	worldDef.contactCapacity = 4;
-	worldDef.stackAllocatorCapacity = 20 * 1024;
 
 	m_solverType = solverType;
 	m_worldId = s2CreateWorld(&worldDef);
@@ -99,7 +96,7 @@ void Sample::MouseDown(s2Vec2 p, int button, int mod)
 			float mass = s2Body_GetMass(queryContext.bodyId);
 
 			s2BodyDef bodyDef = s2DefaultBodyDef();
-			m_groundBodyId = s2World_CreateBody(m_worldId, &bodyDef);
+			m_groundBodyId = s2CreateBody(m_worldId, &bodyDef);
 
 			s2MouseJointDef jd;
 			jd.bodyIdA = m_groundBodyId;
@@ -111,7 +108,7 @@ void Sample::MouseDown(s2Vec2 p, int button, int mod)
 			jd.stiffness = mass * omega * omega;
 			jd.damping = 2.0f * mass * dampingRatio * omega;
 
-			m_mouseJointId = s2World_CreateMouseJoint(m_worldId, &jd);
+			m_mouseJointId = s2CreateMouseJoint(m_worldId, &jd);
 		}
 	}
 }
@@ -120,10 +117,10 @@ void Sample::MouseUp(s2Vec2 p, int button)
 {
 	if (S2_NON_NULL(m_mouseJointId) && button == GLFW_MOUSE_BUTTON_1)
 	{
-		s2World_DestroyJoint(m_mouseJointId);
+		s2DestroyJoint(m_mouseJointId);
 		m_mouseJointId = s2_nullJointId;
 
-		s2World_DestroyBody(m_groundBodyId);
+		s2DestroyBody(m_groundBodyId);
 		m_groundBodyId = s2_nullBodyId;
 	}
 }

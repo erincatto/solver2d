@@ -13,7 +13,7 @@
 #include "world.h"
 #include "shape.h"
 
-s2BodyId s2World_CreateBody(s2WorldId worldId, const s2BodyDef* def)
+s2BodyId s2CreateBody(s2WorldId worldId, const s2BodyDef* def)
 {
 	s2World* world = s2GetWorldFromId(worldId);
 
@@ -59,7 +59,7 @@ s2BodyId s2World_CreateBody(s2WorldId worldId, const s2BodyDef* def)
 	return id;
 }
 
-void s2World_DestroyBody(s2BodyId bodyId)
+void s2DestroyBody(s2BodyId bodyId)
 {
 	s2World* world = s2GetWorldFromIndex(bodyId.world);
 
@@ -266,17 +266,17 @@ static s2ShapeId s2CreateShape(s2BodyId bodyId, const s2ShapeDef* def, const voi
 	return id;
 }
 
-s2ShapeId s2Body_CreateCircle(s2BodyId bodyId, const s2ShapeDef* def, const s2Circle* circle)
+s2ShapeId s2CreateCircleShape(s2BodyId bodyId, const s2ShapeDef* def, const s2Circle* circle)
 {
 	return s2CreateShape(bodyId, def, circle, s2_circleShape);
 }
 
-s2ShapeId s2Body_CreatePolygon(s2BodyId bodyId, const s2ShapeDef* def, const s2Polygon* polygon)
+s2ShapeId s2CreatePolygonShape(s2BodyId bodyId, const s2ShapeDef* def, const s2Polygon* polygon)
 {
 	return s2CreateShape(bodyId, def, polygon, s2_polygonShape);
 }
 
-s2ShapeId s2Body_CreateSegment(s2BodyId bodyId, const s2ShapeDef* def, const s2Segment* segment)
+s2ShapeId s2CreateSegmentShape(s2BodyId bodyId, const s2ShapeDef* def, const s2Segment* segment)
 {
 	float lengthSqr = s2DistanceSquared(segment->point1, segment->point2);
 	if (lengthSqr <= s2_linearSlop * s2_linearSlop)
@@ -288,7 +288,7 @@ s2ShapeId s2Body_CreateSegment(s2BodyId bodyId, const s2ShapeDef* def, const s2S
 	return s2CreateShape(bodyId, def, segment, s2_segmentShape);
 }
 
-s2ShapeId s2Body_CreateCapsule(s2BodyId bodyId, const s2ShapeDef* def, const s2Capsule* capsule)
+s2ShapeId s2CreateCapsuleShape(s2BodyId bodyId, const s2ShapeDef* def, const s2Capsule* capsule)
 {
 	float lengthSqr = s2DistanceSquared(capsule->point1, capsule->point2);
 	if (lengthSqr <= s2_linearSlop * s2_linearSlop)

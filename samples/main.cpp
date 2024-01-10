@@ -387,6 +387,11 @@ static void UpdateUI(s2Color* solverColors)
 			ImGui::Checkbox("XPBD", &s_settings.m_enablesSolvers[s2_solverXPBD]);
 			ImGui::PopStyleColor();
 
+			c = solverColors[s2_solverTGS_Soft];
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{c.r, c.g, c.b, c.a});
+			ImGui::Checkbox("TGS Soft", &s_settings.m_enablesSolvers[s2_solverTGS_Soft]);
+			ImGui::PopStyleColor();
+
 			ImGui::Separator();
 
 			ImGui::Checkbox("Shapes", &s_settings.m_drawShapes);
@@ -594,6 +599,7 @@ int main(int, char**)
 		s2MakeColor(s2_colorDodgerBlue, colorAlpha),
 		s2MakeColor(s2_colorCoral, colorAlpha),
 		s2MakeColor(s2_colorSpringGreen, colorAlpha),
+		s2MakeColor(s2_colorYellow2, colorAlpha),
 	};
 
 	static_assert(S2_ARRAY_COUNT(solverColors) == s2_solverTypeCount);
@@ -718,6 +724,7 @@ int main(int, char**)
 			}
 
 			s_settings.m_restart = false;
+			g_camera.ResetView();
 
 			for (int i = 0; i < s2_solverTypeCount; ++i)
 			{
@@ -726,8 +733,6 @@ int main(int, char**)
 					s_samples[i] = g_sampleEntries[s_settings.m_sampleIndex].createFcn(s_settings, s2SolverType(i));
 				}
 			}
-
-			g_camera.ResetView();
 		}
 
 		glfwPollEvents();

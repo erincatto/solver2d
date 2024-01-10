@@ -617,6 +617,8 @@ void s2Solve_PGS_Soft(s2World* world, s2StepContext* context)
 		{
 			continue;
 		}
+
+		// todo soft
 		s2PrepareJoint(joint, context);
 	}
 
@@ -630,6 +632,7 @@ void s2Solve_PGS_Soft(s2World* world, s2StepContext* context)
 				continue;
 			}
 
+			// todo soft
 			s2SolveJointVelocity(joint, context);
 		}
 
@@ -648,6 +651,7 @@ void s2Solve_PGS_Soft(s2World* world, s2StepContext* context)
 				continue;
 			}
 
+			// todo relax soft
 			s2SolveJointPosition(joint, context);
 		}
 
