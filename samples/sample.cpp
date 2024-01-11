@@ -23,8 +23,6 @@ Sample::Sample(const Settings& settings, s2SolverType solverType)
 
 	m_solverType = solverType;
 	m_worldId = s2CreateWorld(&worldDef);
-	m_textLine = 30;
-	m_textIncrement = 18;
 	m_mouseJointId = s2_nullJointId;
 
 	m_stepCount = 0;
@@ -35,10 +33,10 @@ Sample::~Sample()
 	s2DestroyWorld(m_worldId);
 }
 
-void Sample::DrawTitle(const char* string)
+void Sample::DrawTitle(Settings& settings, const char* string)
 {
 	g_draw.DrawString(5, 5, string);
-	m_textLine = int32_t(26.0f);
+	settings.m_textLine = int32_t(26.0f);
 }
 
 struct QueryContext
@@ -135,41 +133,17 @@ void Sample::MouseMove(s2Vec2 p)
 
 void Sample::Step(Settings& settings, s2Color bodyColor)
 {
-	float timeStep = settings.m_hertz > 0.0f ? 1.0f / settings.m_hertz : float(0.0f);
-
-	if (settings.m_pause)
-	{
-		if (settings.m_singleStep)
-		{
-			settings.m_singleStep = 0;
-		}
-		else
-		{
-			timeStep = 0.0f;
-		}
-
-		g_draw.DrawString(5, m_textLine, "****PAUSED****");
-		m_textLine += m_textIncrement;
-	}
-
 	bodyColor.a = 0.6f;
 	g_draw.m_debugDraw.dynamicBodyColor = bodyColor;
-	g_draw.m_debugDraw.drawShapes = settings.m_drawShapes;
-	g_draw.m_debugDraw.drawJoints = settings.m_drawJoints;
-	g_draw.m_debugDraw.drawAABBs = settings.m_drawAABBs;
-	g_draw.m_debugDraw.drawCOMs = settings.m_drawCOMs;
 
-	for (int32_t i = 0; i < 1; ++i)
-	{
-		s2World_Step(m_worldId, timeStep, settings.m_velocityIterations, settings.m_positionIterations);
-	}
+	s2World_Step(m_worldId, settings.m_timeStep, settings.m_velocityIterations, settings.m_positionIterations);
 
 	if (settings.m_enablesSolvers[m_solverType])
 	{
 		s2World_Draw(m_worldId, &g_draw.m_debugDraw);
 	}
 
-	if (timeStep > 0.0f)
+	if (settings.m_timeStep > 0.0f)
 	{
 		++m_stepCount;
 	}
@@ -178,14 +152,14 @@ void Sample::Step(Settings& settings, s2Color bodyColor)
 	{
 		s2Statistics s = s2World_GetStatistics(m_worldId);
 
-		g_draw.DrawString(5, m_textLine, "bodies/contacts/joints = %d/%d/%d/%d", s.bodyCount, s.contactCount, s.jointCount);
-		m_textLine += m_textIncrement;
+		g_draw.DrawString(5, settings.m_textLine, "bodies/contacts/joints = %d/%d/%d/%d", s.bodyCount, s.contactCount, s.jointCount);
+		settings.m_textLine += settings.m_textIncrement;
 
-		g_draw.DrawString(5, m_textLine, "proxies/height = %d/%d", s.proxyCount, s.treeHeight);
-		m_textLine += m_textIncrement;
+		g_draw.DrawString(5, settings.m_textLine, "proxies/height = %d/%d", s.proxyCount, s.treeHeight);
+		settings.m_textLine += settings.m_textIncrement;
 
-		g_draw.DrawString(5, m_textLine, "stack allocator capacity/used = %d/%d", s.stackCapacity, s.stackUsed);
-		m_textLine += m_textIncrement;
+		g_draw.DrawString(5, settings.m_textLine, "stack allocator capacity/used = %d/%d", s.stackCapacity, s.stackUsed);
+		settings.m_textLine += settings.m_textIncrement;
 	}
 }
 

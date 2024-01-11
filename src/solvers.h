@@ -64,4 +64,4 @@ void s2Solve_PGS_NGS(s2World* world, s2StepContext* context);
 void s2Solve_PGS_Soft(s2World* world, s2StepContext* stepContext);
 void s2Solve_XPDB(s2World* world, s2StepContext* stepContext);
 void s2Solve_TGS_Soft(s2World* world, s2StepContext* stepContext);
-//void s2SolveTGSSticky(s2World* world, s2StepContext* stepContext);
+void s2Solve_TGS_Sticky(s2World* world, s2StepContext* stepContext);

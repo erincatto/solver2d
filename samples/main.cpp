@@ -392,6 +392,11 @@ static void UpdateUI(s2Color* solverColors)
 			ImGui::Checkbox("TGS Soft", &s_settings.m_enablesSolvers[s2_solverTGS_Soft]);
 			ImGui::PopStyleColor();
 
+			c = solverColors[s2_solverTGS_Sticky];
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{c.r, c.g, c.b, c.a});
+			ImGui::Checkbox("TGS Sticky", &s_settings.m_enablesSolvers[s2_solverTGS_Sticky]);
+			ImGui::PopStyleColor();
+
 			ImGui::Separator();
 
 			ImGui::Checkbox("Shapes", &s_settings.m_drawShapes);
@@ -600,6 +605,7 @@ int main(int, char**)
 		s2MakeColor(s2_colorCoral, colorAlpha),
 		s2MakeColor(s2_colorSpringGreen, colorAlpha),
 		s2MakeColor(s2_colorYellow2, colorAlpha),
+		s2MakeColor(s2_colorLavenderBlush, colorAlpha),
 	};
 
 	static_assert(S2_ARRAY_COUNT(solverColors) == s2_solverTypeCount);
@@ -615,12 +621,12 @@ int main(int, char**)
 	glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
 
 	float frameTime = 0.0;
-
 	int32_t frame = 0;
 
 	while (!glfwWindowShouldClose(g_mainWindow))
 	{
 		double time1 = glfwGetTime();
+		s_settings.m_textLine = 0;
 
 		if (glfwGetKey(g_mainWindow, GLFW_KEY_Z) == GLFW_PRESS)
 		{
@@ -675,10 +681,33 @@ int main(int, char**)
 			{
 				if (s_samples[i] != nullptr)
 				{
-					s_samples[i]->DrawTitle(buffer);
+					s_samples[i]->DrawTitle(s_settings, buffer);
+					break;
 				}
 			}
 		}
+
+		s_settings.m_timeStep = s_settings.m_hertz > 0.0f ? 1.0f / s_settings.m_hertz : float(0.0f);
+
+		if (s_settings.m_pause)
+		{
+			if (s_settings.m_singleStep)
+			{
+				s_settings.m_singleStep = 0;
+			}
+			else
+			{
+				s_settings.m_timeStep = 0.0f;
+			}
+
+			g_draw.DrawString(5, s_settings.m_textLine, "****PAUSED****");
+			s_settings.m_textLine += s_settings.m_textIncrement;
+		}
+
+		g_draw.m_debugDraw.drawShapes = s_settings.m_drawShapes;
+		g_draw.m_debugDraw.drawJoints = s_settings.m_drawJoints;
+		g_draw.m_debugDraw.drawAABBs = s_settings.m_drawAABBs;
+		g_draw.m_debugDraw.drawCOMs = s_settings.m_drawCOMs;
 
 		for (int i = 0; i < s2_solverTypeCount; ++i)
 		{

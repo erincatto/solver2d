@@ -206,6 +206,10 @@ void s2World_Step(s2WorldId worldId, float timeStep, int velocityIterations, int
 				s2Solve_TGS_Soft(world, &context);
 				break;
 
+			case s2_solverTGS_Sticky:
+				s2Solve_TGS_Sticky(world, &context);
+				break;
+
 			default:
 				break;
 		}

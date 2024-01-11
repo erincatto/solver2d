@@ -317,7 +317,8 @@ static void s2InitializeStickyConstraints(s2World* world, s2ContactConstraint* c
 }
 #endif
 
-static void s2SolveContactVelocities_TGS_Soft(s2World* world, s2ContactConstraint* constraints, int constraintCount, float inv_dt, bool useBias)
+static void s2SolveContactVelocities_TGS_Soft(s2World* world, s2ContactConstraint* constraints, int constraintCount, float inv_dt,
+											  bool useBias)
 {
 	s2Body* bodies = world->bodies;
 
@@ -376,7 +377,7 @@ static void s2SolveContactVelocities_TGS_Soft(s2World* world, s2ContactConstrain
 				massScale = cp->massCoefficient;
 				impulseScale = cp->impulseCoefficient;
 			}
-			
+
 			// Current anchors
 			s2Vec2 rA = s2Add(cp->rA, drA);
 			s2Vec2 rB = s2Add(cp->rB, drB);
@@ -615,9 +616,9 @@ void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
 
 	// Full step apply gravity
 	s2IntegrateVelocities(world, context->dt);
-	
+
 	s2PrepareSoftContacts(world, constraints, constraintCount, context->dt);
-	
+
 	for (int i = 0; i < jointCapacity; ++i)
 	{
 		s2Joint* joint = joints + i;

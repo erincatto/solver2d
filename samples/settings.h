@@ -14,8 +14,11 @@ struct Settings
 	int m_windowWidth = 1920;
 	int m_windowHeight = 1080;
 	float m_hertz = 60.0f;
+	float m_timeStep = 1.0f / 60.0f;
 	int m_velocityIterations = 8;
 	int m_positionIterations = 3;
+	int m_textLine = 0;
+	int m_textIncrement = 18;
 	bool m_enablesSolvers[s2_solverTypeCount] = {};
 	bool m_enableWarmStarting = true;
 	bool m_drawShapes = true;

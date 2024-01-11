@@ -39,8 +39,8 @@ static void s2PrepareContacts_XBPD(s2World* world, s2ContactConstraint* constrai
 		constraint->normal = manifold->normal;
 
 		// XPBD friction is very strong
-		constraint->friction = 0.25f * contact->friction;
-		constraint->kinematicFriction = 0.8f * constraint->friction;
+		constraint->friction = contact->friction;
+		constraint->kinematicFriction = 0.9f * constraint->friction;
 
 		constraint->restitution = contact->restitution;
 		constraint->pointCount = pointCount;
