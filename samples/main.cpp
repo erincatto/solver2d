@@ -397,6 +397,11 @@ static void UpdateUI(s2Color* solverColors)
 			ImGui::Checkbox("TGS Sticky", &s_settings.m_enablesSolvers[s2_solverTGS_Sticky]);
 			ImGui::PopStyleColor();
 
+			c = solverColors[s2_solverTGS_NGS];
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{c.r, c.g, c.b, c.a});
+			ImGui::Checkbox("TGS NGS", &s_settings.m_enablesSolvers[s2_solverTGS_NGS]);
+			ImGui::PopStyleColor();
+
 			ImGui::Separator();
 
 			ImGui::Checkbox("Shapes", &s_settings.m_drawShapes);
@@ -606,6 +611,7 @@ int main(int, char**)
 		s2MakeColor(s2_colorSpringGreen, colorAlpha),
 		s2MakeColor(s2_colorYellow2, colorAlpha),
 		s2MakeColor(s2_colorLavenderBlush, colorAlpha),
+		s2MakeColor(s2_colorOrchid, colorAlpha),
 	};
 
 	static_assert(S2_ARRAY_COUNT(solverColors) == s2_solverTypeCount);

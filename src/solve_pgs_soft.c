@@ -12,56 +12,6 @@
 
 #include <stdbool.h>
 
-#define maxBaumgarteVelocity 3.0f
-
-#if 0
-static void s2IntegrateDeltaTransform(s2World* world, float h)
-{
-	s2Body* bodies = world->bodies;
-	int bodyCapacity = world->bodyPool.capacity;
-
-	for (int i = 0; i < bodyCapacity; ++i)
-	{
-		s2Body* body = bodies + i;
-		if (s2ObjectValid(&body->object) == false)
-		{
-			continue;
-		}
-
-		if (body->type == s2_staticBody)
-		{
-			continue;
-		}
-
-		body->deltaAngle += h * body->angularVelocity;
-		body->deltaPosition = s2MulAdd(body->deltaPosition, h, body->linearVelocity);
-	}
-}
-
-static void s2UpdatePositions(s2World* world)
-{
-	s2Body* bodies = world->bodies;
-	int bodyCapacity = world->bodyPool.capacity;
-
-	for (int i = 0; i < bodyCapacity; ++i)
-	{
-		s2Body* body = bodies + i;
-		if (s2ObjectValid(&body->object) == false)
-		{
-			continue;
-		}
-
-		if (body->type == s2_staticBody)
-		{
-			continue;
-		}
-
-		body->position = s2Add(body->position, body->deltaPosition);
-		body->angle += body->deltaAngle;
-	}
-}
-#endif
-
 static void s2InitializeSoftConstraints(s2World* world, float h, s2ContactConstraint* constraints, int constraintCount)
 {
 	s2Body* bodies = world->bodies;
@@ -136,7 +86,7 @@ static void s2InitializeSoftConstraints(s2World* world, float h, s2ContactConstr
 
 			// cp->gamma = 1.0f / (h * (d + h * k));
 			// cp->gamma = 1.0f / (h * (2.0f * zeta * omega / kNormal + h * omega * omega / kNormal));
-			cp->gamma = kNormal / (h * omega * (2.0f * zeta + h * omega));
+			// cp->gamma = kNormal / (h * omega * (2.0f * zeta + h * omega));
 
 			cp->separation = mp->separation;
 
@@ -370,7 +320,7 @@ static void s2SolveVelocityConstraintsSoft(s2World* world, s2ContactConstraint* 
 			}
 			else if (useBias)
 			{
-				bias = S2_MAX(cp->biasCoefficient * s, -maxBaumgarteVelocity);
+				bias = S2_MAX(cp->biasCoefficient * s, -s2_maxBaumgarteVelocity);
 				//bias = cp->biasCoefficient * s;
 				massScale = cp->massCoefficient;
 				impulseScale = cp->impulseCoefficient;

@@ -32,7 +32,6 @@ typedef struct s2ContactConstraintPoint
 	float tangentImpulse;
 	float normalMass;
 	float tangentMass;
-	float gamma;
 	float massCoefficient;
 	float biasCoefficient;
 	float impulseCoefficient;
@@ -59,9 +58,11 @@ void s2IntegratePositions(s2World* world, float h);
 void s2WarmStartContacts(s2World* world, s2ContactConstraint* constraints, int constraintCount);
 void s2StoreContactImpulses(s2ContactConstraint* constraints, int constraintCount);
 
+// many solvers
 void s2Solve_PGS_NGS_Block(s2World* world, s2StepContext* stepContext);
 void s2Solve_PGS_NGS(s2World* world, s2StepContext* context);
 void s2Solve_PGS_Soft(s2World* world, s2StepContext* stepContext);
 void s2Solve_XPDB(s2World* world, s2StepContext* stepContext);
 void s2Solve_TGS_Soft(s2World* world, s2StepContext* stepContext);
 void s2Solve_TGS_Sticky(s2World* world, s2StepContext* stepContext);
+void s2Solve_TGS_NGS(s2World* world, s2StepContext* stepContext);
