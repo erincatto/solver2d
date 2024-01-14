@@ -53,6 +53,9 @@ public:
 				s2BodyDef bodyDef = s2_defaultBodyDef;
 				bodyDef.type = s2_dynamicBody;
 				bodyDef.position = {xbase + 0.5f + 1.0f * i, 20.0f};
+				bodyDef.linearDamping = 0.1f;
+				bodyDef.angularDamping = 0.1f;
+
 				s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
 				s2CreatePolygonShape(bodyId, &shapeDef, &box);
 
@@ -126,6 +129,9 @@ public:
 				s2BodyDef bodyDef = s2_defaultBodyDef;
 				bodyDef.type = s2_dynamicBody;
 				bodyDef.position = {(1.0f + 2.0f * i) * hx, e_count * hx};
+				bodyDef.linearDamping = 0.1f;
+				bodyDef.angularDamping = 0.1f;
+
 				s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
 				s2CreateCapsuleShape(bodyId, &shapeDef, &capsule);
 
@@ -147,6 +153,8 @@ public:
 			s2BodyDef bodyDef = s2_defaultBodyDef;
 			bodyDef.type = s2_dynamicBody;
 			bodyDef.position = {(1.0f + 2.0f * e_count) * hx + circle.radius - hx, e_count * hx};
+			bodyDef.linearDamping = 0.1f;
+			bodyDef.angularDamping = 0.1f;
 
 			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
 			s2CreateCircleShape(bodyId, &shapeDef, &circle);

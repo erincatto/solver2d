@@ -363,7 +363,7 @@ static void UpdateUI(s2Color* solverColors)
 			ImGui::SliderInt("Vel Iters", &s_settings.velocityIterations, 0, 50);
 			ImGui::SliderInt("Pos Iters", &s_settings.positionIterations, 0, 50);
 			ImGui::SliderInt("Multi-Steps", &s_settings.multiSteps, 1, 50);
-			ImGui::SliderFloat("Hertz", &s_settings.hertz, 5.0f, 120.0f, "%.0f hz");
+			ImGui::SliderFloat("Hertz", &s_settings.hertz, 5.0f, 240.0f, "%.0f hz");
 			ImGui::Checkbox("Warm Starting", &s_settings.enableWarmStarting);
 
 			ImGui::Separator();
@@ -412,7 +412,7 @@ static void UpdateUI(s2Color* solverColors)
 			ImGui::Checkbox("Contact Normals", &s_settings.drawContactNormals);
 			ImGui::Checkbox("Contact Impulses", &s_settings.drawContactImpulse);
 			ImGui::Checkbox("Friction Impulses", &s_settings.drawFrictionImpulse);
-			ImGui::Checkbox("Center of Masses", &s_settings.drawCOMs);
+			ImGui::Checkbox("Center of Masses", &s_settings.drawMass);
 			ImGui::Checkbox("Statistics", &s_settings.drawStats);
 
 			ImVec2 button_sz = ImVec2(-1, 0);
@@ -714,7 +714,11 @@ int main(int, char**)
 		g_draw.m_debugDraw.drawShapes = s_settings.drawShapes;
 		g_draw.m_debugDraw.drawJoints = s_settings.drawJoints;
 		g_draw.m_debugDraw.drawAABBs = s_settings.drawAABBs;
-		g_draw.m_debugDraw.drawCOMs = s_settings.drawCOMs;
+		g_draw.m_debugDraw.drawMass = s_settings.drawMass;
+		g_draw.m_debugDraw.drawContactPoints = s_settings.drawContactPoints;
+		g_draw.m_debugDraw.drawContactNormals = s_settings.drawContactNormals;
+		g_draw.m_debugDraw.drawContactImpulses = s_settings.drawContactImpulse;
+		g_draw.m_debugDraw.drawFrictionImpulses = s_settings.drawFrictionImpulse;
 
 		for (int i = 0; i < s2_solverTypeCount; ++i)
 		{

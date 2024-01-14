@@ -48,7 +48,6 @@ typedef struct s2ContactConstraint
 	s2ContactConstraintPoint points[2];
 	s2Vec2 normal;
 	float friction;
-	float kinematicFriction;
 	float restitution;
 	int pointCount;
 } s2ContactConstraint;

@@ -108,6 +108,8 @@ typedef struct s2BodyDef
 	float angle;
 	s2Vec2 linearVelocity;
 	float angularVelocity;
+	float linearDamping;
+	float angularDamping;
 	void* userData;
 } s2BodyDef;
 
@@ -117,6 +119,8 @@ static const s2BodyDef s2_defaultBodyDef = {
 	0.0f,		   // angle
 	{0.0f, 0.0f},  // linearVelocity
 	0.0f,		   // angularVelocity
+	0.0f,		   // linearDamping
+	0.0f,		   // angularDamping
 	NULL,		   // userData
 };
 

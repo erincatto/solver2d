@@ -51,7 +51,7 @@ void Settings::Save()
 	fprintf(file, "  \"drawContactNormals\": %s,\n", drawContactNormals ? "true" : "false");
 	fprintf(file, "  \"drawContactImpulse\": %s,\n", drawContactImpulse ? "true" : "false");
 	fprintf(file, "  \"drawFrictionImpulse\": %s,\n", drawFrictionImpulse ? "true" : "false");
-	fprintf(file, "  \"drawCOMs\": %s,\n", drawCOMs ? "true" : "false");
+	fprintf(file, "  \"drawMass\": %s,\n", drawMass ? "true" : "false");
 	fprintf(file, "  \"drawStats\": %s,\n", drawStats ? "true" : "false");
 	fprintf(file, "  \"enableWarmStarting\": %s,\n", enableWarmStarting ? "true" : "false");
 	fprintf(file, "}\n");
@@ -117,5 +117,5 @@ void Settings::Load()
 
 	free(data);
 
-	enablesSolvers[s2_solverTGS_Soft] = true;
+	enablesSolvers[s2_solverXPBD] = true;
 }

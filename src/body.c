@@ -49,10 +49,8 @@ s2BodyId s2CreateBody(s2WorldId worldId, const s2BodyDef* def)
 	b->invMass = 0.0f;
 	b->I = 0.0f;
 	b->invI = 0.0f;
-
-	// a little bit of damping so that joint tests will settle and stretching can be compared
-	b->linearDamping = 0.1f;
-	b->angularDamping = 0.1f;
+	b->linearDamping = def->linearDamping;
+	b->angularDamping = def->angularDamping;
 
 	b->userData = def->userData;
 	b->world = worldId.index;

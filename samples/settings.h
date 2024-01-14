@@ -29,7 +29,7 @@ struct Settings
 	bool drawContactNormals = false;
 	bool drawContactImpulse = false;
 	bool drawFrictionImpulse = false;
-	bool drawCOMs = false;
+	bool drawMass = false;
 	bool drawStats = false;
 	bool pause = false;
 	bool singleStep = false;

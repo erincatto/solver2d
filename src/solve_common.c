@@ -115,6 +115,9 @@ void s2PrepareContacts_Soft(s2World* world, s2ContactConstraint* constraints, in
 		float mB = bodyB->invMass;
 		float iB = bodyB->invI;
 
+		// Stiffer for dynamic vs static
+		float contactHertz = (mA == 0.0f || mB == 0.0f) ? 2.0f * hertz : hertz;
+
 		s2Vec2 cA = bodyA->position;
 		s2Vec2 cB = bodyB->position;
 		s2Rot qA = s2MakeRot(bodyA->angle);
@@ -157,7 +160,7 @@ void s2PrepareContacts_Soft(s2World* world, s2ContactConstraint* constraints, in
 
 			// Soft contact
 			const float zeta = 1.0f;
-			float omega = 2.0f * s2_pi * hertz;
+			float omega = 2.0f * s2_pi * contactHertz;
 			float c = h * omega * (2.0f * zeta + h * omega);
 			cp->biasCoefficient = omega / (2.0f * zeta + h * omega);
 			cp->impulseCoefficient = 1.0f / (1.0f + c);

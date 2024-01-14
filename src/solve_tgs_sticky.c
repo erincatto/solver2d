@@ -177,6 +177,8 @@ static void s2SolveContacts_TGS_Sticky(s2World* world, s2ContactConstraint* cons
 		s2Vec2 vB = bodyB->linearVelocity;
 		float wB = bodyB->angularVelocity;
 
+		s2Vec2 cA = bodyA->position;
+		s2Vec2 cB = bodyB->position;
 		s2Rot qA = s2MakeRot(bodyA->angle);
 		s2Rot qB = s2MakeRot(bodyB->angle);
 
@@ -196,8 +198,8 @@ static void s2SolveContacts_TGS_Sticky(s2World* world, s2ContactConstraint* cons
 			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
 
 			// Compute change in separation
-			float ds = s2Dot(s2Sub(rB, rA), normal);
-			float s = cp->separation + ds;
+			s2Vec2 d = s2Sub(s2Add(cB, rB), s2Add(cA, rA));
+			float s = s2Dot(d, normal) + cp->separation;
 
 			float bias = 0.0f;
 			if (s > 0.0f)
@@ -244,8 +246,8 @@ static void s2SolveContacts_TGS_Sticky(s2World* world, s2ContactConstraint* cons
 			s2Vec2 rBf = s2RotateVector(qB, cp->localFrictionAnchorB);
 
 			// Compute change in separation
-			float ds = s2Dot(s2Sub(rBf, rAf), tangent);
-			float s = cp->tangentSeparation + ds;
+			s2Vec2 d = s2Sub(s2Add(cB, rBf), s2Add(cA, rAf));
+			float s = s2Dot(d, tangent) + cp->tangentSeparation;
 			float bias = 0.5f * s * inv_h;
 
 			// Relative velocity at contact
@@ -344,6 +346,9 @@ void s2Solve_TGS_Sticky(s2World* world, s2StepContext* context)
 		// relax constraints
 		s2SolveContacts_TGS_Sticky(world, constraints, constraintCount, 0.0f, useBias);
 	}
+
+	// warm starting is not used, this is just for reporting
+	s2StoreContactImpulses(constraints, constraintCount);
 
 	s2FreeStackItem(world->stackAllocator, constraints);
 }

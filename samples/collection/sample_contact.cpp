@@ -4,8 +4,8 @@
 #include "sample.h"
 #include "settings.h"
 
-#include "solver2d/hull.h"
 #include "solver2d/geometry.h"
+#include "solver2d/hull.h"
 #include "solver2d/solver2d.h"
 
 #include <GLFW/glfw3.h>
@@ -51,11 +51,76 @@ public:
 
 static int sampleSingleBox = RegisterSample("Contact", "Single Box", SingleBox::Create);
 
+class WarmStartEnergy : public Sample
+{
+public:
+	WarmStartEnergy(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		if (settings.restart == false)
+		{
+			g_camera.m_center = {0.0f, 3.0f};
+			g_camera.m_zoom = 0.2f;
+		}
+
+		s2BodyId groundId = s2CreateBody(m_worldId, &s2_defaultBodyDef);
+		s2Segment segment = {{-10.0f, 0.0f}, {10.0f, 0.0f}};
+		s2CreateSegmentShape(groundId, &s2_defaultShapeDef, &segment);
+
+		s2BodyDef bodyDef = s2_defaultBodyDef;
+		bodyDef.type = s2_dynamicBody;
+
+		s2ShapeDef shapeDef = s2_defaultShapeDef;
+		s2Circle circle = {{0.0f, 0.0f}, 0.5f};
+
+		{
+			bodyDef.position = {0.0f, 0.5f};
+			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+			shapeDef.density = 1.0f;
+			s2CreateCircleShape(bodyId, &shapeDef, &circle);
+		}
+
+		{
+			bodyDef.position = {0.0f, 1.5f};
+			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+			shapeDef.density = 1.0f;
+			s2CreateCircleShape(bodyId, &shapeDef, &circle);
+		}
+
+		{
+			bodyDef.position = {0.0f, 2.5f};
+			m_topId = s2CreateBody(m_worldId, &bodyDef);
+			shapeDef.density = 100.0f;
+			s2CreateCircleShape(m_topId, &shapeDef, &circle);
+		}
+	}
+
+	virtual void Step(Settings& settings, s2Color bodyColor) override
+	{
+		if (m_stepCount == 60 && S2_NON_NULL(m_topId))
+		{
+			s2DestroyBody(m_topId);
+			m_topId = s2_nullBodyId;
+		}
+
+		Sample::Step(settings, bodyColor);
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new WarmStartEnergy(settings, solverType);
+	}
+
+	s2BodyId m_topId;
+};
+
+static int sampleWarmStartEnergy = RegisterSample("Contact", "Warm Start Energy", WarmStartEnergy::Create);
+
 class HighMassRatio1 : public Sample
 {
-  public:
+public:
 	HighMassRatio1(const Settings& settings, s2SolverType solverType)
-		  : Sample(settings, solverType)
+		: Sample(settings, solverType)
 	{
 		float extent = 1.0f;
 
@@ -182,9 +247,9 @@ static int sampleHighMassRatio2 = RegisterSample("Contact", "HighMassRatio2", Hi
 
 class Friction : public Sample
 {
-  public:
+public:
 	Friction(const Settings& settings, s2SolverType solverType)
-		  : Sample(settings, solverType)
+		: Sample(settings, solverType)
 	{
 		{
 			s2BodyDef bodyDef = s2DefaultBodyDef();
@@ -254,23 +319,17 @@ public:
 		}
 
 		int baseCount = 4;
-		float overlap = 0.5f;
-		float extent = 0.3f;
-		float pushout = 3.0f;
-		float hertz = 30.0f;
-		float dampingRatio = 1.0f;
+		float overlap = 0.25f;
+		float extent = 0.5f;
 
 		s2BodyId groundId = s2CreateBody(m_worldId, &s2_defaultBodyDef);
-
-		float groundWidth = 40.0f;
-
-		s2Segment segment = {{-groundWidth, 0.0f}, {groundWidth, 0.0f}};
+		s2Segment segment = {{-40.0f, 0.0f}, {40.0f, 0.0f}};
 		s2CreateSegmentShape(groundId, &s2_defaultShapeDef, &segment);
 
 		s2BodyDef bodyDef = s2_defaultBodyDef;
 		bodyDef.type = s2_dynamicBody;
 
-		s2Polygon box = s2MakeBox(extent, extent);
+		s2Polygon box = s2MakeSquare(extent);
 
 		float fraction = 1.0f - overlap;
 		float y = extent;
@@ -316,6 +375,12 @@ public:
 	VerticalStack(const Settings& settings, s2SolverType solverType)
 		: Sample(settings, solverType)
 	{
+		if (settings.restart == false)
+		{
+			g_camera.m_center = {0.0f, 10.0f};
+			g_camera.m_zoom = 0.5f;
+		}
+
 		{
 			s2BodyDef bodyDef = s2_defaultBodyDef;
 			bodyDef.position = {0.0f, -1.0f};
