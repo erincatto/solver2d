@@ -61,22 +61,24 @@ static void s2InitializePGSConstraints(s2World* world, s2ContactConstraint* cons
 			cp->normalImpulse = mp->normalImpulse;
 			cp->tangentImpulse = mp->tangentImpulse;
 
-			cp->rA = s2Sub(mp->point, cA);
-			cp->rB = s2Sub(mp->point, cB);
-			cp->localAnchorA = s2InvRotateVector(qA, cp->rA);
-			cp->localAnchorB = s2InvRotateVector(qB, cp->rB);
+			s2Vec2 rA = s2Sub(mp->point, cA);
+			s2Vec2 rB = s2Sub(mp->point, cB);
+			cp->rAs = rA;
+			cp->rBs = rB;
+			cp->localAnchorA = s2InvRotateVector(qA, rA);
+			cp->localAnchorB = s2InvRotateVector(qB, rB);
 			cp->separation = mp->separation;
 
 			cp->baumgarte = 0.0f;
 			cp->biasCoefficient = mp->separation > 0.0f ? 1.0f : 0.0f;
 
-			float rtA = s2Cross(cp->rA, tangent);
-			float rtB = s2Cross(cp->rB, tangent);
+			float rtA = s2Cross(rA, tangent);
+			float rtB = s2Cross(rB, tangent);
 			float kTangent = mA + mB + iA * rtA * rtA + iB * rtB * rtB;
 			cp->tangentMass = kTangent > 0.0f ? 1.0f / kTangent : 0.0f;
 
-			float rnA = s2Cross(cp->rA, normal);
-			float rnB = s2Cross(cp->rB, normal);
+			float rnA = s2Cross(rA, normal);
+			float rnB = s2Cross(rB, normal);
 			float kNormal = mA + mB + iA * rnA * rnA + iB * rnB * rnB;
 			cp->normalMass = kNormal > 0.0f ? 1.0f / kNormal : 0.0f;
 		}
@@ -113,9 +115,13 @@ static void s2SolveContactVelocity(s2World* world, s2ContactConstraint* constrai
 		{
 			s2ContactConstraintPoint* cp = constraint->points + j;
 
+			// static anchors
+			s2Vec2 rA = cp->rAs;
+			s2Vec2 rB = cp->rBs;
+
 			// Relative velocity at contact
-			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, cp->rB));
-			s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, cp->rA));
+			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rB));
+			s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, rA));
 			s2Vec2 dv = s2Sub(vrB, vrA);
 
 			// Compute normal impulse
@@ -130,19 +136,23 @@ static void s2SolveContactVelocity(s2World* world, s2ContactConstraint* constrai
 			// Apply contact impulse
 			s2Vec2 P = s2MulSV(impulse, normal);
 			vA = s2MulSub(vA, mA, P);
-			wA -= iA * s2Cross(cp->rA, P);
+			wA -= iA * s2Cross(rA, P);
 
 			vB = s2MulAdd(vB, mB, P);
-			wB += iB * s2Cross(cp->rB, P);
+			wB += iB * s2Cross(rB, P);
 		}
 
 		for (int j = 0; j < pointCount; ++j)
 		{
 			s2ContactConstraintPoint* cp = constraint->points + j;
 
+			// static anchors
+			s2Vec2 rA = cp->rAs;
+			s2Vec2 rB = cp->rBs;
+
 			// Relative velocity at contact
-			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, cp->rB));
-			s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, cp->rA));
+			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rB));
+			s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, rA));
 			s2Vec2 dv = s2Sub(vrB, vrA);
 
 			// Compute tangent force
@@ -159,10 +169,10 @@ static void s2SolveContactVelocity(s2World* world, s2ContactConstraint* constrai
 			s2Vec2 P = s2MulSV(lambda, tangent);
 
 			vA = s2MulSub(vA, mA, P);
-			wA -= iA * s2Cross(cp->rA, P);
+			wA -= iA * s2Cross(cp->rAs, P);
 
 			vB = s2MulAdd(vB, mB, P);
-			wB += iB * s2Cross(cp->rB, P);
+			wB += iB * s2Cross(cp->rBs, P);
 		}
 
 		bodyA->linearVelocity = vA;

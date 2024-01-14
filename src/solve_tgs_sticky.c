@@ -61,21 +61,23 @@ static void s2PrepareContacts_Sticky(s2World* world, s2ContactConstraint* constr
 			cp->normalImpulse = 0.0f;
 			cp->tangentImpulse = 0.0f;
 
-			cp->rA = s2Sub(mp->point, cA);
-			cp->rB = s2Sub(mp->point, cB);
-			cp->localAnchorA = s2InvRotateVector(qA, cp->rA);
-			cp->localAnchorB = s2InvRotateVector(qB, cp->rB);
+			s2Vec2 rA = s2Sub(mp->point, cA);
+			s2Vec2 rB = s2Sub(mp->point, cB);
+			cp->rAs = rA;
+			cp->rBs = rB;
+			cp->localAnchorA = s2InvRotateVector(qA, rA);
+			cp->localAnchorB = s2InvRotateVector(qB, rB);
 			cp->separation = mp->separation;
 
 			cp->baumgarte = 0.8f;
 
-			float rtA = s2Cross(cp->rA, tangent);
-			float rtB = s2Cross(cp->rB, tangent);
+			float rtA = s2Cross(rA, tangent);
+			float rtB = s2Cross(rB, tangent);
 			float kTangent = mA + mB + iA * rtA * rtA + iB * rtB * rtB;
 			cp->tangentMass = kTangent > 0.0f ? 1.0f / kTangent : 0.0f;
 
-			float rnA = s2Cross(cp->rA, normal);
-			float rnB = s2Cross(cp->rB, normal);
+			float rnA = s2Cross(rA, normal);
+			float rnB = s2Cross(rB, normal);
 			float kNormal = mA + mB + iA * rnA * rnA + iB * rnB * rnB;
 			cp->normalMass = kNormal > 0.0f ? 1.0f / kNormal : 0.0f;
 		}
@@ -134,17 +136,20 @@ static void s2PrepareContacts_Sticky(s2World* world, s2ContactConstraint* constr
 				s2ManifoldPoint* mp = manifold->points + j;
 				s2ContactConstraintPoint* cp = constraint->points + j;
 
+				s2Vec2 rA = cp->rAs;
+				s2Vec2 rB = cp->rBs;
+
 				mp->localNormalA = s2InvRotateVector(qA, normal);
 				mp->localNormalB = s2InvRotateVector(qB, normal);
-				mp->localAnchorA = s2InvRotateVector(qA, cp->rA);
-				mp->localAnchorB = s2InvRotateVector(qB, cp->rB);
+				mp->localAnchorA = s2InvRotateVector(qA, rA);
+				mp->localAnchorB = s2InvRotateVector(qB, rB);
 
 				cp->localFrictionAnchorA = mp->localAnchorA;
 				cp->localFrictionAnchorB = mp->localAnchorB;
 				cp->tangentSeparation = 0.0f;
 
-				float rtA = s2Cross(cp->rA, tangent);
-				float rtB = s2Cross(cp->rB, tangent);
+				float rtA = s2Cross(rA, tangent);
+				float rtB = s2Cross(rB, tangent);
 				float kTangent = mA + mB + iA * rtA * rtA + iB * rtB * rtB;
 				cp->tangentMass = kTangent > 0.0f ? 1.0f / kTangent : 0.0f;
 			}

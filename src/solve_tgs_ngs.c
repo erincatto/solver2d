@@ -75,19 +75,19 @@ static void s2PrepareContacts(s2World* world, s2ContactConstraint* constraints, 
 				cp->tangentImpulse = 0.0f;
 			}
 
-			cp->rA = s2Sub(mp->point, cA);
-			cp->rB = s2Sub(mp->point, cB);
-			cp->localAnchorA = s2InvRotateVector(qA, cp->rA);
-			cp->localAnchorB = s2InvRotateVector(qB, cp->rB);
+			s2Vec2 rA = s2Sub(mp->point, cA);
+			s2Vec2 rB = s2Sub(mp->point, cB);
+			cp->localAnchorA = s2InvRotateVector(qA, rA);
+			cp->localAnchorB = s2InvRotateVector(qB, rB);
 			cp->separation = mp->separation;
 
-			float rnA = s2Cross(cp->rA, normal);
-			float rnB = s2Cross(cp->rB, normal);
+			float rnA = s2Cross(rA, normal);
+			float rnB = s2Cross(rB, normal);
 			float kNormal = mA + mB + iA * rnA * rnA + iB * rnB * rnB;
 			cp->normalMass = kNormal > 0.0f ? 1.0f / kNormal : 0.0f;
 
-			float rtA = s2Cross(cp->rA, tangent);
-			float rtB = s2Cross(cp->rB, tangent);
+			float rtA = s2Cross(rA, tangent);
+			float rtB = s2Cross(rB, tangent);
 			float kTangent = mA + mB + iA * rtA * rtA + iB * rtB * rtB;
 			cp->tangentMass = kTangent > 0.0f ? 1.0f / kTangent : 0.0f;
 		}
