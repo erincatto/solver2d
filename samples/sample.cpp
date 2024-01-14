@@ -20,14 +20,9 @@ Sample::Sample(const Settings& settings, s2SolverType solverType)
 
 	s2WorldDef worldDef = s2DefaultWorldDef();
 	worldDef.solverType = solverType;
-	worldDef.bodyCapacity = 4;
-	worldDef.contactCapacity = 4;
-	worldDef.stackAllocatorCapacity = 20 * 1024;
 
 	m_solverType = solverType;
 	m_worldId = s2CreateWorld(&worldDef);
-	m_textLine = 30;
-	m_textIncrement = 18;
 	m_mouseJointId = s2_nullJointId;
 
 	m_stepCount = 0;
@@ -38,10 +33,10 @@ Sample::~Sample()
 	s2DestroyWorld(m_worldId);
 }
 
-void Sample::DrawTitle(const char* string)
+void Sample::DrawTitle(Settings& settings, const char* string)
 {
 	g_draw.DrawString(5, 5, string);
-	m_textLine = int32_t(26.0f);
+	settings.textLine = int32_t(26.0f);
 }
 
 struct QueryContext
@@ -99,7 +94,7 @@ void Sample::MouseDown(s2Vec2 p, int button, int mod)
 			float mass = s2Body_GetMass(queryContext.bodyId);
 
 			s2BodyDef bodyDef = s2DefaultBodyDef();
-			m_groundBodyId = s2World_CreateBody(m_worldId, &bodyDef);
+			m_groundBodyId = s2CreateBody(m_worldId, &bodyDef);
 
 			s2MouseJointDef jd;
 			jd.bodyIdA = m_groundBodyId;
@@ -111,7 +106,7 @@ void Sample::MouseDown(s2Vec2 p, int button, int mod)
 			jd.stiffness = mass * omega * omega;
 			jd.damping = 2.0f * mass * dampingRatio * omega;
 
-			m_mouseJointId = s2World_CreateMouseJoint(m_worldId, &jd);
+			m_mouseJointId = s2CreateMouseJoint(m_worldId, &jd);
 		}
 	}
 }
@@ -120,10 +115,10 @@ void Sample::MouseUp(s2Vec2 p, int button)
 {
 	if (S2_NON_NULL(m_mouseJointId) && button == GLFW_MOUSE_BUTTON_1)
 	{
-		s2World_DestroyJoint(m_mouseJointId);
+		s2DestroyJoint(m_mouseJointId);
 		m_mouseJointId = s2_nullJointId;
 
-		s2World_DestroyBody(m_groundBodyId);
+		s2DestroyBody(m_groundBodyId);
 		m_groundBodyId = s2_nullBodyId;
 	}
 }
@@ -138,57 +133,36 @@ void Sample::MouseMove(s2Vec2 p)
 
 void Sample::Step(Settings& settings, s2Color bodyColor)
 {
-	float timeStep = settings.m_hertz > 0.0f ? 1.0f / settings.m_hertz : float(0.0f);
-
-	if (settings.m_pause)
-	{
-		if (settings.m_singleStep)
-		{
-			settings.m_singleStep = 0;
-		}
-		else
-		{
-			timeStep = 0.0f;
-		}
-
-		g_draw.DrawString(5, m_textLine, "****PAUSED****");
-		m_textLine += m_textIncrement;
-	}
-
 	bodyColor.a = 0.6f;
 	g_draw.m_debugDraw.dynamicBodyColor = bodyColor;
-	g_draw.m_debugDraw.drawShapes = settings.m_drawShapes;
-	g_draw.m_debugDraw.drawJoints = settings.m_drawJoints;
-	g_draw.m_debugDraw.drawAABBs = settings.m_drawAABBs;
-	g_draw.m_debugDraw.drawCOMs = settings.m_drawCOMs;
 
-	for (int32_t i = 0; i < 1; ++i)
+	for (int i = 0; i < settings.multiSteps; ++i)
 	{
-		s2World_Step(m_worldId, timeStep, settings.m_velocityIterations, settings.m_positionIterations);
+		s2World_Step(m_worldId, settings.timeStep, settings.velocityIterations, settings.positionIterations, settings.enableWarmStarting);
 	}
 
-	if (settings.m_enablesSolvers[m_solverType])
+	if (settings.enablesSolvers[m_solverType])
 	{
 		s2World_Draw(m_worldId, &g_draw.m_debugDraw);
 	}
 
-	if (timeStep > 0.0f)
+	if (settings.timeStep > 0.0f)
 	{
 		++m_stepCount;
 	}
 
-	if (settings.m_drawStats)
+	if (settings.drawStats)
 	{
 		s2Statistics s = s2World_GetStatistics(m_worldId);
 
-		g_draw.DrawString(5, m_textLine, "bodies/contacts/joints = %d/%d/%d/%d", s.bodyCount, s.contactCount, s.jointCount);
-		m_textLine += m_textIncrement;
+		g_draw.DrawString(5, settings.textLine, "bodies/contacts/joints = %d/%d/%d/%d", s.bodyCount, s.contactCount, s.jointCount);
+		settings.textLine += settings.textIncrement;
 
-		g_draw.DrawString(5, m_textLine, "proxies/height = %d/%d", s.proxyCount, s.treeHeight);
-		m_textLine += m_textIncrement;
+		g_draw.DrawString(5, settings.textLine, "proxies/height = %d/%d", s.proxyCount, s.treeHeight);
+		settings.textLine += settings.textIncrement;
 
-		g_draw.DrawString(5, m_textLine, "stack allocator capacity/used = %d/%d", s.stackCapacity, s.stackUsed);
-		m_textLine += m_textIncrement;
+		g_draw.DrawString(5, settings.textLine, "stack allocator capacity/used = %d/%d", s.stackCapacity, s.stackUsed);
+		settings.textLine += settings.textIncrement;
 	}
 }
 

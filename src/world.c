@@ -72,23 +72,23 @@ s2WorldId s2CreateWorld(const s2WorldDef* def)
 	world->index = id.index;
 
 	world->blockAllocator = s2CreateBlockAllocator();
-	world->stackAllocator = s2CreateStackAllocator(def->stackAllocatorCapacity);
+	world->stackAllocator = s2CreateStackAllocator(1024 * 1024);
 
 	world->solverType = def->solverType;
 
 	s2CreateBroadPhase(&world->broadPhase);
 
 	// pools
-	world->bodyPool = s2CreatePool(sizeof(s2Body), S2_MAX(def->bodyCapacity, 1));
+	world->bodyPool = s2CreatePool(sizeof(s2Body), S2_MAX(4, 1));
 	world->bodies = (s2Body*)world->bodyPool.memory;
 
-	world->shapePool = s2CreatePool(sizeof(s2Shape), S2_MAX(def->shapeCapacity, 1));
+	world->shapePool = s2CreatePool(sizeof(s2Shape), S2_MAX(4, 1));
 	world->shapes = (s2Shape*)world->shapePool.memory;
 
-	world->contactPool = s2CreatePool(sizeof(s2Contact), S2_MAX(def->contactCapacity, 1));
+	world->contactPool = s2CreatePool(sizeof(s2Contact), S2_MAX(4, 1));
 	world->contacts = (s2Contact*)world->contactPool.memory;
 
-	world->jointPool = s2CreatePool(sizeof(s2Joint), S2_MAX(def->jointCapacity, 1));
+	world->jointPool = s2CreatePool(sizeof(s2Joint), S2_MAX(4, 1));
 	world->joints = (s2Joint*)world->jointPool.memory;
 
 	world->stepId = 0;
@@ -96,8 +96,8 @@ s2WorldId s2CreateWorld(const s2WorldDef* def)
 	// Globals start at 0. It should be fine for this to roll over.
 	world->revision += 1;
 
-	world->gravity = def->gravity;
-	world->restitutionThreshold = def->restitutionThreshold;
+	world->gravity = (s2Vec2){0.0f, -10.0f};
+	world->restitutionThreshold = 1.0f;
 
 	id.revision = world->revision;
 
@@ -119,7 +119,7 @@ void s2DestroyWorld(s2WorldId id)
 	memset(world, 0, sizeof(s2World));
 }
 
-void s2World_Step(s2WorldId worldId, float timeStep, int velocityIterations, int positionIterations)
+void s2World_Step(s2WorldId worldId, float timeStep, int velIters, int posIters, bool warmStart)
 {
 	s2World* world = s2GetWorldFromId(worldId);
 	world->stepId += 1;
@@ -167,8 +167,9 @@ void s2World_Step(s2WorldId worldId, float timeStep, int velocityIterations, int
 	// Stage 3: Integrate velocities, solve velocity constraints, and integrate positions.
 	s2StepContext context = {0};
 	context.dt = timeStep;
-	context.velocityIterations = velocityIterations;
-	context.positionIterations = positionIterations;
+	context.velocityIterations = velIters;
+	context.positionIterations = posIters;
+	context.warmStart = warmStart;
 	if (timeStep > 0.0f)
 	{
 		context.inv_dt = 1.0f / timeStep;
@@ -200,6 +201,18 @@ void s2World_Step(s2WorldId worldId, float timeStep, int velocityIterations, int
 
 			case s2_solverXPBD:
 				s2Solve_XPDB(world, &context);
+				break;
+
+			case s2_solverTGS_Soft:
+				s2Solve_TGS_Soft(world, &context);
+				break;
+
+			case s2_solverTGS_Sticky:
+				s2Solve_TGS_Sticky(world, &context);
+				break;
+
+			case s2_solverTGS_NGS:
+				s2Solve_TGS_NGS(world, &context);
 				break;
 
 			default:
@@ -370,22 +383,6 @@ void s2World_Draw(s2WorldId worldId, s2DebugDraw* draw)
 		}
 	}
 
-	// if (debugDraw->drawPi & s2Draw::e_pairBit)
-	//{
-	//		s2Color color(0.3f, 0.9f, 0.9f);
-	//		for (s2Contact* c = m_contactManager.m_contactList; c; c = c->GetNext())
-	//		{
-	//		s2Shape* fixtureA = c->GetFixtureA();
-	//		s2Shape* fixtureB = c->GetFixtureB();
-	//		int32 indexA = c->GetChildIndexA();
-	//		int32 indexB = c->GetChildIndexB();
-	//		s2Vec2 cA = fixtureA->GetAABB(indexA).GetCenter();
-	//		s2Vec2 cB = fixtureB->GetAABB(indexB).GetCenter();
-
-	//		m_debugDraw->DrawSegment(cA, cB, color);
-	//		}
-	//}
-
 	if (draw->drawAABBs)
 	{
 		s2Color color = {0.9f, 0.3f, 0.9f, 1.0f};
@@ -419,33 +416,105 @@ void s2World_Draw(s2WorldId worldId, s2DebugDraw* draw)
 				shapeIndex = shape->nextShapeIndex;
 			}
 		}
-
-		// for (s2Shape* f = b->GetFixtureList(); f; f = f->GetNext())
-		//{
-		//	for (int32 i = 0; i < f->m_proxyCount; ++i)
-		//	{
-		//		s2FixtureProxy* proxy = f->m_proxies + i;
-		//		s2Box aabb = bp->GetFatAABB(proxy->proxyId);
-		//		s2Vec2 vs[4];
-		//		vs[0].Set(aabb.lowerBound.x, aabb.lowerBound.y);
-		//		vs[1].Set(aabb.upperBound.x, aabb.lowerBound.y);
-		//		vs[2].Set(aabb.upperBound.x, aabb.upperBound.y);
-		//		vs[3].Set(aabb.lowerBound.x, aabb.upperBound.y);
-
-		//		m_debugDraw->DrawPolygon(vs, 4, color);
-		//	}
-		//}
 	}
 
-	// if (flags & s2Draw::e_centerOfMassBit)
-	//{
-	//		for (s2Body* b = m_bodyList; b; b = b->GetNext())
-	//		{
-	//		s2Transform xf = b->GetTransform();
-	//		xf.p = b->GetWorldCenter();
-	//		m_debugDraw->DrawTransform(xf);
-	//		}
-	// }
+	if (draw->drawMass)
+	{
+		s2Vec2 offset = {0.1f, 0.1f};
+		s2Body* bodies = world->bodies;
+		int32_t bodyCapacity = world->bodyPool.capacity;
+		for (int32_t i = 0; i < bodyCapacity; ++i)
+		{
+			s2Body* body = bodies + i;
+			if (s2ObjectValid(&body->object) == false)
+			{
+				continue;
+			}
+
+			s2Transform transform = {body->position, body->transform.q};
+			draw->DrawTransform(transform, draw->context);
+
+			s2Vec2 p = s2TransformPoint(transform, offset);
+
+			char buffer[32];
+			sprintf(buffer, "%.2f", body->mass);
+			draw->DrawString(p, buffer, draw->context);
+		}
+	}
+
+	if (draw->drawContactPoints)
+	{
+		const float k_impulseScale = 1.0f;
+		const float k_axisScale = 0.3f;
+		s2Color speculativeColor = {0.3f, 0.3f, 0.3f, 1.0f};
+		s2Color addColor = {0.3f, 0.95f, 0.3f, 1.0f};
+		s2Color persistColor = {0.3f, 0.3f, 0.95f, 1.0f};
+		s2Color normalColor = {0.9f, 0.9f, 0.9f, 1.0f};
+		s2Color impulseColor = {0.9f, 0.9f, 0.3f, 1.0f};
+		s2Color frictionColor = {0.9f, 0.9f, 0.3f, 1.0f};
+
+		int contactCapacity = world->contactPool.capacity;
+
+		for (int32_t i = 0; i < contactCapacity; ++i)
+		{
+			s2Contact* contact = world->contacts + i;
+
+			if (s2ObjectValid(&contact->object) == false)
+			{
+				continue;
+			}
+
+			int pointCount = contact->manifold.pointCount;
+			s2Vec2 normal = contact->manifold.normal;
+			char buffer[32];
+
+			for (int j = 0; j < pointCount; ++j)
+			{
+				s2ManifoldPoint* point = contact->manifold.points + j;
+
+				if (point->separation > s2_linearSlop)
+				{
+					// Speculative
+					draw->DrawPoint(point->point, 5.0f, speculativeColor, draw->context);
+				}
+				else if (point->persisted == false)
+				{
+					// Add
+					draw->DrawPoint(point->point, 10.0f, addColor, draw->context);
+				}
+				else if (point->persisted == true)
+				{
+					// Persist
+					draw->DrawPoint(point->point, 5.0f, persistColor, draw->context);
+				}
+
+				if (draw->drawContactNormals)
+				{
+					s2Vec2 p1 = point->point;
+					s2Vec2 p2 = s2MulAdd(p1, k_axisScale, normal);
+					draw->DrawSegment(p1, p2, normalColor, draw->context);
+				}
+				else if (draw->drawContactImpulses)
+				{
+					s2Vec2 p1 = point->point;
+					s2Vec2 p2 = s2MulAdd(p1, k_impulseScale * point->normalImpulse, normal);
+					draw->DrawSegment(p1, p2, impulseColor, draw->context);
+					snprintf(buffer, S2_ARRAY_COUNT(buffer), "%.2f", point->normalImpulse);
+					draw->DrawString(p1, buffer, draw->context);
+				}
+
+				if (draw->drawFrictionImpulses)
+				{
+					s2Vec2 tangent = s2RightPerp(normal);
+					s2Vec2 p1 = point->point;
+					s2Vec2 p2 = s2MulAdd(p1, k_impulseScale * point->tangentImpulse, tangent);
+					draw->DrawSegment(p1, p2, frictionColor, draw->context);
+					snprintf(buffer, S2_ARRAY_COUNT(buffer), "%.2f", point->normalImpulse);
+					draw->DrawString(p1, buffer, draw->context);
+				}
+			}
+		}
+	}
 }
 
 s2Statistics s2World_GetStatistics(s2WorldId worldId)

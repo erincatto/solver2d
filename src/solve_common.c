@@ -13,7 +13,6 @@ void s2IntegrateVelocities(s2World* world, float h)
 	int bodyCapacity = world->bodyPool.capacity;
 	s2Vec2 gravity = world->gravity;
 
-	// Integrate velocities and apply damping. Initialize the body state.
 	for (int i = 0; i < bodyCapacity; ++i)
 	{
 		s2Body* body = bodies + i;
@@ -33,15 +32,15 @@ void s2IntegrateVelocities(s2World* world, float h)
 		s2Vec2 v = body->linearVelocity;
 		float w = body->angularVelocity;
 
-		// Integrate velocities
 		v = s2Add(v, s2MulSV(h * invMass, s2MulAdd(body->force, body->mass, gravity)));
 		w = w + h * invI * body->torque;
 
+		// Damping
+		v = s2MulSV(1.0f / (1.0f + h * body->linearDamping), v);
+		w *= 1.0f / (1.0f + h * body->angularDamping);
+
 		body->linearVelocity = v;
 		body->angularVelocity = w;
-
-		body->deltaAngle = 0.0f;
-		body->deltaPosition = s2Vec2_zero;
 	}
 }
 
@@ -50,7 +49,6 @@ void s2IntegratePositions(s2World* world, float h)
 	s2Body* bodies = world->bodies;
 	int bodyCapacity = world->bodyPool.capacity;
 
-	// Integrate velocities and apply damping. Initialize the body state.
 	for (int i = 0; i < bodyCapacity; ++i)
 	{
 		s2Body* body = bodies + i;
@@ -64,34 +62,115 @@ void s2IntegratePositions(s2World* world, float h)
 			continue;
 		}
 
-		s2Vec2 c = body->position;
-		float a = body->angle;
-		s2Vec2 v = body->linearVelocity;
-		float w = body->angularVelocity;
+		body->position = s2MulAdd(body->position, h, body->linearVelocity);
+		body->angle += h * body->angularVelocity;
+	}
+}
 
-		// Clamp large velocities
-		s2Vec2 translation = s2MulSV(h, v);
-		if (s2Dot(translation, translation) > s2_maxTranslation * s2_maxTranslation)
+// Soft contact math
+// float d = 2.0f * zeta * omega / kNormal;
+// float k = omega * omega / kNormal;
+// cp->gamma = 1.0f / (h * (d + h * k));
+// cp->gamma = 1.0f / (h * (2.0f * zeta * omega / kNormal + h * omega * omega / kNormal));
+// cp->gamma = kNormal / (h * omega * (2.0f * zeta + h * omega));
+// cp->bias = h * k * cp->gamma * mp->separation;
+// cp->bias = k / (d + h * k) * mp->separation;
+// cp->bias =
+//	(omega * omega / kNormal) / (2 * zeta * omega / kNormal + h * omega * omega / kNormal) * mp->separation;
+// cp->gamma = 0.0f;
+// cp->bias = (0.2f / h) * mp->separation;
+// This can be expanded
+// cp->normalMass = 1.0f / (kNormal + cp->gamma);
+// meff = 1.0f / kNormal * 1.0f / (1.0f + 1.0f / (h * omega * (2 * zeta + h * omega)))
+// float impulse = -cp->normalMass * (vn + bias + cp->gamma * cp->normalImpulse);
+// = -meff * mscale * (vn + bias) - imp_scale * impulse
+
+void s2PrepareContacts_Soft(s2World* world, s2ContactConstraint* constraints, int constraintCount, float h, float hertz,
+								   bool warmStart)
+{
+	s2Body* bodies = world->bodies;
+
+	for (int i = 0; i < constraintCount; ++i)
+	{
+		s2ContactConstraint* constraint = constraints + i;
+
+		s2Contact* contact = constraint->contact;
+		const s2Manifold* manifold = &contact->manifold;
+		int pointCount = manifold->pointCount;
+		S2_ASSERT(0 < pointCount && pointCount <= 2);
+		int indexA = contact->edges[0].bodyIndex;
+		int indexB = contact->edges[1].bodyIndex;
+
+		constraint->indexA = indexA;
+		constraint->indexB = indexB;
+		constraint->normal = manifold->normal;
+		constraint->friction = contact->friction;
+		constraint->pointCount = pointCount;
+
+		s2Body* bodyA = bodies + indexA;
+		s2Body* bodyB = bodies + indexB;
+
+		float mA = bodyA->invMass;
+		float iA = bodyA->invI;
+		float mB = bodyB->invMass;
+		float iB = bodyB->invI;
+
+		// Stiffer for dynamic vs static
+		float contactHertz = (mA == 0.0f || mB == 0.0f) ? 2.0f * hertz : hertz;
+
+		s2Vec2 cA = bodyA->position;
+		s2Vec2 cB = bodyB->position;
+		s2Rot qA = s2MakeRot(bodyA->angle);
+		s2Rot qB = s2MakeRot(bodyB->angle);
+
+		s2Vec2 normal = constraint->normal;
+		s2Vec2 tangent = s2RightPerp(constraint->normal);
+
+		for (int j = 0; j < pointCount; ++j)
 		{
-			float ratio = s2_maxTranslation / s2Length(translation);
-			v = s2MulSV(ratio, v);
+			const s2ManifoldPoint* mp = manifold->points + j;
+			s2ContactConstraintPoint* cp = constraint->points + j;
+
+			if (warmStart)
+			{
+				cp->normalImpulse = mp->normalImpulse;
+				cp->tangentImpulse = mp->tangentImpulse;
+			}
+			else
+			{
+				cp->normalImpulse = 0.0f;
+				cp->tangentImpulse = 0.0f;
+			}
+
+			s2Vec2 rA = s2Sub(mp->point, cA);
+			s2Vec2 rB = s2Sub(mp->point, cB);
+
+			// static anchors
+			cp->rAs = rA;
+			cp->rBs = rB;
+
+			cp->localAnchorA = s2InvRotateVector(qA, rA);
+			cp->localAnchorB = s2InvRotateVector(qB, rB);
+			cp->separation = mp->separation;
+
+			float rnA = s2Cross(rA, normal);
+			float rnB = s2Cross(rB, normal);
+			float kNormal = mA + mB + iA * rnA * rnA + iB * rnB * rnB;
+			cp->normalMass = kNormal > 0.0f ? 1.0f / kNormal : 0.0f;
+
+			float rtA = s2Cross(rA, tangent);
+			float rtB = s2Cross(rB, tangent);
+			float kTangent = mA + mB + iA * rtA * rtA + iB * rtB * rtB;
+			cp->tangentMass = kTangent > 0.0f ? 1.0f / kTangent : 0.0f;
+
+			// Soft contact
+			const float zeta = 1.0f;
+			float omega = 2.0f * s2_pi * contactHertz;
+			float c = h * omega * (2.0f * zeta + h * omega);
+			cp->biasCoefficient = omega / (2.0f * zeta + h * omega);
+			cp->impulseCoefficient = 1.0f / (1.0f + c);
+			cp->massCoefficient = c * cp->impulseCoefficient;
 		}
-
-		float rotation = h * w;
-		if (rotation * rotation > s2_maxRotation * s2_maxRotation)
-		{
-			float ratio = s2_maxRotation / S2_ABS(rotation);
-			w *= ratio;
-		}
-
-		// Integrate
-		c = s2MulAdd(c, h, v);
-		a += h * w;
-
-		body->position = c;
-		body->angle = a;
-		body->linearVelocity = v;
-		body->angularVelocity = w;
 	}
 }
 
@@ -119,6 +198,9 @@ void s2WarmStartContacts(s2World* world, s2ContactConstraint* constraints, int c
 		s2Vec2 vB = bodyB->linearVelocity;
 		float wB = bodyB->angularVelocity;
 
+		s2Rot qA = s2MakeRot(bodyA->angle);
+		s2Rot qB = s2MakeRot(bodyB->angle);
+
 		s2Vec2 normal = constraint->normal;
 		s2Vec2 tangent = s2RightPerp(normal);
 
@@ -126,10 +208,14 @@ void s2WarmStartContacts(s2World* world, s2ContactConstraint* constraints, int c
 		{
 			s2ContactConstraintPoint* cp = constraint->points + j;
 
+			// Current anchors (to support TGS)
+			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
+			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
+
 			s2Vec2 P = s2Add(s2MulSV(cp->normalImpulse, normal), s2MulSV(cp->tangentImpulse, tangent));
-			wA -= iA * s2Cross(cp->rA, P);
+			wA -= iA * s2Cross(rA, P);
 			vA = s2MulAdd(vA, -mA, P);
-			wB += iB * s2Cross(cp->rB, P);
+			wB += iB * s2Cross(rB, P);
 			vB = s2MulAdd(vB, mB, P);
 		}
 

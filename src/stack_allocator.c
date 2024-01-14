@@ -80,6 +80,8 @@ void* s2AllocateStackItem(s2StackAllocator* alloc, int32_t size, const char* nam
 
 	s2Array_Push(alloc->entries, entry);
 
+	memset(entry.data, 0, size);
+
 	return entry.data;
 }
 

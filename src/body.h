@@ -39,9 +39,6 @@ typedef struct s2Body
 	s2Vec2 linearVelocity0;
 	float angularVelocity0;
 
-	s2Vec2 deltaPosition;
-	float deltaAngle;
-
 	s2Vec2 force;
 	float torque;
 
@@ -59,6 +56,9 @@ typedef struct s2Body
 	// Rotational inertia about the center of mass.
 	float I, invI;
 
+	float linearDamping;
+	float angularDamping;
+
 	void* userData;
 	int16_t world;
 
@@ -67,5 +67,5 @@ typedef struct s2Body
 
 bool s2ShouldBodiesCollide(s2World* world, s2Body* bodyA, s2Body* bodyB);
 
-s2ShapeId s2Body_CreatePolygon(s2BodyId bodyId, const s2ShapeDef* def, const s2Polygon* polygon);
+s2ShapeId s2CreatePolygonShape(s2BodyId bodyId, const s2ShapeDef* def, const s2Polygon* polygon);
 void s2Body_DestroyShape(s2ShapeId shapeId);

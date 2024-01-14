@@ -41,7 +41,6 @@ typedef struct s2World
 
 	s2Vec2 gravity;
 	float restitutionThreshold;
-
 	uint16_t revision;
 } s2World;
 

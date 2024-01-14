@@ -320,7 +320,7 @@ static s2Manifold s2PolygonClip(const s2Polygon* polyA, s2Transform xfA, const s
 		{
 			cp->point = s2TransformPoint(xfA, vLower);
 			cp->separation = separationLower - radius;
-			cp->id = B2_MAKE_ID(i11, i22);
+			cp->id = S2_MAKE_ID(i11, i22);
 			manifold.pointCount += 1;
 			cp += 1;
 		}
@@ -329,7 +329,7 @@ static s2Manifold s2PolygonClip(const s2Polygon* polyA, s2Transform xfA, const s
 		{
 			cp->point = s2TransformPoint(xfA, vUpper);
 			cp->separation = separationUpper - radius;
-			cp->id = B2_MAKE_ID(i12, i21);
+			cp->id = S2_MAKE_ID(i12, i21);
 			manifold.pointCount += 1;
 		}
 	}
@@ -342,7 +342,7 @@ static s2Manifold s2PolygonClip(const s2Polygon* polyA, s2Transform xfA, const s
 		{
 			cp->point = s2TransformPoint(xfB, vUpper);
 			cp->separation = separationUpper - radius;
-			cp->id = B2_MAKE_ID(i21, i12);
+			cp->id = S2_MAKE_ID(i21, i12);
 			manifold.pointCount += 1;
 			cp += 1;
 		}
@@ -351,7 +351,7 @@ static s2Manifold s2PolygonClip(const s2Polygon* polyA, s2Transform xfA, const s
 		{
 			cp->point = s2TransformPoint(xfB, vLower);
 			cp->separation = separationLower - radius;
-			cp->id = B2_MAKE_ID(i22, i11);
+			cp->id = S2_MAKE_ID(i22, i11);
 			manifold.pointCount += 1;
 		}
 	}
@@ -507,7 +507,7 @@ s2Manifold s2CollidePolygons(const s2Polygon* polyA, s2Transform xfA, const s2Po
 		s2ManifoldPoint* cp = manifold.points + 0;
 		cp->point = s2MulAdd(pB, 0.5f * (polyA->radius - polyB->radius - distance), manifold.normal);
 		cp->separation = distance - radius;
-		cp->id = B2_MAKE_ID(cache->indexA[0], cache->indexB[0]);
+		cp->id = S2_MAKE_ID(cache->indexA[0], cache->indexB[0]);
 		manifold.pointCount = 1;
 		return manifold;
 	}

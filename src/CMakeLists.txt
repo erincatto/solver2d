@@ -31,7 +31,9 @@ set(S2D_SOURCE_FILES
 	solve_pgs_ngs.c
 	solve_pgs_ngs_block.c
 	solve_pgs_soft.c
+	solve_tgs_ngs.c
 	solve_tgs_soft.c
+	solve_tgs_sticky.c
 	solve_xpbd.c
 	solvers.h
 	stack_allocator.c
@@ -65,6 +67,12 @@ add_library(solver2d ${S2D_SOURCE_FILES} ${S2D_API_FILES})
 target_include_directories(solver2d
 	PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
 	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+set_target_properties(solver2d PROPERTIES
+	C_STANDARD 17
+    C_STANDARD_REQUIRED YES
+    C_EXTENSIONS NO
 )
 
 message(STATUS "CMake C compiler: ${CMAKE_C_COMPILER_ID}")

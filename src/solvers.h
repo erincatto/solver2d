@@ -19,20 +19,21 @@ typedef struct s2StepContext
 	float restitutionThreshold;
 	s2Body* bodies;
 	int32_t bodyCapacity;
+	bool warmStart;
 } s2StepContext;
 
 typedef struct s2ContactConstraintPoint
 {
-	s2Vec2 rA, rB;
-	s2Vec2 rAf, rBf;
+	// static anchors, need to be careful to not use these in TGS solvers
+	s2Vec2 rAs, rBs;
 	s2Vec2 localAnchorA, localAnchorB;
+	s2Vec2 localFrictionAnchorA, localFrictionAnchorB;
 	float tangentSeparation;
 	float separation;
 	float normalImpulse;
 	float tangentImpulse;
 	float normalMass;
 	float tangentMass;
-	float gamma;
 	float massCoefficient;
 	float biasCoefficient;
 	float impulseCoefficient;
@@ -48,7 +49,6 @@ typedef struct s2ContactConstraint
 	s2ContactConstraintPoint points[2];
 	s2Vec2 normal;
 	float friction;
-	float kinematicFriction;
 	float restitution;
 	int pointCount;
 } s2ContactConstraint;
@@ -56,12 +56,16 @@ typedef struct s2ContactConstraint
 // common
 void s2IntegrateVelocities(s2World* world, float h);
 void s2IntegratePositions(s2World* world, float h);
+void s2PrepareContacts_Soft(s2World* world, s2ContactConstraint* constraints, int constraintCount, float h, float hertz,
+							bool warmStart);
 void s2WarmStartContacts(s2World* world, s2ContactConstraint* constraints, int constraintCount);
 void s2StoreContactImpulses(s2ContactConstraint* constraints, int constraintCount);
 
+// many solvers
 void s2Solve_PGS_NGS_Block(s2World* world, s2StepContext* stepContext);
 void s2Solve_PGS_NGS(s2World* world, s2StepContext* context);
 void s2Solve_PGS_Soft(s2World* world, s2StepContext* stepContext);
 void s2Solve_XPDB(s2World* world, s2StepContext* stepContext);
-//void s2SolveTGSSoft(s2World* world, s2StepContext* stepContext);
-//void s2SolveTGSSticky(s2World* world, s2StepContext* stepContext);
+void s2Solve_TGS_Soft(s2World* world, s2StepContext* stepContext);
+void s2Solve_TGS_Sticky(s2World* world, s2StepContext* stepContext);
+void s2Solve_TGS_NGS(s2World* world, s2StepContext* stepContext);

@@ -10,11 +10,11 @@
 #include <stdio.h>
 
 #if defined(_WIN32)
-#define _CRTDBG_MAP_ALLOC
-#include <crtdbg.h>
-#include <stdlib.h>
+	#define _CRTDBG_MAP_ALLOC
+	#include <crtdbg.h>
+	#include <stdlib.h>
 #else
-#include <stdlib.h>
+	#include <stdlib.h>
 #endif
 
 #include <glad/glad.h>
@@ -820,7 +820,8 @@ void DrawSolidPolygonFcn(const s2Vec2* vertices, int vertexCount, s2Color color,
 	static_cast<Draw*>(context)->DrawSolidPolygon(vertices, vertexCount, color);
 }
 
-void DrawRoundedPolygonFcn(const s2Vec2* vertices, int32_t vertexCount, float radius, s2Color fillColor, s2Color lineColor, void* context)
+void DrawRoundedPolygonFcn(const s2Vec2* vertices, int32_t vertexCount, float radius, s2Color fillColor, s2Color lineColor,
+						   void* context)
 {
 	static_cast<Draw*>(context)->DrawRoundedPolygon(vertices, vertexCount, radius, fillColor, lineColor);
 }
@@ -905,10 +906,14 @@ void Draw::Create()
 				   DrawPointFcn,
 				   DrawStringFcn,
 				   s2MakeColor(s2_colorSalmon, 1.0f),
-				   true,
-				   true,
-				   false,
-				   false,
+				   true,	// drawShapes
+				   true,	// drawJoints
+				   false,	// drawAABBs
+				   false,	// drawMass
+				   false,	// drawContactPoints
+				   false,	// drawContactNormals
+				   false,	// drawContactImpulses
+				   false,	// drawContactFriction
 				   this};
 }
 

@@ -15,9 +15,6 @@
 #include "solver2d/aabb.h"
 
 #include <stdbool.h>
-#include <stdlib.h>
-
-#define maxBaumgarteVelocity 3.0f
 
 static void s2PrepareContacts_XBPD(s2World* world, s2ContactConstraint* constraints, int constraintCount)
 {
@@ -39,8 +36,7 @@ static void s2PrepareContacts_XBPD(s2World* world, s2ContactConstraint* constrai
 		constraint->normal = manifold->normal;
 
 		// XPBD friction is very strong
-		constraint->friction = 0.25f * contact->friction;
-		constraint->kinematicFriction = 0.8f * constraint->friction;
+		constraint->friction = contact->friction;
 
 		constraint->restitution = contact->restitution;
 		constraint->pointCount = pointCount;
@@ -69,10 +65,10 @@ static void s2PrepareContacts_XBPD(s2World* world, s2ContactConstraint* constrai
 			cp->normalImpulse = 0.0f;
 			cp->tangentImpulse = 0.0f;
 
-			cp->rA = s2Sub(mp->point, cA);
-			cp->rB = s2Sub(mp->point, cB);
-			cp->localAnchorA = s2InvRotateVector(qA, cp->rA);
-			cp->localAnchorB = s2InvRotateVector(qB, cp->rB);
+			s2Vec2 rA = s2Sub(mp->point, cA);
+			s2Vec2 rB = s2Sub(mp->point, cB);
+			cp->localAnchorA = s2InvRotateVector(qA, rA);
+			cp->localAnchorB = s2InvRotateVector(qB, rB);
 			cp->separation = mp->separation;
 
 			cp->baumgarte = 0.0f;
@@ -80,23 +76,22 @@ static void s2PrepareContacts_XBPD(s2World* world, s2ContactConstraint* constrai
 
 			// todo perhaps re-use effective mass across substeps
 
-			float rtA = s2Cross(cp->rA, tangent);
-			float rtB = s2Cross(cp->rB, tangent);
+			float rtA = s2Cross(rA, tangent);
+			float rtB = s2Cross(rB, tangent);
 			float kTangent = mA + mB + iA * rtA * rtA + iB * rtB * rtB;
 			cp->tangentMass = kTangent > 0.0f ? 1.0f / kTangent : 0.0f;
 
-			float rnA = s2Cross(cp->rA, normal);
-			float rnB = s2Cross(cp->rB, normal);
+			float rnA = s2Cross(rA, normal);
+			float rnB = s2Cross(rB, normal);
 			float kNormal = mA + mB + iA * rnA * rnA + iB * rnB * rnB;
 			cp->normalMass = kNormal > 0.0f ? 1.0f / kNormal : 0.0f;
 		}
 	}
 }
 
-static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* constraints, int constraintCount)
+static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* constraints, int constraintCount, float h)
 {
 	s2Body* bodies = world->bodies;
-	float slop = s2_linearSlop;
 
 	for (int i = 0; i < constraintCount; ++i)
 	{
@@ -139,6 +134,9 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 				continue;
 			}
 
+			// this clamping is not in the paper
+			float C_clamped = S2_MAX(-s2_maxBaumgarteVelocity * h, C);
+
 			float rnA = s2Cross(rA, normal);
 			float rnB = s2Cross(rB, normal);
 
@@ -146,16 +144,16 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 			float kA = mA + iA * rnA * rnA;
 			float kB = mB + iB * rnB * rnB;
 
-			float lambda = -C / (kA + kB);
+			float lambda = -C_clamped / (kA + kB);
 			cp->normalImpulse = lambda;
 
 			s2Vec2 P = s2MulSV(lambda, normal);
 
 			cA = s2MulSub(cA, mA, P);
-			aA -= iA * s2Cross(cp->rA, P);
+			aA -= iA * s2Cross(rA, P);
 
 			cB = s2MulAdd(cB, mB, P);
-			aB += iB * s2Cross(cp->rB, P);
+			aB += iB * s2Cross(rB, P);
 		}
 
 		// static friction constraints
@@ -182,21 +180,24 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 			float kA = mA + iA * rtA * rtA;
 			float kB = mB + iB * rtB * rtB;
 
-			float lambda = C / (kA + kB);
+			float lambda = -C / (kA + kB);
 
 			float maxLambda = friction * cp->normalImpulse;
 			if (lambda < -maxLambda || maxLambda < lambda)
 			{
+				cp->tangentImpulse = 0.0f;
 				continue;
 			}
+
+			cp->tangentImpulse = lambda;
 
 			s2Vec2 P = s2MulSV(lambda, tangent);
 
 			cA = s2MulSub(cA, mA, P);
-			aA -= iA * s2Cross(cp->rA, P);
+			aA -= iA * s2Cross(rA, P);
 
 			cB = s2MulAdd(cB, mB, P);
-			aB += iB * s2Cross(cp->rB, P);
+			aB += iB * s2Cross(rB, P);
 		}
 
 		bodyA->position = cA;
@@ -245,12 +246,19 @@ static void s2SolveContactVelocities_XPBD(s2World* world, s2ContactConstraint* c
 
 		s2Vec2 normal = constraint->normal;
 		s2Vec2 tangent = s2CrossVS(normal, 1.0f);
-		float friction = constraint->kinematicFriction;
+		float friction = constraint->friction;
 		float restitution = constraint->restitution;
 
+		// relax non-penetration
 		for (int j = 0; j < pointCount; ++j)
 		{
 			s2ContactConstraintPoint* cp = constraint->points + j;
+
+			// Skip if there was no overlap at the beginning of this time step
+			if (cp->separation > 0.0f)
+			{
+				continue;
+			}
 
 			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
 			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
@@ -280,11 +288,12 @@ static void s2SolveContactVelocities_XPBD(s2World* world, s2ContactConstraint* c
 
 			s2Vec2 P = s2MulSV(lambda, normal);
 			vA = s2MulSub(vA, mA, P);
-			wA -= iA * s2Cross(cp->rA, P);
+			wA -= iA * s2Cross(rA, P);
 			vB = s2MulAdd(vB, mB, P);
-			wB += iB * s2Cross(cp->rB, P);
+			wB += iB * s2Cross(rB, P);
 		}
 
+		// kinetic friction
 		for (int j = 0; j < pointCount; ++j)
 		{
 			s2ContactConstraintPoint* cp = constraint->points + j;
@@ -305,7 +314,8 @@ static void s2SolveContactVelocities_XPBD(s2World* world, s2ContactConstraint* c
 			}
 
 			// eq 31
-			float huf = friction * cp->normalImpulse * inv_h;
+			cp->tangentImpulse = friction * cp->normalImpulse;
+			float huf = cp->tangentImpulse * inv_h;
 			float abs_vt = S2_ABS(vt);
 			float Cdot = (vt / abs_vt) * S2_MIN(huf, abs_vt);
 
@@ -320,9 +330,9 @@ static void s2SolveContactVelocities_XPBD(s2World* world, s2ContactConstraint* c
 
 			s2Vec2 P = s2MulSV(lambda, tangent);
 			vA = s2MulSub(vA, mA, P);
-			wA -= iA * s2Cross(cp->rA, P);
+			wA -= iA * s2Cross(rA, P);
 			vB = s2MulAdd(vB, mB, P);
-			wB += iB * s2Cross(cp->rB, P);
+			wB += iB * s2Cross(rB, P);
 		}
 
 		bodyA->linearVelocity = vA;
@@ -383,7 +393,7 @@ void s2Solve_XPDB(s2World* world, s2StepContext* context)
 		{
 			continue;
 		}
-		s2PrepareJoint(joint, context);
+		s2PrepareJoint_XPBD(joint, context);
 	}
 
 	float h = context->dt / substepCount;
@@ -414,9 +424,13 @@ void s2Solve_XPDB(s2World* world, s2StepContext* context)
 			s2Vec2 v = body->linearVelocity;
 			float w = body->angularVelocity;
 
-			// Integrate velocities
+			// integrate velocities
 			v = s2Add(v, s2MulSV(h * invMass, s2MulAdd(body->force, body->mass, gravity)));
 			w = w + h * invI * body->torque;
+
+			// damping
+			v = s2MulSV(1.0f / (1.0f + h * body->linearDamping), v);
+			w *= 1.0f / (1.0f + h * body->angularDamping);
 
 			body->linearVelocity = v;
 			body->angularVelocity = w;
@@ -428,7 +442,8 @@ void s2Solve_XPDB(s2World* world, s2StepContext* context)
 			body->position0 = c;
 			body->angle0 = a;
 
-			// Integrate positions
+			// integrate positions
+			// this is unique to XPBD, no other solvers update position immediately
 			body->position = s2MulAdd(c, h, v);
 			body->angle += h * w;
 		}
@@ -441,10 +456,10 @@ void s2Solve_XPDB(s2World* world, s2StepContext* context)
 				continue;
 			}
 
-			//s2SolveJointPosition_XPBD(joint, context);
+			s2SolveJoint_XPBD(joint, context);
 		}
 
-		s2SolveContactPositions_XPBD(world, constraints, constraintCount);
+		s2SolveContactPositions_XPBD(world, constraints, constraintCount, h);
 
 		// Project velocities
 		for (int i = 0; i < bodyCapacity; ++i)
@@ -467,17 +482,21 @@ void s2Solve_XPDB(s2World* world, s2StepContext* context)
 			body->angularVelocity = inv_h * (body->angle - body->angle0);
 		}
 
+		// Relax contact velocities
 		s2SolveContactVelocities_XPBD(world, constraints, constraintCount, h);
+	}
 
-		for (int i = 0; i < jointCapacity; ++i)
+	// warm starting is not used, this is just for reporting
+	for (int i = 0; i < constraintCount; ++i)
+	{
+		s2ContactConstraint* constraint = constraints + i;
+		s2Contact* contact = constraint->contact;
+		s2Manifold* manifold = &contact->manifold;
+
+		for (int j = 0; j < constraint->pointCount; ++j)
 		{
-			s2Joint* joint = joints + i;
-			if (s2IsFree(&joint->object))
-			{
-				continue;
-			}
-
-			//s2SolveJointVelocities_XPBD(joint, context);
+			manifold->points[j].normalImpulse = constraint->points[j].normalImpulse * inv_h;
+			manifold->points[j].tangentImpulse = constraint->points[j].tangentImpulse * inv_h;
 		}
 	}
 

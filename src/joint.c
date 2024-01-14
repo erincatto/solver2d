@@ -151,7 +151,7 @@ static void s2DestroyContactsBetweenBodies(s2World* world, s2Body* bodyA, s2Body
 	}
 }
 
-s2JointId s2World_CreateMouseJoint(s2WorldId worldId, const s2MouseJointDef* def)
+s2JointId s2CreateMouseJoint(s2WorldId worldId, const s2MouseJointDef* def)
 {
 	s2World* world = s2GetWorldFromId(worldId);
 
@@ -180,7 +180,7 @@ s2JointId s2World_CreateMouseJoint(s2WorldId worldId, const s2MouseJointDef* def
 	return jointId;
 }
 
-s2JointId s2World_CreateRevoluteJoint(s2WorldId worldId, const s2RevoluteJointDef* def)
+s2JointId s2CreateRevoluteJoint(s2WorldId worldId, const s2RevoluteJointDef* def)
 {
 	s2World* world = s2GetWorldFromId(worldId);
 
@@ -212,7 +212,6 @@ s2JointId s2World_CreateRevoluteJoint(s2WorldId worldId, const s2RevoluteJointDe
 	joint->revoluteJoint.motorSpeed = def->motorSpeed;
 	joint->revoluteJoint.enableLimit = def->enableLimit;
 	joint->revoluteJoint.enableMotor = def->enableMotor;
-	joint->revoluteJoint.angle = 0.0f;
 
 	// If the joint prevents collisions, then destroy all contacts between attached bodies
 	if (def->collideConnected == false)
@@ -225,7 +224,7 @@ s2JointId s2World_CreateRevoluteJoint(s2WorldId worldId, const s2RevoluteJointDe
 	return jointId;
 }
 
-void s2World_DestroyJoint(s2JointId jointId)
+void s2DestroyJoint(s2JointId jointId)
 {
 	s2World* world = s2GetWorldFromIndex(jointId.world);
 
@@ -291,19 +290,19 @@ void s2World_DestroyJoint(s2JointId jointId)
 	s2FreeObject(&world->jointPool, &joint->object);
 }
 
-extern void s2PrepareMouse(s2Joint* base, s2StepContext* data);
-extern void s2PrepareRevolute(s2Joint* base, s2StepContext* data);
+extern void s2PrepareMouse(s2Joint* base, s2StepContext* context);
+extern void s2PrepareRevolute(s2Joint* base, s2StepContext* context);
 
-void s2PrepareJoint(s2Joint* joint, s2StepContext* data)
+void s2PrepareJoint(s2Joint* joint, s2StepContext* context)
 {
 	switch (joint->type)
 	{
 		case s2_mouseJoint:
-			s2PrepareMouse(joint, data);
+			s2PrepareMouse(joint, context);
 			break;
 
 		case s2_revoluteJoint:
-			s2PrepareRevolute(joint, data);
+			s2PrepareRevolute(joint, context);
 			break;
 
 		default:
@@ -311,19 +310,19 @@ void s2PrepareJoint(s2Joint* joint, s2StepContext* data)
 	}
 }
 
-extern void s2SolveMouseVelocity(s2Joint* base, s2StepContext* data);
-extern void s2SolveRevoluteVelocity(s2Joint* base, s2StepContext* data);
+extern void s2WarmStartMouse(s2Joint* base, s2StepContext* context);
+extern void s2WarmStartRevolute(s2Joint* base, s2StepContext* context);
 
-void s2SolveJointVelocity(s2Joint* joint, s2StepContext* data)
+void s2WarmStartJoint(s2Joint* joint, s2StepContext* context)
 {
 	switch (joint->type)
 	{
 		case s2_mouseJoint:
-			s2SolveMouseVelocity(joint, data);
+			s2WarmStartMouse(joint, context);
 			break;
 
 		case s2_revoluteJoint:
-			s2SolveRevoluteVelocity(joint, data);
+			s2WarmStartRevolute(joint, context);
 			break;
 
 		default:
@@ -331,18 +330,118 @@ void s2SolveJointVelocity(s2Joint* joint, s2StepContext* data)
 	}
 }
 
-extern void s2SolveRevolutePosition(s2Joint* base, s2StepContext* data);
+extern void s2SolveMouse(s2Joint* base, s2StepContext* context);
+extern void s2SolveRevolute(s2Joint* base, s2StepContext* context);
 
-void s2SolveJointPosition(s2Joint* joint, s2StepContext* data)
+void s2SolveJoint(s2Joint* joint, s2StepContext* context)
+{
+	switch (joint->type)
+	{
+		case s2_mouseJoint:
+			s2SolveMouse(joint, context);
+			break;
+
+		case s2_revoluteJoint:
+			s2SolveRevolute(joint, context);
+			break;
+
+		default:
+			S2_ASSERT(false);
+	}
+}
+
+extern void s2SolveRevolutePosition(s2Joint* base, s2StepContext* context);
+
+void s2SolveJointPosition(s2Joint* joint, s2StepContext* context)
 {
 	switch (joint->type)
 	{
 		case s2_revoluteJoint:
-			s2SolveRevolutePosition(joint, data);
+			s2SolveRevolutePosition(joint, context);
 			break;
 
 		default:
 			break;
+	}
+}
+
+extern void s2PrepareMouse_Soft(s2Joint* base, s2StepContext* context);
+extern void s2PrepareRevolute_Soft(s2Joint* base, s2StepContext* context, float hertz);
+
+void s2PrepareJoint_Soft(s2Joint* joint, s2StepContext* context, float hertz)
+{
+	switch (joint->type)
+	{
+		case s2_mouseJoint:
+			s2PrepareMouse_Soft(joint, context);
+			break;
+
+		case s2_revoluteJoint:
+			s2PrepareRevolute_Soft(joint, context, hertz);
+			break;
+
+		default:
+			S2_ASSERT(false);
+	}
+}
+
+extern void s2SolveMouse_Soft(s2Joint* base, s2StepContext* context, bool useBias);
+extern void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, bool useBias);
+
+void s2SolveJoint_Soft(s2Joint* joint, s2StepContext* context, bool useBias)
+{
+	switch (joint->type)
+	{
+		case s2_mouseJoint:
+			s2SolveMouse_Soft(joint, context, useBias);
+			break;
+
+		case s2_revoluteJoint:
+			s2SolveRevolute_Soft(joint, context, useBias);
+			break;
+
+		default:
+			S2_ASSERT(false);
+	}
+}
+
+extern void s2PrepareMouse_XPBD(s2Joint* base, s2StepContext* context);
+extern void s2PrepareRevolute_XPBD(s2Joint* base, s2StepContext* context);
+
+void s2PrepareJoint_XPBD(s2Joint* joint, s2StepContext* context)
+{
+	switch (joint->type)
+	{
+		case s2_mouseJoint:
+			s2PrepareMouse_XPBD(joint, context);
+			break;
+
+		case s2_revoluteJoint:
+			s2PrepareRevolute_XPBD(joint, context);
+			break;
+
+		default:
+			S2_ASSERT(false);
+	}
+}
+
+extern void s2SolveMouse_XPBD(s2Joint* base, s2StepContext* context);
+extern void s2SolveRevolute_XPBD(s2Joint* base, s2StepContext* context);
+
+void s2SolveJoint_XPBD(s2Joint* joint, s2StepContext* context)
+{
+	switch (joint->type)
+	{
+		case s2_mouseJoint:
+			s2SolveMouse_XPBD(joint, context);
+			break;
+
+		case s2_revoluteJoint:
+			s2SolveRevolute_XPBD(joint, context);
+			break;
+
+		default:
+			S2_ASSERT(false);
 	}
 }
 

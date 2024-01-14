@@ -47,7 +47,7 @@ class Sample
 	Sample(const Settings& settings, s2SolverType solverType);
 	virtual ~Sample();
 
-	void DrawTitle(const char* string);
+	void DrawTitle(Settings& settings, const char* string);
 	virtual void Step(Settings& settings, s2Color bodyColor);
 	virtual void UpdateUI()
 	{
@@ -64,7 +64,6 @@ class Sample
 
 	s2SolverType m_solverType;
 	s2BodyId m_groundBodyId;
-	int m_textLine;
 	s2WorldId m_worldId;
 	s2JointId m_mouseJointId;
 	int m_stepCount;

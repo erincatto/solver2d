@@ -46,6 +46,10 @@ typedef struct s2DebugDraw
 	bool drawShapes;
 	bool drawJoints;
 	bool drawAABBs;
-	bool drawCOMs;
+	bool drawMass;
+	bool drawContactPoints;
+	bool drawContactNormals;
+	bool drawContactImpulses;
+	bool drawFrictionImpulses;
 	void* context;
 } s2DebugDraw;
