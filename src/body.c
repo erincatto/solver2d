@@ -38,8 +38,6 @@ s2BodyId s2CreateBody(s2WorldId worldId, const s2BodyDef* def)
 	b->angularVelocity = def->angularVelocity;
 	b->linearVelocity0 = def->linearVelocity;
 	b->angularVelocity0 = def->angularVelocity;
-	b->deltaPosition = s2Vec2_zero;
-	b->deltaAngle = 0.0f;
 	b->force = s2Vec2_zero;
 	b->torque = 0.0f;
 	b->shapeList = S2_NULL_INDEX;
@@ -51,6 +49,11 @@ s2BodyId s2CreateBody(s2WorldId worldId, const s2BodyDef* def)
 	b->invMass = 0.0f;
 	b->I = 0.0f;
 	b->invI = 0.0f;
+
+	// a little bit of damping so that joint tests will settle and stretching can be compared
+	b->linearDamping = 0.1f;
+	b->angularDamping = 0.1f;
+
 	b->userData = def->userData;
 	b->world = worldId.index;
 	b->enlargeAABB = false;

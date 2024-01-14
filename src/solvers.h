@@ -19,13 +19,14 @@ typedef struct s2StepContext
 	float restitutionThreshold;
 	s2Body* bodies;
 	int32_t bodyCapacity;
+	bool warmStart;
 } s2StepContext;
 
 typedef struct s2ContactConstraintPoint
 {
 	s2Vec2 rA, rB;
-	s2Vec2 rAf, rBf;
 	s2Vec2 localAnchorA, localAnchorB;
+	s2Vec2 localFrictionAnchorA, localFrictionAnchorB;
 	float tangentSeparation;
 	float separation;
 	float normalImpulse;
@@ -55,6 +56,8 @@ typedef struct s2ContactConstraint
 // common
 void s2IntegrateVelocities(s2World* world, float h);
 void s2IntegratePositions(s2World* world, float h);
+void s2PrepareContacts_Soft(s2World* world, s2ContactConstraint* constraints, int constraintCount, float h, float hertz,
+							bool warmStart);
 void s2WarmStartContacts(s2World* world, s2ContactConstraint* constraints, int constraintCount);
 void s2StoreContactImpulses(s2ContactConstraint* constraints, int constraintCount);
 

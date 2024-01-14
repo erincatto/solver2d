@@ -91,7 +91,28 @@ void s2PrepareMouse(s2Joint* base, s2StepContext* context)
 	bodyB->angularVelocity = wB;
 }
 
-void s2SolveMouseVelocity(s2Joint* base, s2StepContext* context)
+void s2WarmStartMouse(s2Joint* base, s2StepContext* context)
+{
+	S2_ASSERT(base->type == s2_mouseJoint);
+
+	int32_t indexB = base->edges[1].bodyIndex;
+	S2_ASSERT(0 <= indexB && indexB < context->bodyCapacity);
+
+	s2Body* bodyB = context->bodies + indexB;
+	S2_ASSERT(bodyB->object.index == bodyB->object.next);
+
+	s2MouseJoint* joint = &base->mouseJoint;
+	s2Vec2 vB = bodyB->linearVelocity;
+	float wB = bodyB->angularVelocity;
+
+	vB = s2MulAdd(vB, joint->invMassB, joint->impulse);
+	wB += joint->invIB * s2Cross(joint->rB, joint->impulse);
+
+	bodyB->linearVelocity = vB;
+	bodyB->angularVelocity = wB;
+}
+
+void s2SolveMouse(s2Joint* base, s2StepContext* context)
 {
 	s2MouseJoint* joint = &base->mouseJoint;
 	s2Body* bodyB = context->bodies + base->edges[1].bodyIndex;
@@ -183,7 +204,7 @@ void s2PrepareMouse_Soft(s2Joint* base, s2StepContext* context)
 	bodyB->angularVelocity = wB;
 }
 
-void s2SolveMouseVelocity_Soft(s2Joint* base, s2StepContext* context, bool useBias)
+void s2SolveMouse_Soft(s2Joint* base, s2StepContext* context, bool useBias)
 {
 	S2_MAYBE_UNUSED(useBias);
 
@@ -277,7 +298,7 @@ void s2PrepareMouse_XPBD(s2Joint* base, s2StepContext* context)
 	bodyB->angularVelocity = wB;
 }
 
-void s2SolveMouseVelocity_XPBD(s2Joint* base, s2StepContext* context)
+void s2SolveMouse_XPBD(s2Joint* base, s2StepContext* context)
 {
 	s2MouseJoint* joint = &base->mouseJoint;
 	s2Body* bodyB = context->bodies + base->edges[1].bodyIndex;

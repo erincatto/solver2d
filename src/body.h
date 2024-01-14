@@ -39,9 +39,6 @@ typedef struct s2Body
 	s2Vec2 linearVelocity0;
 	float angularVelocity0;
 
-	s2Vec2 deltaPosition;
-	float deltaAngle;
-
 	s2Vec2 force;
 	float torque;
 
@@ -58,6 +55,9 @@ typedef struct s2Body
 
 	// Rotational inertia about the center of mass.
 	float I, invI;
+
+	float linearDamping;
+	float angularDamping;
 
 	void* userData;
 	int16_t world;

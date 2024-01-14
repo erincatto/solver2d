@@ -383,7 +383,7 @@ void s2Solve_XPDB(s2World* world, s2StepContext* context)
 		{
 			continue;
 		}
-		s2PrepareJoint(joint, context);
+		s2PrepareJoint_XPBD(joint, context);
 	}
 
 	float h = context->dt / substepCount;
@@ -418,6 +418,10 @@ void s2Solve_XPDB(s2World* world, s2StepContext* context)
 			v = s2Add(v, s2MulSV(h * invMass, s2MulAdd(body->force, body->mass, gravity)));
 			w = w + h * invI * body->torque;
 
+			// Damping
+			v = s2MulSV(1.0f / (1.0f + h * body->linearDamping), v);
+			w *= 1.0f / (1.0f + h * body->angularDamping);
+
 			body->linearVelocity = v;
 			body->angularVelocity = w;
 
@@ -441,7 +445,7 @@ void s2Solve_XPDB(s2World* world, s2StepContext* context)
 				continue;
 			}
 
-			//s2SolveJointPosition_XPBD(joint, context);
+			s2SolveJoint_XPBD(joint, context);
 		}
 
 		s2SolveContactPositions_XPBD(world, constraints, constraintCount);
@@ -467,18 +471,8 @@ void s2Solve_XPDB(s2World* world, s2StepContext* context)
 			body->angularVelocity = inv_h * (body->angle - body->angle0);
 		}
 
+		// Relax contact velocities
 		s2SolveContactVelocities_XPBD(world, constraints, constraintCount, h);
-
-		for (int i = 0; i < jointCapacity; ++i)
-		{
-			s2Joint* joint = joints + i;
-			if (s2IsFree(&joint->object))
-			{
-				continue;
-			}
-
-			//s2SolveJointVelocities_XPBD(joint, context);
-		}
 	}
 
 	s2FreeStackItem(world->stackAllocator, constraints);

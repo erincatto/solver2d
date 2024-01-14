@@ -17,65 +17,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-static void s2SubStepVelocities(s2World* world, float h)
-{
-	s2Body* bodies = world->bodies;
-	int bodyCapacity = world->bodyPool.capacity;
-	s2Vec2 gravity = world->gravity;
-
-	// Integrate velocities and apply damping. Initialize the body state.
-	for (int i = 0; i < bodyCapacity; ++i)
-	{
-		s2Body* body = bodies + i;
-		if (s2IsFree(&body->object))
-		{
-			continue;
-		}
-
-		if (body->type != s2_dynamicBody)
-		{
-			continue;
-		}
-
-		float invMass = body->invMass;
-		float invI = body->invI;
-
-		s2Vec2 v = body->linearVelocity;
-		float w = body->angularVelocity;
-
-		// Integrate velocities
-		v = s2Add(v, s2MulSV(h * invMass, s2MulAdd(body->force, body->mass, gravity)));
-		w = w + h * invI * body->torque;
-
-		body->linearVelocity = v;
-		body->angularVelocity = w;
-	}
-}
-
-static void s2SubStepPositions(s2World* world, float h)
-{
-	s2Body* bodies = world->bodies;
-	int bodyCapacity = world->bodyPool.capacity;
-
-	for (int i = 0; i < bodyCapacity; ++i)
-	{
-		s2Body* body = bodies + i;
-		if (s2ObjectValid(&body->object) == false)
-		{
-			continue;
-		}
-
-		if (body->type == s2_staticBody)
-		{
-			continue;
-		}
-
-		body->angle += h * body->angularVelocity;
-		body->position = s2MulAdd(body->position, h, body->linearVelocity);
-	}
-}
-
-static void s2PrepareRigidContacts(s2World* world, s2ContactConstraint* constraints, int constraintCount)
+static void s2PrepareContacts(s2World* world, s2ContactConstraint* constraints, int constraintCount, bool warmStart)
 {
 	s2Body* bodies = world->bodies;
 
@@ -122,8 +64,16 @@ static void s2PrepareRigidContacts(s2World* world, s2ContactConstraint* constrai
 			const s2ManifoldPoint* mp = manifold->points + j;
 			s2ContactConstraintPoint* cp = constraint->points + j;
 
-			cp->normalImpulse = mp->normalImpulse;
-			cp->tangentImpulse = mp->tangentImpulse;
+			if (warmStart)
+			{
+				cp->normalImpulse = mp->normalImpulse;
+				cp->tangentImpulse = mp->tangentImpulse;
+			}
+			else
+			{
+				cp->normalImpulse = 0.0f;
+				cp->tangentImpulse = 0.0f;
+			}
 
 			cp->rA = s2Sub(mp->point, cA);
 			cp->rB = s2Sub(mp->point, cB);
@@ -201,7 +151,7 @@ static void s2SubStepWarmStartContacts(s2World* world, s2ContactConstraint* cons
 	}
 }
 
-static void s2SolveContactVelocities_TGS(s2World* world, s2ContactConstraint* constraints, int constraintCount, float inv_h)
+static void s2SolveContacts_TGS(s2World* world, s2ContactConstraint* constraints, int constraintCount, float inv_h)
 {
 	s2Body* bodies = world->bodies;
 
@@ -411,7 +361,7 @@ void s2Solve_TGS_NGS(s2World* world, s2StepContext* context)
 		constraintCount += 1;
 	}
 
-	s2PrepareRigidContacts(world, constraints, constraintCount);
+	s2PrepareContacts(world, constraints, constraintCount, context->warmStart);
 
 	for (int i = 0; i < jointCapacity; ++i)
 	{
@@ -430,8 +380,23 @@ void s2Solve_TGS_NGS(s2World* world, s2StepContext* context)
 
 	for (int substep = 0; substep < substepCount; ++substep)
 	{
-		s2SubStepVelocities(world, h);
-		s2SubStepWarmStartContacts(world, constraints, constraintCount);
+		s2IntegrateVelocities(world, h);
+
+		if (context->warmStart)
+		{
+			for (int i = 0; i < jointCapacity; ++i)
+			{
+				s2Joint* joint = joints + i;
+				if (s2IsFree(&joint->object))
+				{
+					continue;
+				}
+
+				s2WarmStartJoint(joint, context);
+			}
+
+			s2SubStepWarmStartContacts(world, constraints, constraintCount);
+		}
 
 		for (int i = 0; i < jointCapacity; ++i)
 		{
@@ -441,13 +406,12 @@ void s2Solve_TGS_NGS(s2World* world, s2StepContext* context)
 				continue;
 			}
 
-			// todo soft
-			s2SolveJointVelocity(joint, context);
+			s2SolveJoint(joint, context);
 		}
 
-		s2SolveContactVelocities_TGS(world, constraints, constraintCount, inv_h);
+		s2SolveContacts_TGS(world, constraints, constraintCount, inv_h);
 		
-		s2SubStepPositions(world, h);
+		s2IntegratePositions(world, h);
 
 		for (int i = 0; i < jointCapacity; ++i)
 		{

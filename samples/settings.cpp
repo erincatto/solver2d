@@ -43,17 +43,17 @@ void Settings::Save()
 {
 	FILE* file = fopen(fileName, "w");
 	fprintf(file, "{\n");
-	fprintf(file, "  \"sampleIndex\": %d,\n", m_sampleIndex);
-	fprintf(file, "  \"drawShapes\": %s,\n", m_drawShapes ? "true" : "false");
-	fprintf(file, "  \"drawJoints\": %s,\n", m_drawJoints ? "true" : "false");
-	fprintf(file, "  \"drawAABBs\": %s,\n", m_drawAABBs ? "true" : "false");
-	fprintf(file, "  \"drawContactPoints\": %s,\n", m_drawContactPoints ? "true" : "false");
-	fprintf(file, "  \"drawContactNormals\": %s,\n", m_drawContactNormals ? "true" : "false");
-	fprintf(file, "  \"drawContactImpulse\": %s,\n", m_drawContactImpulse ? "true" : "false");
-	fprintf(file, "  \"drawFrictionImpulse\": %s,\n", m_drawFrictionImpulse ? "true" : "false");
-	fprintf(file, "  \"drawCOMs\": %s,\n", m_drawCOMs ? "true" : "false");
-	fprintf(file, "  \"drawStats\": %s,\n", m_drawStats ? "true" : "false");
-	fprintf(file, "  \"enableWarmStarting\": %s,\n", m_enableWarmStarting ? "true" : "false");
+	fprintf(file, "  \"sampleIndex\": %d,\n", sampleIndex);
+	fprintf(file, "  \"drawShapes\": %s,\n", drawShapes ? "true" : "false");
+	fprintf(file, "  \"drawJoints\": %s,\n", drawJoints ? "true" : "false");
+	fprintf(file, "  \"drawAABBs\": %s,\n", drawAABBs ? "true" : "false");
+	fprintf(file, "  \"drawContactPoints\": %s,\n", drawContactPoints ? "true" : "false");
+	fprintf(file, "  \"drawContactNormals\": %s,\n", drawContactNormals ? "true" : "false");
+	fprintf(file, "  \"drawContactImpulse\": %s,\n", drawContactImpulse ? "true" : "false");
+	fprintf(file, "  \"drawFrictionImpulse\": %s,\n", drawFrictionImpulse ? "true" : "false");
+	fprintf(file, "  \"drawCOMs\": %s,\n", drawCOMs ? "true" : "false");
+	fprintf(file, "  \"drawStats\": %s,\n", drawStats ? "true" : "false");
+	fprintf(file, "  \"enableWarmStarting\": %s,\n", enableWarmStarting ? "true" : "false");
 	fprintf(file, "}\n");
 	fclose(file);
 }
@@ -99,23 +99,23 @@ void Settings::Load()
 			const char* s = data + tokens[i + 1].start;
 			strncpy(buffer, s, count);
 			char* dummy;
-			m_sampleIndex = strtol(buffer, &dummy, 10);
+			sampleIndex = strtol(buffer, &dummy, 10);
 		}
 		else if (jsoneq(data, &tokens[i], "drawShapes") == 0)
 		{
 			const char* s = data + tokens[i + 1].start;
 			if (strncmp(s, "true", 4) == 0)
 			{
-				m_drawShapes = true;
+				drawShapes = true;
 			}
 			else if (strncmp(s, "false", 5) == 0)
 			{
-				m_drawShapes = false;
+				drawShapes = false;
 			}
 		}
 	}
 
 	free(data);
 
-	m_enablesSolvers[0] = true;
+	enablesSolvers[s2_solverTGS_Soft] = true;
 }

@@ -299,7 +299,7 @@ void s2Solve_PGS_NGS(s2World* world, s2StepContext* context)
 				continue;
 			}
 
-			s2SolveJointVelocity(joint, context);
+			s2SolveJoint(joint, context);
 		}
 
 		s2SolveContactVelocity(world, constraints, constraintCount, inv_h);

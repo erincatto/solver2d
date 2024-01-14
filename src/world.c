@@ -119,7 +119,7 @@ void s2DestroyWorld(s2WorldId id)
 	memset(world, 0, sizeof(s2World));
 }
 
-void s2World_Step(s2WorldId worldId, float timeStep, int velocityIterations, int positionIterations)
+void s2World_Step(s2WorldId worldId, float timeStep, int velIters, int posIters, bool warmStart)
 {
 	s2World* world = s2GetWorldFromId(worldId);
 	world->stepId += 1;
@@ -167,8 +167,9 @@ void s2World_Step(s2WorldId worldId, float timeStep, int velocityIterations, int
 	// Stage 3: Integrate velocities, solve velocity constraints, and integrate positions.
 	s2StepContext context = {0};
 	context.dt = timeStep;
-	context.velocityIterations = velocityIterations;
-	context.positionIterations = positionIterations;
+	context.velocityIterations = velIters;
+	context.positionIterations = posIters;
+	context.warmStart = warmStart;
 	if (timeStep > 0.0f)
 	{
 		context.inv_dt = 1.0f / timeStep;

@@ -36,7 +36,7 @@ Sample::~Sample()
 void Sample::DrawTitle(Settings& settings, const char* string)
 {
 	g_draw.DrawString(5, 5, string);
-	settings.m_textLine = int32_t(26.0f);
+	settings.textLine = int32_t(26.0f);
 }
 
 struct QueryContext
@@ -136,30 +136,33 @@ void Sample::Step(Settings& settings, s2Color bodyColor)
 	bodyColor.a = 0.6f;
 	g_draw.m_debugDraw.dynamicBodyColor = bodyColor;
 
-	s2World_Step(m_worldId, settings.m_timeStep, settings.m_velocityIterations, settings.m_positionIterations);
+	for (int i = 0; i < settings.multiSteps; ++i)
+	{
+		s2World_Step(m_worldId, settings.timeStep, settings.velocityIterations, settings.positionIterations, settings.enableWarmStarting);
+	}
 
-	if (settings.m_enablesSolvers[m_solverType])
+	if (settings.enablesSolvers[m_solverType])
 	{
 		s2World_Draw(m_worldId, &g_draw.m_debugDraw);
 	}
 
-	if (settings.m_timeStep > 0.0f)
+	if (settings.timeStep > 0.0f)
 	{
 		++m_stepCount;
 	}
 
-	if (settings.m_drawStats)
+	if (settings.drawStats)
 	{
 		s2Statistics s = s2World_GetStatistics(m_worldId);
 
-		g_draw.DrawString(5, settings.m_textLine, "bodies/contacts/joints = %d/%d/%d/%d", s.bodyCount, s.contactCount, s.jointCount);
-		settings.m_textLine += settings.m_textIncrement;
+		g_draw.DrawString(5, settings.textLine, "bodies/contacts/joints = %d/%d/%d/%d", s.bodyCount, s.contactCount, s.jointCount);
+		settings.textLine += settings.textIncrement;
 
-		g_draw.DrawString(5, settings.m_textLine, "proxies/height = %d/%d", s.proxyCount, s.treeHeight);
-		settings.m_textLine += settings.m_textIncrement;
+		g_draw.DrawString(5, settings.textLine, "proxies/height = %d/%d", s.proxyCount, s.treeHeight);
+		settings.textLine += settings.textIncrement;
 
-		g_draw.DrawString(5, settings.m_textLine, "stack allocator capacity/used = %d/%d", s.stackCapacity, s.stackUsed);
-		settings.m_textLine += settings.m_textIncrement;
+		g_draw.DrawString(5, settings.textLine, "stack allocator capacity/used = %d/%d", s.stackCapacity, s.stackUsed);
+		settings.textLine += settings.textIncrement;
 	}
 }
 

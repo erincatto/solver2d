@@ -69,6 +69,12 @@ target_include_directories(solver2d
 	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
+set_target_properties(solver2d PROPERTIES
+	C_STANDARD 17
+    C_STANDARD_REQUIRED YES
+    C_EXTENSIONS NO
+)
+
 message(STATUS "CMake C compiler: ${CMAKE_C_COMPILER_ID}")
 message(STATUS "CMake C++ compiler: ${CMAKE_CXX_COMPILER_ID}")
 message(STATUS "CMake system name: ${CMAKE_SYSTEM_NAME}")

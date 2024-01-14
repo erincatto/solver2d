@@ -1033,7 +1033,7 @@ void s2Solve_PGS_NGS_Block(s2World* world, s2StepContext* context)
 				continue;
 			}
 
-			s2SolveJointVelocity(joint, context);
+			s2SolveJoint(joint, context);
 		}
 
 		s2ContactSolver_SolveVelocityConstraints(&contactSolver);

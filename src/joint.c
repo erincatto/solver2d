@@ -212,7 +212,6 @@ s2JointId s2CreateRevoluteJoint(s2WorldId worldId, const s2RevoluteJointDef* def
 	joint->revoluteJoint.motorSpeed = def->motorSpeed;
 	joint->revoluteJoint.enableLimit = def->enableLimit;
 	joint->revoluteJoint.enableMotor = def->enableMotor;
-	joint->revoluteJoint.angle = 0.0f;
 
 	// If the joint prevents collisions, then destroy all contacts between attached bodies
 	if (def->collideConnected == false)
@@ -311,19 +310,39 @@ void s2PrepareJoint(s2Joint* joint, s2StepContext* context)
 	}
 }
 
-extern void s2SolveMouseVelocity(s2Joint* base, s2StepContext* context);
-extern void s2SolveRevoluteVelocity(s2Joint* base, s2StepContext* context);
+extern void s2WarmStartMouse(s2Joint* base, s2StepContext* context);
+extern void s2WarmStartRevolute(s2Joint* base, s2StepContext* context);
 
-void s2SolveJointVelocity(s2Joint* joint, s2StepContext* context)
+void s2WarmStartJoint(s2Joint* joint, s2StepContext* context)
 {
 	switch (joint->type)
 	{
 		case s2_mouseJoint:
-			s2SolveMouseVelocity(joint, context);
+			s2WarmStartMouse(joint, context);
 			break;
 
 		case s2_revoluteJoint:
-			s2SolveRevoluteVelocity(joint, context);
+			s2WarmStartRevolute(joint, context);
+			break;
+
+		default:
+			S2_ASSERT(false);
+	}
+}
+
+extern void s2SolveMouse(s2Joint* base, s2StepContext* context);
+extern void s2SolveRevolute(s2Joint* base, s2StepContext* context);
+
+void s2SolveJoint(s2Joint* joint, s2StepContext* context)
+{
+	switch (joint->type)
+	{
+		case s2_mouseJoint:
+			s2SolveMouse(joint, context);
+			break;
+
+		case s2_revoluteJoint:
+			s2SolveRevolute(joint, context);
 			break;
 
 		default:
@@ -347,9 +366,9 @@ void s2SolveJointPosition(s2Joint* joint, s2StepContext* context)
 }
 
 extern void s2PrepareMouse_Soft(s2Joint* base, s2StepContext* context);
-extern void s2PrepareRevolute_Soft(s2Joint* base, s2StepContext* context);
+extern void s2PrepareRevolute_Soft(s2Joint* base, s2StepContext* context, float hertz);
 
-void s2PrepareJoint_Soft(s2Joint* joint, s2StepContext* context)
+void s2PrepareJoint_Soft(s2Joint* joint, s2StepContext* context, float hertz)
 {
 	switch (joint->type)
 	{
@@ -358,7 +377,7 @@ void s2PrepareJoint_Soft(s2Joint* joint, s2StepContext* context)
 			break;
 
 		case s2_revoluteJoint:
-			s2PrepareRevolute_Soft(joint, context);
+			s2PrepareRevolute_Soft(joint, context, hertz);
 			break;
 
 		default:
@@ -366,19 +385,19 @@ void s2PrepareJoint_Soft(s2Joint* joint, s2StepContext* context)
 	}
 }
 
-extern void s2SolveMouseVelocity_Soft(s2Joint* base, s2StepContext* context, bool useBias);
-extern void s2SolveRevoluteVelocity_Soft(s2Joint* base, s2StepContext* context, bool useBias);
+extern void s2SolveMouse_Soft(s2Joint* base, s2StepContext* context, bool useBias);
+extern void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, bool useBias);
 
-void s2SolveJointVelocity_Soft(s2Joint* joint, s2StepContext* context, bool useBias)
+void s2SolveJoint_Soft(s2Joint* joint, s2StepContext* context, bool useBias)
 {
 	switch (joint->type)
 	{
 		case s2_mouseJoint:
-			s2SolveMouseVelocity_Soft(joint, context, useBias);
+			s2SolveMouse_Soft(joint, context, useBias);
 			break;
 
 		case s2_revoluteJoint:
-			s2SolveRevoluteVelocity_Soft(joint, context, useBias);
+			s2SolveRevolute_Soft(joint, context, useBias);
 			break;
 
 		default:
@@ -406,19 +425,19 @@ void s2PrepareJoint_XPBD(s2Joint* joint, s2StepContext* context)
 	}
 }
 
-extern void s2SolveMouseVelocity_XPBD(s2Joint* base, s2StepContext* context);
-extern void s2SolveRevoluteVelocity_XPBD(s2Joint* base, s2StepContext* context);
+extern void s2SolveMouse_XPBD(s2Joint* base, s2StepContext* context);
+extern void s2SolveRevolute_XPBD(s2Joint* base, s2StepContext* context);
 
-void s2SolveJointVelocity_XPBD(s2Joint* joint, s2StepContext* context)
+void s2SolveJoint_XPBD(s2Joint* joint, s2StepContext* context)
 {
 	switch (joint->type)
 	{
 		case s2_mouseJoint:
-			s2SolveMouseVelocity_XPBD(joint, context);
+			s2SolveMouse_XPBD(joint, context);
 			break;
 
 		case s2_revoluteJoint:
-			s2SolveRevoluteVelocity_XPBD(joint, context);
+			s2SolveRevolute_XPBD(joint, context);
 			break;
 
 		default:

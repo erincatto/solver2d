@@ -17,7 +17,7 @@ public:
 	SingleBox(const Settings& settings, s2SolverType solverType)
 		: Sample(settings, solverType)
 	{
-		if (settings.m_restart == false)
+		if (settings.restart == false)
 		{
 			g_camera.m_center = {0.0f, 3.0f};
 			g_camera.m_zoom = 0.2f;
@@ -127,7 +127,7 @@ public:
 	HighMassRatio2(const Settings& settings, s2SolverType solverType)
 		: Sample(settings, solverType)
 	{
-		if (settings.m_restart == false)
+		if (settings.restart == false)
 		{
 			g_camera.m_center = {0.0f, 3.0f};
 			g_camera.m_zoom = 1.0f;
@@ -247,7 +247,7 @@ public:
 	OverlapRecovery(const Settings& settings, s2SolverType solverType)
 		: Sample(settings, solverType)
 	{
-		if (settings.m_restart == false)
+		if (settings.restart == false)
 		{
 			g_camera.m_zoom = 0.25f;
 			g_camera.m_center = {0.0f, 5.0f};

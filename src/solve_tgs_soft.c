@@ -19,52 +19,7 @@
 
 #define maxBaumgarteVelocity 3.0f
 
-static void s2UpdatePositionDeltas(s2World* world, float h)
-{
-	s2Body* bodies = world->bodies;
-	int bodyCapacity = world->bodyPool.capacity;
-
-	for (int i = 0; i < bodyCapacity; ++i)
-	{
-		s2Body* body = bodies + i;
-		if (s2ObjectValid(&body->object) == false)
-		{
-			continue;
-		}
-
-		if (body->type == s2_staticBody)
-		{
-			continue;
-		}
-
-		body->deltaAngle += h * body->angularVelocity;
-		body->deltaPosition = s2MulAdd(body->deltaPosition, h, body->linearVelocity);
-	}
-}
-
-static void s2FinalizePositions(s2World* world)
-{
-	s2Body* bodies = world->bodies;
-	int bodyCapacity = world->bodyPool.capacity;
-
-	for (int i = 0; i < bodyCapacity; ++i)
-	{
-		s2Body* body = bodies + i;
-		if (s2ObjectValid(&body->object) == false)
-		{
-			continue;
-		}
-
-		if (body->type == s2_staticBody)
-		{
-			continue;
-		}
-
-		body->position = s2Add(body->position, body->deltaPosition);
-		body->angle += body->deltaAngle;
-	}
-}
-
+#if 0
 // todo same as PGS
 static void s2PrepareSoftContacts(s2World* world, s2ContactConstraint* constraints, int constraintCount, float h)
 {
@@ -176,8 +131,10 @@ static void s2PrepareSoftContacts(s2World* world, s2ContactConstraint* constrain
 		bodyB->angularVelocity = wB;
 	}
 }
+#endif
 
-static void s2SolveContactVelocities_TGS_Soft(s2World* world, s2ContactConstraint* constraints, int constraintCount, float inv_dt,
+// this differes from PGS because it uses updated anchors
+static void s2SolveContact_TGS_Soft(s2World* world, s2ContactConstraint* constraints, int constraintCount, float inv_dt,
 											  bool useBias)
 {
 	s2Body* bodies = world->bodies;
@@ -200,10 +157,8 @@ static void s2SolveContactVelocities_TGS_Soft(s2World* world, s2ContactConstrain
 		s2Vec2 vB = bodyB->linearVelocity;
 		float wB = bodyB->angularVelocity;
 
-		const s2Vec2 dpA = bodyA->deltaPosition;
-		const float daA = bodyA->deltaAngle;
-		const s2Vec2 dpB = bodyB->deltaPosition;
-		const float daB = bodyB->deltaAngle;
+		s2Rot qA = s2MakeRot(bodyA->angle);
+		s2Rot qB = s2MakeRot(bodyB->angle);
 
 		s2Vec2 normal = constraint->normal;
 		s2Vec2 tangent = s2RightPerp(normal);
@@ -213,14 +168,12 @@ static void s2SolveContactVelocities_TGS_Soft(s2World* world, s2ContactConstrain
 		{
 			s2ContactConstraintPoint* cp = constraint->points + j;
 
-			// Approximate change in anchor points
-			s2Vec2 drA = s2CrossSV(daA, cp->rA);
-			s2Vec2 drB = s2CrossSV(daB, cp->rB);
+			// Current anchor points
+			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
+			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
 
 			// Compute change in separation
-			s2Vec2 prA = s2Add(dpA, drA);
-			s2Vec2 prB = s2Add(dpB, drB);
-			float ds = s2Dot(s2Sub(prB, prA), normal);
+			float ds = s2Dot(s2Sub(rB, rA), normal);
 			float s = cp->separation + ds;
 
 			float bias = 0.0f;
@@ -237,10 +190,6 @@ static void s2SolveContactVelocities_TGS_Soft(s2World* world, s2ContactConstrain
 				massScale = cp->massCoefficient;
 				impulseScale = cp->impulseCoefficient;
 			}
-
-			// Current anchors
-			s2Vec2 rA = s2Add(cp->rA, drA);
-			s2Vec2 rB = s2Add(cp->rB, drB);
 
 			// Relative velocity at contact
 			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rB));
@@ -268,9 +217,9 @@ static void s2SolveContactVelocities_TGS_Soft(s2World* world, s2ContactConstrain
 		{
 			s2ContactConstraintPoint* cp = constraint->points + j;
 
-			// Approximate anchor points
-			s2Vec2 rA = s2Add(cp->rA, s2CrossSV(daA, cp->rA));
-			s2Vec2 rB = s2Add(cp->rB, s2CrossSV(daB, cp->rB));
+			// Current anchor points
+			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
+			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
 
 			// Relative velocity at contact
 			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rB));
@@ -336,7 +285,19 @@ void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
 	// Full step apply gravity
 	s2IntegrateVelocities(world, context->dt);
 
-	s2PrepareSoftContacts(world, constraints, constraintCount, context->dt);
+	s2PrepareContacts_Soft(world, constraints, constraintCount, context->dt, 30.0f, context->warmStart);
+	
+	// Full warm start
+	if (context->warmStart)
+	{
+		s2WarmStartContacts(world, constraints, constraintCount);
+	}
+
+	int substepCount = context->velocityIterations;
+	float h = context->dt / substepCount;
+	float inv_h = 1.0f / h;
+
+	float jointHertz =  0.25f * inv_h;
 
 	for (int i = 0; i < jointCapacity; ++i)
 	{
@@ -346,14 +307,17 @@ void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
 			continue;
 		}
 
-		// todo soft
-		s2PrepareJoint(joint, context);
+		s2PrepareJoint_Soft(joint, context, jointHertz);
+
+		// Full warm start
+		if (context->warmStart)
+		{
+			s2WarmStartJoint(joint, context);
+		}
 	}
 
-	int substepCount = context->velocityIterations;
-	float h = context->dt / substepCount;
-	float inv_h = 1.0f / h;
-
+	// Solve
+	bool useBias = true;
 	for (int substep = 0; substep < substepCount; ++substep)
 	{
 		for (int i = 0; i < jointCapacity; ++i)
@@ -364,24 +328,20 @@ void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
 				continue;
 			}
 
-			// todo soft
-			s2SolveJointVelocity(joint, context);
+			s2SolveJoint_Soft(joint, context, true);
 		}
 
-		// One constraint iteration
-		bool useBias = true;
-		s2SolveContactVelocities_TGS_Soft(world, constraints, constraintCount, inv_h, useBias);
+		s2SolveContact_TGS_Soft(world, constraints, constraintCount, inv_h, useBias);
 
-		// Update position deltas
-		s2UpdatePositionDeltas(world, h);
+		s2IntegratePositions(world, h);
 	}
 
-	// Update positions using deltas
-	s2FinalizePositions(world);
-
+	// Relax
+	useBias = false;
 	int positionIterations = context->positionIterations;
 	for (int iter = 0; iter < positionIterations; ++iter)
 	{
+
 		for (int i = 0; i < jointCapacity; ++i)
 		{
 			s2Joint* joint = joints + i;
@@ -390,12 +350,11 @@ void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
 				continue;
 			}
 
-			// todo relax soft
-			s2SolveJointPosition(joint, context);
+			s2SolveJoint_Soft(joint, context, useBias);
 		}
 
-		bool useBias = false;
-		s2SolveContactVelocities_TGS_Soft(world, constraints, constraintCount, 0.0f, useBias);
+		// This could use fixed anchors
+		s2SolveContact_TGS_Soft(world, constraints, constraintCount, 0.0f, useBias);
 	}
 
 	s2StoreContactImpulses(constraints, constraintCount);

@@ -15,111 +15,7 @@
 
 #include <stdbool.h>
 
-static void s2ResetDeltaPositions(s2World* world)
-{
-	s2Body* bodies = world->bodies;
-	int bodyCapacity = world->bodyPool.capacity;
-
-	for (int i = 0; i < bodyCapacity; ++i)
-	{
-		s2Body* body = bodies + i;
-		if (s2ObjectValid(&body->object) == false)
-		{
-			continue;
-		}
-
-		if (body->type == s2_staticBody)
-		{
-			continue;
-		}
-
-		body->deltaAngle = 0.0f;
-		body->deltaPosition = (s2Vec2){0.0f, 0.0f};
-	}
-}
-
-static void s2SubStepVelocities(s2World* world, float h)
-{
-	s2Body* bodies = world->bodies;
-	int bodyCapacity = world->bodyPool.capacity;
-	s2Vec2 gravity = world->gravity;
-
-	// Integrate velocities and apply damping. Initialize the body state.
-	for (int i = 0; i < bodyCapacity; ++i)
-	{
-		s2Body* body = bodies + i;
-		if (s2IsFree(&body->object))
-		{
-			continue;
-		}
-
-		if (body->type != s2_dynamicBody)
-		{
-			continue;
-		}
-
-		float invMass = body->invMass;
-		float invI = body->invI;
-
-		s2Vec2 v = body->linearVelocity;
-		float w = body->angularVelocity;
-
-		// Integrate velocities
-		v = s2Add(v, s2MulSV(h * invMass, s2MulAdd(body->force, body->mass, gravity)));
-		w = w + h * invI * body->torque;
-
-		body->linearVelocity = v;
-		body->angularVelocity = w;
-	}
-}
-
-static void s2UpdateDeltaPositions(s2World* world, float h)
-{
-	s2Body* bodies = world->bodies;
-	int bodyCapacity = world->bodyPool.capacity;
-
-	for (int i = 0; i < bodyCapacity; ++i)
-	{
-		s2Body* body = bodies + i;
-		if (s2ObjectValid(&body->object) == false)
-		{
-			continue;
-		}
-
-		if (body->type == s2_staticBody)
-		{
-			continue;
-		}
-
-		body->deltaAngle += h * body->angularVelocity;
-		body->deltaPosition = s2MulAdd(body->deltaPosition, h, body->linearVelocity);
-	}
-}
-
-static void s2FinalizePositions(s2World* world)
-{
-	s2Body* bodies = world->bodies;
-	int bodyCapacity = world->bodyPool.capacity;
-
-	for (int i = 0; i < bodyCapacity; ++i)
-	{
-		s2Body* body = bodies + i;
-		if (s2ObjectValid(&body->object) == false)
-		{
-			continue;
-		}
-
-		if (body->type == s2_staticBody)
-		{
-			continue;
-		}
-
-		body->position = s2Add(body->position, body->deltaPosition);
-		body->angle += body->deltaAngle;
-	}
-}
-
-static void s2PrepareStickyContacts(s2World* world, s2ContactConstraint* constraints, int constraintCount)
+static void s2PrepareContacts_Sticky(s2World* world, s2ContactConstraint* constraints, int constraintCount)
 {
 	s2Body* bodies = world->bodies;
 
@@ -213,8 +109,8 @@ static void s2PrepareStickyContacts(s2World* world, s2ContactConstraint* constra
 					break;
 				}
 
-				cp->rAf = anchorA;
-				cp->rBf = anchorB;
+				cp->localFrictionAnchorA = mp->localAnchorA;
+				cp->localFrictionAnchorB = mp->localAnchorB;
 				cp->tangentSeparation = s2Dot(offset, tangent);
 
 				float rtA = s2Cross(anchorA, tangent);
@@ -243,12 +139,12 @@ static void s2PrepareStickyContacts(s2World* world, s2ContactConstraint* constra
 				mp->localAnchorA = s2InvRotateVector(qA, cp->rA);
 				mp->localAnchorB = s2InvRotateVector(qB, cp->rB);
 
-				cp->rAf = cp->rA;
-				cp->rBf = cp->rB;
+				cp->localFrictionAnchorA = mp->localAnchorA;
+				cp->localFrictionAnchorB = mp->localAnchorB;
 				cp->tangentSeparation = 0.0f;
 
-				float rtA = s2Cross(cp->rAf, tangent);
-				float rtB = s2Cross(cp->rBf, tangent);
+				float rtA = s2Cross(cp->rA, tangent);
+				float rtB = s2Cross(cp->rB, tangent);
 				float kTangent = mA + mB + iA * rtA * rtA + iB * rtB * rtB;
 				cp->tangentMass = kTangent > 0.0f ? 1.0f / kTangent : 0.0f;
 			}
@@ -258,8 +154,8 @@ static void s2PrepareStickyContacts(s2World* world, s2ContactConstraint* constra
 	}
 }
 
-static void s2SolveContactVelocities_TGS_Sticky(s2World* world, s2ContactConstraint* constraints, int constraintCount,
-												float inv_dt, bool useBias)
+static void s2SolveContacts_TGS_Sticky(s2World* world, s2ContactConstraint* constraints, int constraintCount,
+												float inv_h, bool useBias)
 {
 	s2Body* bodies = world->bodies;
 
@@ -281,10 +177,8 @@ static void s2SolveContactVelocities_TGS_Sticky(s2World* world, s2ContactConstra
 		s2Vec2 vB = bodyB->linearVelocity;
 		float wB = bodyB->angularVelocity;
 
-		const s2Vec2 dpA = bodyA->deltaPosition;
-		const float daA = bodyA->deltaAngle;
-		const s2Vec2 dpB = bodyB->deltaPosition;
-		const float daB = bodyB->deltaAngle;
+		s2Rot qA = s2MakeRot(bodyA->angle);
+		s2Rot qB = s2MakeRot(bodyB->angle);
 
 		s2Vec2 normal = constraint->normal;
 		s2Vec2 tangent = s2RightPerp(normal);
@@ -297,30 +191,24 @@ static void s2SolveContactVelocities_TGS_Sticky(s2World* world, s2ContactConstra
 		{
 			s2ContactConstraintPoint* cp = constraint->points + j;
 
-			// Approximate change in anchor points
-			s2Vec2 drA = s2CrossSV(daA, cp->rA);
-			s2Vec2 drB = s2CrossSV(daB, cp->rB);
+			// Current anchor points
+			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
+			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
 
 			// Compute change in separation
-			s2Vec2 prA = s2Add(dpA, drA);
-			s2Vec2 prB = s2Add(dpB, drB);
-			float ds = s2Dot(s2Sub(prB, prA), normal);
+			float ds = s2Dot(s2Sub(rB, rA), normal);
 			float s = cp->separation + ds;
 
 			float bias = 0.0f;
 			if (s > 0.0f)
 			{
 				// Speculative
-				bias = s * inv_dt;
+				bias = s * inv_h;
 			}
 			else if (useBias)
 			{
-				bias = S2_MAX(-s2_maxBaumgarteVelocity, cp->baumgarte * s * inv_dt);
+				bias = S2_MAX(-s2_maxBaumgarteVelocity, cp->baumgarte * s * inv_h);
 			}
-
-			// Current anchors
-			s2Vec2 rA = s2Add(cp->rA, drA);
-			s2Vec2 rB = s2Add(cp->rB, drB);
 
 			// Relative velocity at contact
 			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rB));
@@ -351,20 +239,14 @@ static void s2SolveContactVelocities_TGS_Sticky(s2World* world, s2ContactConstra
 		{
 			s2ContactConstraintPoint* cp = constraint->points + j;
 
-			// Approximate change in friction anchor points
-			s2Vec2 drAf = s2CrossSV(daA, cp->rAf);
-			s2Vec2 drBf = s2CrossSV(daB, cp->rBf);
+			// Current friction anchor points
+			s2Vec2 rAf = s2RotateVector(qA, cp->localFrictionAnchorA);
+			s2Vec2 rBf = s2RotateVector(qB, cp->localFrictionAnchorB);
 
 			// Compute change in separation
-			s2Vec2 prA = s2Add(dpA, drAf);
-			s2Vec2 prB = s2Add(dpB, drBf);
-			float ds = s2Dot(s2Sub(prB, prA), tangent);
+			float ds = s2Dot(s2Sub(rBf, rAf), tangent);
 			float s = cp->tangentSeparation + ds;
-			float bias = 0.5f * s * inv_dt;
-
-			// Current friction anchors
-			s2Vec2 rAf = s2Add(cp->rAf, drAf);
-			s2Vec2 rBf = s2Add(cp->rBf, drBf);
+			float bias = 0.5f * s * inv_h;
 
 			// Relative velocity at contact
 			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rBf));
@@ -374,8 +256,8 @@ static void s2SolveContactVelocities_TGS_Sticky(s2World* world, s2ContactConstra
 			// Compute tangent impulse
 			float impulse = -cp->tangentMass * (vt + bias);
 
-			// max friction uses an average of the total normal impulse because persistent friction anchors don't line up with
-			// normal anchors
+			// max friction uses an average of the total normal impulse because persistent friction
+			// anchors don't line up with normal anchors
 			float maxFriction = 0.5f * friction * totalNormalImpulse;
 
 			// Clamp the accumulated impulse
@@ -411,6 +293,7 @@ static void s2SolveContactVelocities_TGS_Sticky(s2World* world, s2ContactConstra
 	}
 }
 
+// Joints not implemented for sticky solver
 void s2Solve_TGS_Sticky(s2World* world, s2StepContext* context)
 {
 	s2Contact* contacts = world->contacts;
@@ -438,30 +321,28 @@ void s2Solve_TGS_Sticky(s2World* world, s2StepContext* context)
 		constraintCount += 1;
 	}
 
-	//s2IntegrateVelocities(world, context->dt);
-
-	s2ResetDeltaPositions(world);
-
-	s2PrepareStickyContacts(world, constraints, constraintCount);
+	s2PrepareContacts_Sticky(world, constraints, constraintCount);
 
 	int substepCount = context->velocityIterations;
 	float h = context->dt / substepCount;
 	float inv_h = substepCount / context->dt;
 
+	// TGS solve
+	bool useBias = true;
 	for (int substep = 0; substep < substepCount; ++substep)
 	{
-		s2SubStepVelocities(world, h);
-		s2SolveContactVelocities_TGS_Sticky(world, constraints, constraintCount, inv_h, true);
-		s2UpdateDeltaPositions(world, h);
+		s2IntegrateVelocities(world, h);
+		s2SolveContacts_TGS_Sticky(world, constraints, constraintCount, inv_h, useBias);
+		s2IntegratePositions(world, h);
 	}
 
-	s2FinalizePositions(world);
-
+	// Relax
+	useBias = false;
 	int positionIterations = context->positionIterations;
 	for (int iter = 0; iter < positionIterations; ++iter)
 	{
 		// relax constraints
-		s2SolveContactVelocities_TGS_Sticky(world, constraints, constraintCount, 0.0f, false);
+		s2SolveContacts_TGS_Sticky(world, constraints, constraintCount, 0.0f, useBias);
 	}
 
 	s2FreeStackItem(world->stackAllocator, constraints);

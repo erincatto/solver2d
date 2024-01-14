@@ -64,6 +64,7 @@ set(S2D_SAMPLES
 	settings.cpp
 
 	collection/sample_contact.cpp
+	collection/sample_joints.cpp
 )
 
 add_executable(samples ${S2D_SAMPLES})

@@ -22,7 +22,7 @@ extern "C"
 s2WorldId s2CreateWorld(const s2WorldDef* def);
 void s2DestroyWorld(s2WorldId worldId);
 
-void s2World_Step(s2WorldId worldId, float timeStep, int32_t velocityIterations, int32_t positionIterations);
+void s2World_Step(s2WorldId worldId, float timeStep, int32_t velIters, int32_t posIters, bool warmStart);
 void s2World_Draw(s2WorldId worldId, s2DebugDraw* debugDraw);
 
 struct s2Statistics s2World_GetStatistics(s2WorldId worldId);
