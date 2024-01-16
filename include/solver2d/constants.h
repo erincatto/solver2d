@@ -17,4 +17,6 @@
 #define s2_linearSleepTolerance 0.01f
 #define s2_angularSleepTolerance (2.0f / 180.0f * s2_pi)
 #define s2_huge (100000.0f)
-#define s2_maxBaumgarteVelocity 40.0f
+#define s2_maxBaumgarteVelocity 4.0f
+#define s2_contactHertz 30.0f
+#define s2_jointHertz 60.0f

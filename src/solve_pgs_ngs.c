@@ -271,7 +271,7 @@ void s2Solve_PGS_NGS(s2World* world, s2StepContext* context)
 			s2SolveJointPosition(joint, context);
 		}
 
-		s2SolveContact_NGS(world, constraints, constraintCount);
+		s2SolveContact_NGS(world, constraints, constraintCount, 1.0f);
 	}
 
 	s2FreeStackItem(world->stackAllocator, constraints);

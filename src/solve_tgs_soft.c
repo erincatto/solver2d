@@ -173,8 +173,8 @@ void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
 	float h = context->dt / substepCount;
 	float inv_h = 1.0f / h;
 
-	float contactHertz = S2_MIN(30.0f, 0.125f * inv_h);
-	float jointHertz = S2_MIN(60.0f, 0.125f * inv_h);
+	float contactHertz = S2_MIN(s2_contactHertz, 0.25f * inv_h);
+	float jointHertz = S2_MIN(s2_jointHertz, 0.125f * inv_h);
 
 	// Prepare
 	s2PrepareContacts_Soft(world, constraints, constraintCount, context, h, contactHertz);

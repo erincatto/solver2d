@@ -58,6 +58,7 @@ typedef struct s2Body
 
 	float linearDamping;
 	float angularDamping;
+	float gravityScale;
 
 	void* userData;
 	int16_t world;

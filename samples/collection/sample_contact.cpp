@@ -6,10 +6,12 @@
 
 #include "solver2d/geometry.h"
 #include "solver2d/hull.h"
+#include "solver2d/math.h"
 #include "solver2d/solver2d.h"
 
 #include <GLFW/glfw3.h>
 #include <imgui.h>
+#include <math.h>
 
 class SingleBox : public Sample
 {
@@ -473,11 +475,11 @@ public:
 		s2ShapeDef shapeDef = s2_defaultShapeDef;
 		shapeDef.density = 1.0f;
 
-		#ifdef NDEBUG
+#ifdef NDEBUG
 		int baseCount = 100;
-		#else
+#else
 		int baseCount = 20;
-		#endif
+#endif
 
 		float h = 0.5f;
 		s2Polygon box = s2MakeSquare(h);
@@ -507,3 +509,101 @@ public:
 };
 
 static int samplePyramid = RegisterSample("Contact", "Pyramid", Pyramid::Create);
+
+// This sample shows an artifact of sub-stepping. The velocity impulse is resolved
+// in the first sub-step and then normal impulse drops to zero and so does friction.
+// A better result would be had using a force that is applied each substep.
+class Rush : public Sample
+{
+public:
+	enum
+	{
+		e_count = 400
+	};
+
+	Rush(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		if (settings.restart == false)
+		{
+			g_camera.m_center = {0.0f, 0.0f};
+			g_camera.m_zoom = 0.5f;
+		}
+
+		s2BodyDef bodyDef = s2_defaultBodyDef;
+		s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
+
+		s2Circle circle = {{0.0f, 0.0f}, 0.5f};
+
+		s2ShapeDef shapeDef = s2_defaultShapeDef;
+		shapeDef.friction = 0.2f;
+		shapeDef.density = 100.0f;
+		s2CreateCircleShape(groundId, &shapeDef, &circle);
+
+		float distance = 5.0f;
+		float deltaAngle = 1.0f / distance;
+		float deltaDistance = 0.05f;
+		float angle = 0.0f;
+		bodyDef.type = s2_dynamicBody;
+		bodyDef.gravityScale = 0.0f;
+
+		for (int i = 0; i < e_count; ++i)
+		{
+			bodyDef.position = {distance * cosf(angle), distance * sinf(angle)};
+			//bodyDef.linearVelocity = {2.0f * distance * sinf(angle), -1.5f * distance * cosf(angle)};
+			m_bodyIds[i] = s2CreateBody(m_worldId, &bodyDef);
+			s2CreateCircleShape(m_bodyIds[i], &shapeDef, &circle);
+
+			angle += deltaAngle;
+			distance += deltaDistance;
+		}
+	}
+
+	virtual void Step(Settings& settings, s2Color bodyColor) override
+	{
+#if 0
+		// This approach shows artifacts of sub-stepping
+		float speed = 10.0f;
+		for (int i = 0; i < e_count; ++i)
+		{
+			s2Vec2 p = s2Body_GetPosition(m_bodyIds[i]);
+			float distance = s2Length(p);
+			if (distance < 0.1f)
+			{
+				continue;
+			}
+
+			float scale = speed / distance;
+			s2Vec2 v = {-scale * p.x, -scale * p.y};
+			s2Body_SetLinearVelocity(m_bodyIds[i], v);
+		}
+#else
+		// forces work better with substepping
+		float force = 1000.0f;
+		for (int i = 0; i < e_count; ++i)
+		{
+			s2Vec2 p = s2Body_GetPosition(m_bodyIds[i]);
+			float distance = s2Length(p);
+			if (distance < 0.1f)
+			{
+				continue;
+			}
+
+			float scale = force / distance;
+			s2Vec2 f = {-scale * p.x, -scale * p.y};
+			s2Body_ApplyForceToCenter(m_bodyIds[i], f);
+		}
+#endif
+
+		Sample::Step(settings, bodyColor);
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new Rush(settings, solverType);
+	}
+
+	s2BodyId m_bodyIds[e_count];
+};
+
+static int sampleRush = RegisterSample("Contact", "Rush", Rush::Create);

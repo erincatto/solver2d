@@ -159,8 +159,8 @@ void s2Solve_PGS_Soft(s2World* world, s2StepContext* context)
 	float h = context->dt;
 	float inv_h = context->inv_dt;
 
-	float contactHertz = 30.0f;
-	float jointHertz = 30.0f;
+	float contactHertz = S2_MIN(s2_contactHertz, 0.5f * inv_h);
+	float jointHertz = S2_MIN(s2_jointHertz, 0.5f * inv_h);
 
 	s2IntegrateVelocities(world, h);
 
