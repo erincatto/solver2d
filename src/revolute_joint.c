@@ -604,7 +604,7 @@ void s2SolveRevolute_XPBD(s2Joint* base, s2StepContext* context, float inv_h)
 	S2_ASSERT(base->type == s2_revoluteJoint);
 
 	// joint grid sample blows up (more quickly) without compliance
-	float compliance = 0.00005f * inv_h * inv_h;
+	float compliance = 0.00001f * inv_h * inv_h;
 
 	s2RevoluteJoint* joint = &base->revoluteJoint;
 

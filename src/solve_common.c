@@ -32,7 +32,7 @@ void s2IntegrateVelocities(s2World* world, float h)
 		s2Vec2 v = body->linearVelocity;
 		float w = body->angularVelocity;
 
-		v = s2Add(v, s2MulSV(h * invMass, s2MulAdd(body->force, body->mass, gravity)));
+		v = s2Add(v, s2MulSV(h * invMass, s2MulAdd(body->force, body->mass * body->gravityScale, gravity)));
 		w = w + h * invI * body->torque;
 
 		// Damping
@@ -165,7 +165,7 @@ void s2PrepareContacts_Soft(s2World* world, s2ContactConstraint* constraints, in
 
 			// soft contact
 			// should use the substep not the full time step
-			const float zeta = 0.1f;
+			const float zeta = 10.0f;
 			float omega = 2.0f * s2_pi * contactHertz;
 			float c = h * omega * (2.0f * zeta + h * omega);
 			cp->biasCoefficient = omega / (2.0f * zeta + h * omega);

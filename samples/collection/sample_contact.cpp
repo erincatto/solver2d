@@ -6,10 +6,12 @@
 
 #include "solver2d/geometry.h"
 #include "solver2d/hull.h"
+#include "solver2d/math.h"
 #include "solver2d/solver2d.h"
 
 #include <GLFW/glfw3.h>
 #include <imgui.h>
+#include <math.h>
 
 class SingleBox : public Sample
 {
@@ -507,3 +509,77 @@ public:
 };
 
 static int samplePyramid = RegisterSample("Contact", "Pyramid", Pyramid::Create);
+
+class Rush : public Sample
+{
+public:
+	enum
+	{
+		e_count = 100
+	};
+
+	Rush(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		if (settings.restart == false)
+		{
+			g_camera.m_center = {0.0f, 14.0f};
+			g_camera.m_zoom = 0.6f;
+		}
+
+		s2BodyDef bodyDef = s2_defaultBodyDef;
+		s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
+
+		s2Circle circle = {{0.0f, 0.0f}, 0.5f};
+
+		s2ShapeDef shapeDef = s2_defaultShapeDef;
+		shapeDef.friction = 0.2f;
+		shapeDef.density = 100.0f;
+		s2CreateCircleShape(groundId, &shapeDef, &circle);
+
+		float deltaAngle = 2.0f * s2_pi / e_count;
+		float distance = 10.0f;
+		float angle = 0.0f;
+		bodyDef.type = s2_dynamicBody;
+		bodyDef.gravityScale = 0.0f;
+
+		for (int i = 0; i < e_count; ++i)
+		{
+			bodyDef.position = {distance * cosf(angle), distance * sinf(angle)};
+			m_bodyIds[i] = s2CreateBody(m_worldId, &bodyDef);
+			s2CreateCircleShape(m_bodyIds[i], &shapeDef, &circle);
+
+			angle += deltaAngle;
+		}
+	}
+
+	virtual void Step(Settings& settings, s2Color bodyColor) override
+	{
+		float speed = 10.0f;
+
+		for (int i = 0; i < e_count; ++i)
+		{
+			s2Vec2 p = s2Body_GetPosition(m_bodyIds[i]);
+			float distance = s2Length(p);
+			if (distance < 0.1f)
+			{
+				continue;
+			}
+
+			float scale = speed / distance;
+			s2Vec2 v = {-scale * p.x, -scale * p.y};
+			s2Body_SetLinearVelocity(m_bodyIds[i], v);
+		}
+
+		Sample::Step(settings, bodyColor);
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new Rush(settings, solverType);
+	}
+
+	s2BodyId m_bodyIds[e_count];
+};
+
+static int sampleRush = RegisterSample("Contact", "Rush", Rush::Create);

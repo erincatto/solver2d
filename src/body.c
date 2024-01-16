@@ -51,6 +51,7 @@ s2BodyId s2CreateBody(s2WorldId worldId, const s2BodyDef* def)
 	b->invI = 0.0f;
 	b->linearDamping = def->linearDamping;
 	b->angularDamping = def->angularDamping;
+	b->gravityScale = def->gravityScale;
 
 	b->userData = def->userData;
 	b->world = worldId.index;

@@ -92,7 +92,7 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 	float inv_h = h > 0.0f ? 1.0f / h : 0.0f;
 
 	// compliance because contacts are too energetic otherwise
-	float baseCompliance = 0.00001f * inv_h * inv_h;
+	float baseCompliance = 0.00005f * inv_h * inv_h;
 
 	for (int i = 0; i < constraintCount; ++i)
 	{
@@ -255,6 +255,10 @@ static void s2SolveContactVelocities_XPBD(s2World* world, s2ContactConstraint* c
 		for (int j = 0; j < pointCount; ++j)
 		{
 			s2ContactConstraintPoint* cp = constraint->points + j;
+			if (cp->normalImpulse == 0.0f)
+			{
+				continue;
+			}
 
 			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
 			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
@@ -420,7 +424,7 @@ void s2Solve_XPBD(s2World* world, s2StepContext* context)
 			float w = body->angularVelocity;
 
 			// integrate velocities
-			v = s2Add(v, s2MulSV(h * invMass, s2MulAdd(body->force, body->mass, gravity)));
+			v = s2Add(v, s2MulSV(h * invMass, s2MulAdd(body->force, body->mass * body->gravityScale, gravity)));
 			w = w + h * invI * body->torque;
 
 			// damping
