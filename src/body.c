@@ -250,6 +250,7 @@ static s2ShapeId s2CreateShape(s2BodyId bodyId, const s2ShapeDef* def, const voi
 	shape->friction = def->friction;
 	shape->restitution = def->restitution;
 	shape->userData = def->userData;
+	shape->filter = def->filter;
 	shape->enlargedAABB = false;
 
 	s2Shape_CreateProxy(shape, &w->broadPhase, body->type, body->transform);

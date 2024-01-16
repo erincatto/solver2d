@@ -78,6 +78,8 @@ typedef struct s2RevoluteJointDef
 	/// Usually in N-m.
 	float maxMotorTorque;
 
+	float drawSize;
+
 	/// Set this flag to true if the attached bodies should collide.
 	bool collideConnected;
 } s2RevoluteJointDef;
@@ -96,6 +98,7 @@ static inline struct s2RevoluteJointDef s2DefaultRevoluteJointDef(void)
 	def.motorSpeed = 0.0f;
 	def.enableLimit = false;
 	def.enableMotor = false;
+	def.drawSize = 1.0f;
 	def.collideConnected = false;
 	return def;
 }

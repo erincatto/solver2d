@@ -1,13 +1,13 @@
 // SPDX-FileCopyrightText: 2022 Erin Catto
 // SPDX-License-Identifier: MIT
 
-//#include "human.h"
+#include "human.h"
 #include "sample.h"
 #include "settings.h"
 
-#include "solver2d/solver2d.h"
 #include "solver2d/geometry.h"
 #include "solver2d/math.h"
+#include "solver2d/solver2d.h"
 
 #include <assert.h>
 
@@ -17,7 +17,7 @@ class Bridge : public Sample
 public:
 	enum
 	{
-		//e_count = 10
+		// e_count = 10
 		e_count = 160
 	};
 
@@ -42,13 +42,14 @@ public:
 			shapeDef.density = 20.0f;
 
 			s2RevoluteJointDef jointDef = s2DefaultRevoluteJointDef();
-			int32_t jointIndex = 0;
-			m_frictionTorque = 200.0f;
+			jointDef.drawSize = 0.1f;
+			// jointDef.enableMotor = true;
+			// jointDef.maxMotorTorque = 200.0f;
 
 			float xbase = -80.0f;
 
 			s2BodyId prevBodyId = groundId;
-			for (int32_t i = 0; i < e_count; ++i)
+			for (int i = 0; i < e_count; ++i)
 			{
 				s2BodyDef bodyDef = s2_defaultBodyDef;
 				bodyDef.type = s2_dynamicBody;
@@ -64,8 +65,6 @@ public:
 				jointDef.bodyIdB = bodyId;
 				jointDef.localAnchorA = s2Body_GetLocalPoint(jointDef.bodyIdA, pivot);
 				jointDef.localAnchorB = s2Body_GetLocalPoint(jointDef.bodyIdB, pivot);
-				//jointDef.enableMotor = true;
-				//jointDef.maxMotorTorque = m_frictionTorque;
 				s2CreateRevoluteJoint(m_worldId, &jointDef);
 
 				prevBodyId = bodyId;
@@ -76,8 +75,8 @@ public:
 			jointDef.bodyIdB = groundId;
 			jointDef.localAnchorA = s2Body_GetLocalPoint(jointDef.bodyIdA, pivot);
 			jointDef.localAnchorB = s2Body_GetLocalPoint(jointDef.bodyIdB, pivot);
-			//jointDef.enableMotor = true;
-			//jointDef.maxMotorTorque = m_frictionTorque;
+			// jointDef.enableMotor = true;
+			// jointDef.maxMotorTorque = frictionTorque;
 			s2CreateRevoluteJoint(m_worldId, &jointDef);
 		}
 	}
@@ -86,8 +85,6 @@ public:
 	{
 		return new Bridge(settings, solverType);
 	}
-
-	float m_frictionTorque;
 };
 
 static int sampleBridgeIndex = RegisterSample("Joints", "Bridge", Bridge::Create);
@@ -122,9 +119,10 @@ public:
 			shapeDef.density = 20.0f;
 
 			s2RevoluteJointDef jointDef = s2DefaultRevoluteJointDef();
+			jointDef.drawSize = 0.1f;
 
 			s2BodyId prevBodyId = groundId;
-			for (int32_t i = 0; i < e_count; ++i)
+			for (int i = 0; i < e_count; ++i)
 			{
 				s2BodyDef bodyDef = s2_defaultBodyDef;
 				bodyDef.type = s2_dynamicBody;
@@ -141,13 +139,13 @@ public:
 				jointDef.localAnchorA = s2Body_GetLocalPoint(jointDef.bodyIdA, pivot);
 				jointDef.localAnchorB = s2Body_GetLocalPoint(jointDef.bodyIdB, pivot);
 				// jointDef.enableMotor = true;
-				//jointDef.maxMotorTorque = 100.0f;
+				// jointDef.maxMotorTorque = 100.0f;
 				s2CreateRevoluteJoint(m_worldId, &jointDef);
 
 				prevBodyId = bodyId;
 			}
 
-			#if 1
+#if 1
 			s2Circle circle = {{0.0f, 0.0f}, 4.0f};
 
 			s2BodyDef bodyDef = s2_defaultBodyDef;
@@ -164,10 +162,10 @@ public:
 			jointDef.bodyIdB = bodyId;
 			jointDef.localAnchorA = s2Body_GetLocalPoint(jointDef.bodyIdA, pivot);
 			jointDef.localAnchorB = s2Body_GetLocalPoint(jointDef.bodyIdB, pivot);
-			//jointDef.enableMotor = true;
-			//jointDef.maxMotorTorque = m_frictionTorque;
+			// jointDef.enableMotor = true;
+			// jointDef.maxMotorTorque = m_frictionTorque;
 			s2CreateRevoluteJoint(m_worldId, &jointDef);
-			#endif
+#endif
 		}
 	}
 
@@ -179,12 +177,11 @@ public:
 
 static int sampleBallAndChainIndex = RegisterSample("Joints", "Ball & Chain", BallAndChain::Create);
 
-#if 0
 class Ragdoll : public Sample
 {
 public:
-	Ragdoll(const Settings& settings)
-		: Sample(settings)
+	Ragdoll(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
 	{
 		if (settings.restart == false)
 		{
@@ -192,23 +189,277 @@ public:
 			g_camera.m_center = {0.0f, 5.0f};
 		}
 
-		s2BodyId groundId;
 		{
-			groundId = s2CreateBody(m_worldId, &s2_defaultBodyDef);
-			s2Segment segment = {{-20.0f, 0.0f}, {20.0f, 0.0f}};
-			s2CreateSegmentShape(groundId, &s2_defaultShapeDef, &segment);
+			s2BodyDef bodyDef = s2_defaultBodyDef;
+			bodyDef.position = {0.0f, -1.0f};
+			s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
+			s2Polygon box = s2MakeBox(20.0f, 1.0f);
+			s2CreatePolygonShape(groundId, &s2_defaultShapeDef, &box);
 		}
 
 		m_human.Spawn(m_worldId, {0.0f, 10.0f}, 1.0f, 1, nullptr);
 	}
 
-	static Sample* Create(const Settings& settings)
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
 	{
-		return new Ragdoll(settings);
+		return new Ragdoll(settings, solverType);
 	}
 
 	Human m_human;
 };
 
 static int sampleRagdoll = RegisterSample("Joints", "Ragdoll", Ragdoll::Create);
+
+class RagdollStress : public Sample
+{
+public:
+	enum
+	{
+		e_count = 32
+	};
+
+	RagdollStress(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		if (settings.restart == false)
+		{
+			g_camera.m_center = {0.0f, 0.0f};
+			g_camera.m_zoom = 1.333f;
+		}
+
+		{
+			s2BodyId groundId = s2CreateBody(m_worldId, &s2_defaultBodyDef);
+			// s2Segment segment = {{-20.0f, -30.0f}, {20.0f, -30.0f}};
+			// s2CreateSegmentShape(groundId, &s2_defaultShapeDef, &segment);
+
+			s2Vec2 points[] = {
+				{-16.8672504, 31.088623},	 {16.8672485, 31.088623},	 {16.8672485, 17.1978741}, {8.26824951, 11.906374},
+				{16.8672485, 11.906374},	 {16.8672485, -0.661376953}, {8.26824951, -5.953125},  {16.8672485, -5.953125},
+				{16.8672485, -13.229126},	 {3.63799858, -23.151123},	 {3.63799858, -31.088623}, {-3.63800049, -31.088623},
+				{-3.63800049, -23.151123},	 {-16.8672504, -13.229126},	 {-16.8672504, -5.953125}, {-8.26825142, -5.953125},
+				{-16.8672504, -0.661376953}, {-16.8672504, 11.906374},	 {-8.26825142, 11.906374}, {-16.8672504, 17.1978741},
+			};
+
+			int count = sizeof(points) / sizeof(points[0]);
+
+			s2ShapeDef shapeDef = s2_defaultShapeDef;
+			shapeDef.friction = 0.2f;
+			for (int i = 0; i < count; ++i)
+			{
+				int i1 = i;
+				int i2 = (i + 1) % count;
+				s2Capsule capsule = {points[i1], points[i2], 0.5f};
+				s2CreateCapsuleShape(groundId, &shapeDef, &capsule);
+			}
+
+			// s2ChainDef chainDef = s2_defaultChainDef;
+			// chainDef.points = points;
+			// chainDef.count = count;
+			// chainDef.loop = true;
+			// chainDef.friction = 0.2f;
+			// s2CreateChain(groundId, &chainDef);
+
+			float sign = 1.0f;
+			float y = 14.0f;
+			for (int i = 0; i < 3; ++i)
+			{
+				s2BodyDef bodyDef = s2_defaultBodyDef;
+				bodyDef.position = {0.0f, y};
+				bodyDef.type = s2_dynamicBody;
+
+				s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+
+				s2Polygon box = s2MakeBox(6.0f, 0.5f);
+				s2ShapeDef shapeDef = s2_defaultShapeDef;
+				shapeDef.friction = 0.1f;
+				shapeDef.restitution = 1.0f;
+				shapeDef.density = 1.0f;
+
+				s2CreatePolygonShape(bodyId, &shapeDef, &box);
+
+				s2RevoluteJointDef revoluteDef = s2DefaultRevoluteJointDef();
+				revoluteDef.bodyIdA = groundId;
+				revoluteDef.bodyIdB = bodyId;
+				revoluteDef.localAnchorA = bodyDef.position;
+				revoluteDef.localAnchorB = s2Vec2_zero;
+				revoluteDef.maxMotorTorque = 200.0f;
+				revoluteDef.motorSpeed = 5.0f * sign;
+				revoluteDef.enableMotor = true;
+
+				s2CreateRevoluteJoint(m_worldId, &revoluteDef);
+
+				y -= 14.0f;
+				sign = -sign;
+			}
+		}
+
+		m_wait = 0.5f;
+		m_side = -15.0f;
+
+		for (int i = 0; i < e_count; ++i)
+		{
+			m_isSpawned[i] = false;
+		}
+
+		CreateElement();
+	}
+
+	void CreateElement()
+	{
+		int index = -1;
+		for (int i = 0; i < e_count; ++i)
+		{
+			if (m_isSpawned[i] == false)
+			{
+				index = i;
+				break;
+			}
+		}
+
+		if (index == -1)
+		{
+			return;
+		}
+
+		s2Vec2 center = {m_side, 28.5f};
+
+		Human* human = m_humans + index;
+		human->Spawn(m_worldId, center, 1.5f, index + 1, human);
+
+		m_isSpawned[index] = true;
+		m_side = -m_side;
+	}
+
+	void Step(Settings& settings, s2Color bodyColor) override
+	{
+		Sample::Step(settings, bodyColor);
+
+		for (int i = 0; i < e_count; ++i)
+		{
+			if (m_isSpawned[i] == false)
+			{
+				continue;
+			}
+
+			s2Vec2 p = m_humans[i].GetBonePosition(Bone::e_torso);
+
+			if (p.y < -25.0f)
+			{
+				m_humans[i].Despawn();
+				m_isSpawned[i] = false;
+			}
+		}
+
+		if (settings.hertz > 0.0f && settings.pause == false)
+		{
+			m_wait -= 1.0f / settings.hertz;
+			if (m_wait < 0.0f)
+			{
+				CreateElement();
+				m_wait += 0.5f;
+			}
+		}
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new RagdollStress(settings, solverType);
+	}
+
+	Human m_humans[e_count];
+	bool m_isSpawned[e_count];
+	float m_wait;
+	float m_side;
+};
+
+static int sampleRagdollStress = RegisterSample("Joints", "Ragdoll Stress", RagdollStress::Create);
+
+// This stresses the joint solver. It may blow up and/or crash for some solvers.
+class JointGrid : public Sample
+{
+public:
+	JointGrid(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		if (settings.restart == false)
+		{
+			g_camera.m_center = {55.0f, -55.0f};
+			g_camera.m_zoom = 2.5f;
+		}
+
+		float rad = 0.4f;
+#ifdef NDEBUG
+		int numi = 100;
+		int numk = 100;
+#else
+		int numi = 10;
+		int numk = 10;
 #endif
+
+		float shift = 1.0f;
+
+		// Allocate to avoid huge stack usage
+		s2BodyId* bodies = static_cast<s2BodyId*>(malloc(numi * numk * sizeof(s2BodyId)));
+		int index = 0;
+
+		s2ShapeDef shapeDef = s2_defaultShapeDef;
+		shapeDef.filter.categoryBits = 2;
+		shapeDef.filter.maskBits = ~2u;
+
+		s2Circle circle = {0};
+		circle.radius = rad;
+
+		s2RevoluteJointDef jointDef = s2DefaultRevoluteJointDef();
+
+		for (int k = 0; k < numk; ++k)
+		{
+			for (int i = 0; i < numi; ++i)
+			{
+				s2BodyDef bodyDef = s2_defaultBodyDef;
+				if (k >= numk / 2 - 3 && k <= numk / 2 + 3 && i == 0)
+				{
+					bodyDef.type = s2_staticBody;
+				}
+				else
+				{
+					bodyDef.type = s2_dynamicBody;
+				}
+
+				bodyDef.position = {k * shift, -i * shift};
+
+				s2BodyId body = s2CreateBody(m_worldId, &bodyDef);
+
+				s2CreateCircleShape(body, &shapeDef, &circle);
+
+				if (i > 0)
+				{
+					jointDef.bodyIdA = bodies[index - 1];
+					jointDef.bodyIdB = body;
+					jointDef.localAnchorA = {0.0f, -0.5f * shift};
+					jointDef.localAnchorB = {0.0f, 0.5f * shift};
+					s2CreateRevoluteJoint(m_worldId, &jointDef);
+				}
+
+				if (k > 0)
+				{
+					jointDef.bodyIdA = bodies[index - numi];
+					jointDef.bodyIdB = body;
+					jointDef.localAnchorA = {0.5f * shift, 0.0f};
+					jointDef.localAnchorB = {-0.5f * shift, 0.0f};
+					s2CreateRevoluteJoint(m_worldId, &jointDef);
+				}
+
+				bodies[index++] = body;
+			}
+		}
+
+		free(bodies);
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new JointGrid(settings, solverType);
+	}
+};
+
+static int sampleJointGrid = RegisterSample("Joints", "Joint Grid", JointGrid::Create);

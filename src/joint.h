@@ -84,6 +84,7 @@ typedef struct s2Joint
 	s2JointEdge edges[2];
 	s2Vec2 localAnchorA;
 	s2Vec2 localAnchorB;
+	float drawSize;
 
 	union
 	{
@@ -99,12 +100,12 @@ void s2WarmStartJoint(s2Joint* joint, s2StepContext* context);
 void s2SolveJointPosition(s2Joint* joint, s2StepContext* context);
 
 void s2PrepareJoint(s2Joint* joint, s2StepContext* context);
-void s2SolveJoint(s2Joint* joint, s2StepContext* context);
+void s2SolveJoint(s2Joint* joint, s2StepContext* context, float h);
 
-void s2PrepareJoint_Soft(s2Joint* joint, s2StepContext* context, float hertz);
-void s2SolveJoint_Soft(s2Joint* joint, s2StepContext* context, bool useBias);
+void s2PrepareJoint_Soft(s2Joint* joint, s2StepContext* context, float h, float hertz, bool warmStart);
+void s2SolveJoint_Soft(s2Joint* joint, s2StepContext* context, float inv_h, bool useBias);
 
 void s2PrepareJoint_XPBD(s2Joint* joint, s2StepContext* context);
-void s2SolveJoint_XPBD(s2Joint* joint, s2StepContext* context);
+void s2SolveJoint_XPBD(s2Joint* joint, s2StepContext* context, float inv_h);
 
 void s2DrawJoint(s2DebugDraw* draw, s2World* world, s2Joint* joint);

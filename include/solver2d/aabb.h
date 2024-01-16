@@ -57,17 +57,6 @@ static inline s2Box s2AABB_Union(s2Box a, s2Box b)
 	return c;
 }
 
-/// Fatten an AABB
-static inline s2Box s2AABB_Extend(s2Box a)
-{
-	s2Box c;
-	c.lowerBound.x = a.lowerBound.x - s2_aabbMargin;
-	c.lowerBound.y = a.lowerBound.y - s2_aabbMargin;
-	c.upperBound.x = a.upperBound.x + s2_aabbMargin;
-	c.upperBound.y = a.upperBound.y + s2_aabbMargin;
-	return c;
-}
-
 /// Enlarge a to contain b
 /// @return true if the AABB grew
 static inline bool s2AABB_Enlarge(s2Box* a, s2Box b)

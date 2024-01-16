@@ -8,11 +8,11 @@
 #include "solver2d/timer.h"
 #include "solver2d/types.h"
 
-typedef struct Capsule Capsule;
-typedef struct Circle Circle;
-typedef struct Polygon Polygon;
-typedef struct DebugDraw DebugDraw;
-typedef struct Segment Segment;
+typedef struct s2Capsule s2Capsule;
+typedef struct s2Circle s2Circle;
+typedef struct s2Polygon s2Polygon;
+typedef struct s2DebugDraw s2DebugDraw;
+typedef struct s2Segment s2Segment;
 
 #ifdef __cplusplus
 extern "C"

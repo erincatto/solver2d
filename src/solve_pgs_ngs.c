@@ -16,7 +16,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-static void s2InitializePGSConstraints(s2World* world, s2ContactConstraint* constraints, int constraintCount)
+static void s2PrepareContacts_PGS(s2World* world, s2ContactConstraint* constraints, int constraintCount)
 {
 	s2Body* bodies = world->bodies;
 
@@ -85,7 +85,7 @@ static void s2InitializePGSConstraints(s2World* world, s2ContactConstraint* cons
 	}
 }
 
-static void s2SolveContactVelocity(s2World* world, s2ContactConstraint* constraints, int constraintCount, float inv_dt)
+static void s2SolveContacts_PGS(s2World* world, s2ContactConstraint* constraints, int constraintCount, float inv_dt)
 {
 	s2Body* bodies = world->bodies;
 
@@ -122,10 +122,9 @@ static void s2SolveContactVelocity(s2World* world, s2ContactConstraint* constrai
 			// Relative velocity at contact
 			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rB));
 			s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, rA));
-			s2Vec2 dv = s2Sub(vrB, vrA);
+			float vn = s2Dot(s2Sub(vrB, vrA), normal);
 
 			// Compute normal impulse
-			float vn = s2Dot(dv, normal);
 			float impulse = -cp->normalMass * (vn + cp->biasCoefficient * cp->separation * inv_dt);
 
 			// Clamp the accumulated impulse
@@ -153,10 +152,9 @@ static void s2SolveContactVelocity(s2World* world, s2ContactConstraint* constrai
 			// Relative velocity at contact
 			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rB));
 			s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, rA));
-			s2Vec2 dv = s2Sub(vrB, vrA);
+			float vt = s2Dot(s2Sub(vrB, vrA), tangent);
 
 			// Compute tangent force
-			float vt = s2Dot(dv, tangent);
 			float lambda = cp->tangentMass * (-vt);
 
 			// Clamp the accumulated force
@@ -179,73 +177,6 @@ static void s2SolveContactVelocity(s2World* world, s2ContactConstraint* constrai
 		bodyA->angularVelocity = wA;
 		bodyB->linearVelocity = vB;
 		bodyB->angularVelocity = wB;
-	}
-}
-
-static void s2SolveContactPosition(s2World* world, s2ContactConstraint* constraints, int constraintCount)
-{
-	s2Body* bodies = world->bodies;
-	float slop = s2_linearSlop;
-
-	for (int i = 0; i < constraintCount; ++i)
-	{
-		s2ContactConstraint* constraint = constraints + i;
-
-		s2Body* bodyA = bodies + constraint->indexA;
-		s2Body* bodyB = bodies + constraint->indexB;
-
-		float mA = bodyA->invMass;
-		float iA = bodyA->invI;
-		float mB = bodyB->invMass;
-		float iB = bodyB->invI;
-		int pointCount = constraint->pointCount;
-
-		s2Vec2 cA = bodyA->position;
-		float aA = bodyA->angle;
-		s2Vec2 cB = bodyB->position;
-		float aB = bodyB->angle;
-
-		s2Vec2 normal = constraint->normal;
-
-		for (int j = 0; j < pointCount; ++j)
-		{
-			s2ContactConstraintPoint* cp = constraint->points + j;
-
-			s2Rot qA = s2MakeRot(aA);
-			s2Rot qB = s2MakeRot(aB);
-
-			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
-			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
-
-			// Current separation
-			s2Vec2 d = s2Sub(s2Add(cB, rB), s2Add(cA, rA));
-			float separation = s2Dot(d, normal) + cp->separation;
-
-			// Prevent large corrections. Need to maintain a small overlap to avoid overshoot.
-			// This improves stacking stability significantly.
-			float C = S2_CLAMP(s2_baumgarte * (separation + slop), -s2_maxLinearCorrection, 0.0f);
-
-			// Compute the effective mass.
-			float rnA = s2Cross(rA, normal);
-			float rnB = s2Cross(rB, normal);
-			float K = mA + mB + iA * rnA * rnA + iB * rnB * rnB;
-
-			// Compute normal impulse
-			float impulse = K > 0.0f ? -C / K : 0.0f;
-
-			s2Vec2 P = s2MulSV(impulse, normal);
-
-			cA = s2MulSub(cA, mA, P);
-			aA -= iA * s2Cross(rA, P);
-
-			cB = s2MulAdd(cB, mB, P);
-			aB += iB * s2Cross(rB, P);
-		}
-
-		bodyA->position = cA;
-		bodyA->angle = aA;
-		bodyB->position = cB;
-		bodyB->angle = aB;
 	}
 }
 
@@ -278,14 +209,19 @@ void s2Solve_PGS_NGS(s2World* world, s2StepContext* context)
 		constraintCount += 1;
 	}
 
-	int velocityIterations = context->velocityIterations;
-	int positionIterations = context->positionIterations;
+	int velocityIterations = context->iterations;
+	int positionIterations = context->extraIterations;
 	float h = context->dt;
 	float inv_h = context->inv_dt;
 
 	s2IntegrateVelocities(world, h);
 
-	s2InitializePGSConstraints(world, constraints, constraintCount);
+	s2PrepareContacts_PGS(world, constraints, constraintCount);
+
+	if (context->warmStart)
+	{
+		s2WarmStartContacts(world, constraints, constraintCount);
+	}
 
 	for (int i = 0; i < jointCapacity; ++i)
 	{
@@ -295,9 +231,12 @@ void s2Solve_PGS_NGS(s2World* world, s2StepContext* context)
 			continue;
 		}
 		s2PrepareJoint(joint, context);
-	}
 
-	s2WarmStartContacts(world, constraints, constraintCount);
+		if (context->warmStart)
+		{
+			s2WarmStartJoint(joint, context);
+		}
+	}
 
 	for (int iter = 0; iter < velocityIterations; ++iter)
 	{
@@ -309,15 +248,15 @@ void s2Solve_PGS_NGS(s2World* world, s2StepContext* context)
 				continue;
 			}
 
-			s2SolveJoint(joint, context);
+			s2SolveJoint(joint, context, h);
 		}
 
-		s2SolveContactVelocity(world, constraints, constraintCount, inv_h);
+		s2SolveContacts_PGS(world, constraints, constraintCount, inv_h);
 	}
 
-	s2StoreContactImpulses(constraints, constraintCount);
-
 	s2IntegratePositions(world, h);
+
+	s2StoreContactImpulses(constraints, constraintCount);
 
 	for (int iter = 0; iter < positionIterations; ++iter)
 	{
@@ -332,7 +271,7 @@ void s2Solve_PGS_NGS(s2World* world, s2StepContext* context)
 			s2SolveJointPosition(joint, context);
 		}
 
-		s2SolveContactPosition(world, constraints, constraintCount);
+		s2SolveContact_NGS(world, constraints, constraintCount);
 	}
 
 	s2FreeStackItem(world->stackAllocator, constraints);

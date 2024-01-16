@@ -25,11 +25,11 @@ public:
 
 		float extent = 1.0f;
 
-		s2BodyDef bodyDef = s2DefaultBodyDef();
+		s2BodyDef bodyDef = s2_defaultBodyDef;
 		s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
 
 		float groundWidth = 66.0f * extent;
-		s2ShapeDef shapeDef = s2DefaultShapeDef();
+		s2ShapeDef shapeDef = s2_defaultShapeDef;
 		shapeDef.friction = 0.5f;
 
 		s2Segment segment = {{-0.5f * 2.0f * groundWidth, 0.0f}, {0.5f * 2.0f * groundWidth, 0.0f}};
@@ -73,22 +73,24 @@ public:
 		s2ShapeDef shapeDef = s2_defaultShapeDef;
 		s2Circle circle = {{0.0f, 0.0f}, 0.5f};
 
+		float separation = 0.0f;
+
 		{
-			bodyDef.position = {0.0f, 0.5f};
+			bodyDef.position = {0.0f, 0.5f + separation};
 			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
 			shapeDef.density = 1.0f;
 			s2CreateCircleShape(bodyId, &shapeDef, &circle);
 		}
 
 		{
-			bodyDef.position = {0.0f, 1.5f};
+			bodyDef.position = {0.0f, 1.5f + separation};
 			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
 			shapeDef.density = 1.0f;
 			s2CreateCircleShape(bodyId, &shapeDef, &circle);
 		}
 
 		{
-			bodyDef.position = {0.0f, 2.5f};
+			bodyDef.position = {0.0f, 2.5f + separation};
 			m_topId = s2CreateBody(m_worldId, &bodyDef);
 			shapeDef.density = 100.0f;
 			s2CreateCircleShape(m_topId, &shapeDef, &circle);
@@ -97,7 +99,7 @@ public:
 
 	virtual void Step(Settings& settings, s2Color bodyColor) override
 	{
-		if (m_stepCount == 60 && S2_NON_NULL(m_topId))
+		if (m_stepCount == 120 && S2_NON_NULL(m_topId))
 		{
 			s2DestroyBody(m_topId);
 			m_topId = s2_nullBodyId;
@@ -124,11 +126,11 @@ public:
 	{
 		float extent = 1.0f;
 
-		s2BodyDef bodyDef = s2DefaultBodyDef();
+		s2BodyDef bodyDef = s2_defaultBodyDef;
 		s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
 
 		float groundWidth = 66.0f * extent;
-		s2ShapeDef shapeDef = s2DefaultShapeDef();
+		s2ShapeDef shapeDef = s2_defaultShapeDef;
 		shapeDef.friction = 0.5f;
 
 		s2Segment segment = {{-0.5f * 2.0f * groundWidth, 0.0f}, {0.5f * 2.0f * groundWidth, 0.0f}};
@@ -251,11 +253,17 @@ public:
 	Friction(const Settings& settings, s2SolverType solverType)
 		: Sample(settings, solverType)
 	{
+		if (settings.restart == false)
 		{
-			s2BodyDef bodyDef = s2DefaultBodyDef();
+			g_camera.m_center = {0.0f, 14.0f};
+			g_camera.m_zoom = 0.6f;
+		}
+
+		{
+			s2BodyDef bodyDef = s2_defaultBodyDef;
 			s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
 
-			s2ShapeDef shapeDef = s2DefaultShapeDef();
+			s2ShapeDef shapeDef = s2_defaultShapeDef;
 			shapeDef.friction = 0.2f;
 
 			s2Segment segment = {{-40.0f, 0.0f}, {40.0f, 0.0f}};
@@ -280,14 +288,14 @@ public:
 		{
 			s2Polygon box = s2MakeBox(0.5f, 0.5f);
 
-			s2ShapeDef shapeDef = s2DefaultShapeDef();
+			s2ShapeDef shapeDef = s2_defaultShapeDef;
 			shapeDef.density = 25.0f;
 
 			float friction[5] = {0.75f, 0.5f, 0.35f, 0.1f, 0.0f};
 
 			for (int i = 0; i < 5; ++i)
 			{
-				s2BodyDef bodyDef = s2DefaultBodyDef();
+				s2BodyDef bodyDef = s2_defaultBodyDef;
 				bodyDef.type = s2_dynamicBody;
 				bodyDef.position = {-15.0f + 4.0f * i, 28.0f};
 				s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
@@ -361,11 +369,6 @@ static int sampleOverlapRecovery = RegisterSample("Contact", "Overlap Recovery",
 class VerticalStack : public Sample
 {
 public:
-	enum
-	{
-		e_maxRows = 30,
-	};
-
 	enum ShapeType
 	{
 		e_circleShape = 0,
@@ -386,32 +389,13 @@ public:
 			bodyDef.position = {0.0f, -1.0f};
 			s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
 
-			s2Polygon box = s2MakeBox(1000.0f, 1.0f);
+			s2Polygon box = s2MakeBox(100.0f, 1.0f);
 			s2ShapeDef shapeDef = s2_defaultShapeDef;
 			s2CreatePolygonShape(groundId, &shapeDef, &box);
 		}
 
-		for (int i = 0; i < e_maxRows; ++i)
-		{
-			m_bodies[i] = s2_nullBodyId;
-		}
-
-		m_shapeType = e_boxShape;
-		m_rowCount = 15;
-
-		CreateStack();
-	}
-
-	void CreateStack()
-	{
-		for (int i = 0; i < e_maxRows; ++i)
-		{
-			if (S2_NON_NULL(m_bodies[i]))
-			{
-				s2DestroyBody(m_bodies[i]);
-				m_bodies[i] = s2_nullBodyId;
-			}
-		}
+		ShapeType shapeType = e_boxShape;
+		int rowCount = 15;
 
 		s2Circle circle = {0};
 		circle.radius = 0.5f;
@@ -424,7 +408,7 @@ public:
 
 		float offset;
 
-		if (m_shapeType == e_circleShape)
+		if (shapeType == e_circleShape)
 		{
 			offset = 0.0f;
 		}
@@ -433,7 +417,7 @@ public:
 			offset = 0.01f;
 		}
 
-		for (int i = 0; i < m_rowCount; ++i)
+		for (int i = 0; i < rowCount; ++i)
 		{
 			s2BodyDef bodyDef = s2_defaultBodyDef;
 			bodyDef.type = s2_dynamicBody;
@@ -442,9 +426,7 @@ public:
 			bodyDef.position = {shift, 0.5f + 1.0f * i};
 			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
 
-			m_bodies[i] = bodyId;
-
-			if (m_shapeType == e_circleShape)
+			if (shapeType == e_circleShape)
 			{
 				s2CreateCircleShape(bodyId, &shapeDef, &circle);
 			}
@@ -459,10 +441,69 @@ public:
 	{
 		return new VerticalStack(settings, solverType);
 	}
-
-	s2BodyId m_bodies[e_maxRows];
-	int m_rowCount;
-	ShapeType m_shapeType;
 };
 
 static int sampleVerticalStack = RegisterSample("Contact", "Vertical Stack", VerticalStack::Create);
+
+class Pyramid : public Sample
+{
+public:
+	Pyramid(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		if (settings.restart == false)
+		{
+			g_camera.m_center = {0.0f, 50.0f};
+			g_camera.m_zoom = 2.25f;
+		}
+
+		{
+			s2BodyDef bodyDef = s2_defaultBodyDef;
+			bodyDef.position = {0.0f, -1.0f};
+			s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
+
+			s2Polygon box = s2MakeBox(100.0f, 1.0f);
+			s2ShapeDef shapeDef = s2_defaultShapeDef;
+			s2CreatePolygonShape(groundId, &shapeDef, &box);
+		}
+
+		s2BodyDef bodyDef = s2_defaultBodyDef;
+		bodyDef.type = s2_dynamicBody;
+
+		s2ShapeDef shapeDef = s2_defaultShapeDef;
+		shapeDef.density = 1.0f;
+
+		#ifdef NDEBUG
+		int baseCount = 100;
+		#else
+		int baseCount = 20;
+		#endif
+
+		float h = 0.5f;
+		s2Polygon box = s2MakeSquare(h);
+
+		float shift = 1.0f * h;
+
+		for (int i = 0; i < baseCount; ++i)
+		{
+			float y = (2.0f * i + 1.0f) * shift;
+
+			for (int j = i; j < baseCount; ++j)
+			{
+				float x = (i + 1.0f) * shift + 2.0f * (j - i) * shift - h * baseCount;
+
+				bodyDef.position = {x, y};
+
+				s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+				s2CreatePolygonShape(bodyId, &shapeDef, &box);
+			}
+		}
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new Pyramid(settings, solverType);
+	}
+};
+
+static int samplePyramid = RegisterSample("Contact", "Pyramid", Pyramid::Create);

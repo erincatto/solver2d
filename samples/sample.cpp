@@ -93,7 +93,7 @@ void Sample::MouseDown(s2Vec2 p, int button, int mod)
 			float dampingRatio = 0.7f;
 			float mass = s2Body_GetMass(queryContext.bodyId);
 
-			s2BodyDef bodyDef = s2DefaultBodyDef();
+			s2BodyDef bodyDef = s2_defaultBodyDef;
 			m_groundBodyId = s2CreateBody(m_worldId, &bodyDef);
 
 			s2MouseJointDef jd;
@@ -155,7 +155,7 @@ void Sample::Step(Settings& settings, s2Color bodyColor)
 	{
 		s2Statistics s = s2World_GetStatistics(m_worldId);
 
-		g_draw.DrawString(5, settings.textLine, "bodies/contacts/joints = %d/%d/%d/%d", s.bodyCount, s.contactCount, s.jointCount);
+		g_draw.DrawString(5, settings.textLine, "bodies/contacts/joints = %d/%d/%d", s.bodyCount, s.contactCount, s.jointCount);
 		settings.textLine += settings.textIncrement;
 
 		g_draw.DrawString(5, settings.textLine, "proxies/height = %d/%d", s.proxyCount, s.treeHeight);

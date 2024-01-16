@@ -164,7 +164,7 @@ s2JointId s2CreateMouseJoint(s2WorldId worldId, const s2MouseJointDef* def)
 	s2Joint* joint = s2CreateJoint(world, bodyA, bodyB);
 
 	joint->type = s2_mouseJoint;
-
+	joint->drawSize = 1.0f;
 	joint->localAnchorA = s2InvTransformPoint(bodyA->transform, def->target);
 	joint->localAnchorB = s2InvTransformPoint(bodyB->transform, def->target);
 
@@ -193,7 +193,7 @@ s2JointId s2CreateRevoluteJoint(s2WorldId worldId, const s2RevoluteJointDef* def
 	s2Joint* joint = s2CreateJoint(world, bodyA, bodyB);
 
 	joint->type = s2_revoluteJoint;
-
+	joint->drawSize = def->drawSize;
 	joint->localAnchorA = def->localAnchorA;
 	joint->localAnchorB = def->localAnchorB;
 
@@ -331,9 +331,9 @@ void s2WarmStartJoint(s2Joint* joint, s2StepContext* context)
 }
 
 extern void s2SolveMouse(s2Joint* base, s2StepContext* context);
-extern void s2SolveRevolute(s2Joint* base, s2StepContext* context);
+extern void s2SolveRevolute(s2Joint* base, s2StepContext* context, float h);
 
-void s2SolveJoint(s2Joint* joint, s2StepContext* context)
+void s2SolveJoint(s2Joint* joint, s2StepContext* context, float h)
 {
 	switch (joint->type)
 	{
@@ -342,7 +342,7 @@ void s2SolveJoint(s2Joint* joint, s2StepContext* context)
 			break;
 
 		case s2_revoluteJoint:
-			s2SolveRevolute(joint, context);
+			s2SolveRevolute(joint, context, h);
 			break;
 
 		default:
@@ -366,9 +366,9 @@ void s2SolveJointPosition(s2Joint* joint, s2StepContext* context)
 }
 
 extern void s2PrepareMouse_Soft(s2Joint* base, s2StepContext* context);
-extern void s2PrepareRevolute_Soft(s2Joint* base, s2StepContext* context, float hertz);
+extern void s2PrepareRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float hertz, bool warmStart);
 
-void s2PrepareJoint_Soft(s2Joint* joint, s2StepContext* context, float hertz)
+void s2PrepareJoint_Soft(s2Joint* joint, s2StepContext* context, float h, float hertz, bool warmStart)
 {
 	switch (joint->type)
 	{
@@ -377,7 +377,7 @@ void s2PrepareJoint_Soft(s2Joint* joint, s2StepContext* context, float hertz)
 			break;
 
 		case s2_revoluteJoint:
-			s2PrepareRevolute_Soft(joint, context, hertz);
+			s2PrepareRevolute_Soft(joint, context, h, hertz, warmStart);
 			break;
 
 		default:
@@ -386,9 +386,9 @@ void s2PrepareJoint_Soft(s2Joint* joint, s2StepContext* context, float hertz)
 }
 
 extern void s2SolveMouse_Soft(s2Joint* base, s2StepContext* context, bool useBias);
-extern void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, bool useBias);
+extern void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float inv_h, bool useBias);
 
-void s2SolveJoint_Soft(s2Joint* joint, s2StepContext* context, bool useBias)
+void s2SolveJoint_Soft(s2Joint* joint, s2StepContext* context, float inv_h, bool useBias)
 {
 	switch (joint->type)
 	{
@@ -397,7 +397,7 @@ void s2SolveJoint_Soft(s2Joint* joint, s2StepContext* context, bool useBias)
 			break;
 
 		case s2_revoluteJoint:
-			s2SolveRevolute_Soft(joint, context, useBias);
+			s2SolveRevolute_Soft(joint, context, inv_h, useBias);
 			break;
 
 		default:
@@ -426,9 +426,9 @@ void s2PrepareJoint_XPBD(s2Joint* joint, s2StepContext* context)
 }
 
 extern void s2SolveMouse_XPBD(s2Joint* base, s2StepContext* context);
-extern void s2SolveRevolute_XPBD(s2Joint* base, s2StepContext* context);
+extern void s2SolveRevolute_XPBD(s2Joint* base, s2StepContext* context, float inv_h);
 
-void s2SolveJoint_XPBD(s2Joint* joint, s2StepContext* context)
+void s2SolveJoint_XPBD(s2Joint* joint, s2StepContext* context, float inv_h)
 {
 	switch (joint->type)
 	{
@@ -437,7 +437,7 @@ void s2SolveJoint_XPBD(s2Joint* joint, s2StepContext* context)
 			break;
 
 		case s2_revoluteJoint:
-			s2SolveRevolute_XPBD(joint, context);
+			s2SolveRevolute_XPBD(joint, context, inv_h);
 			break;
 
 		default:

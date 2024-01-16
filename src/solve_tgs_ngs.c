@@ -15,7 +15,10 @@
 #include "solver2d/aabb.h"
 
 #include <stdbool.h>
-#include <stdlib.h>
+
+// Should switch to quaternions or incremental rotation updates
+// cos(a + da) = cos(a)*cos(da) + sin(a)*sin(da) ~= cos(a) + da * sin(a)
+// sin(a + da) = sin(a)*cos(da) + cos(a)*sin(da) ~= sin(a) + da * cos(a)
 
 static void s2PrepareContacts(s2World* world, s2ContactConstraint* constraints, int constraintCount, bool warmStart)
 {
@@ -90,58 +93,6 @@ static void s2PrepareContacts(s2World* world, s2ContactConstraint* constraints, 
 			float rtB = s2Cross(rB, tangent);
 			float kTangent = mA + mB + iA * rtA * rtA + iB * rtB * rtB;
 			cp->tangentMass = kTangent > 0.0f ? 1.0f / kTangent : 0.0f;
-		}
-
-		bodyA->linearVelocity = vA;
-		bodyA->angularVelocity = wA;
-		bodyB->linearVelocity = vB;
-		bodyB->angularVelocity = wB;
-	}
-}
-
-static void s2SubStepWarmStartContacts(s2World* world, s2ContactConstraint* constraints, int constraintCount)
-{
-	s2Body* bodies = world->bodies;
-
-	for (int i = 0; i < constraintCount; ++i)
-	{
-		s2ContactConstraint* constraint = constraints + i;
-
-		int pointCount = constraint->pointCount;
-		S2_ASSERT(0 < pointCount && pointCount <= 2);
-
-		s2Body* bodyA = bodies + constraint->indexA;
-		s2Body* bodyB = bodies + constraint->indexB;
-
-		float mA = bodyA->invMass;
-		float iA = bodyA->invI;
-		float mB = bodyB->invMass;
-		float iB = bodyB->invI;
-
-		s2Vec2 vA = bodyA->linearVelocity;
-		float wA = bodyA->angularVelocity;
-		s2Vec2 vB = bodyB->linearVelocity;
-		float wB = bodyB->angularVelocity;
-
-		s2Rot qA = s2MakeRot(bodyA->angle);
-		s2Rot qB = s2MakeRot(bodyB->angle);
-
-		s2Vec2 normal = constraint->normal;
-		s2Vec2 tangent = s2RightPerp(normal);
-
-		for (int j = 0; j < pointCount; ++j)
-		{
-			s2ContactConstraintPoint* cp = constraint->points + j;
-
-			// Current anchors
-			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
-			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
-
-			s2Vec2 P = s2Add(s2MulSV(cp->normalImpulse, normal), s2MulSV(cp->tangentImpulse, tangent));
-			wA -= iA * s2Cross(rA, P);
-			vA = s2MulAdd(vA, -mA, P);
-			wB += iB * s2Cross(rB, P);
-			vB = s2MulAdd(vB, mB, P);
 		}
 
 		bodyA->linearVelocity = vA;
@@ -261,76 +212,6 @@ static void s2SolveContacts_TGS(s2World* world, s2ContactConstraint* constraints
 	}
 }
 
-// Should switch to quaternions or incremental rotation updates
-// cos(a + da) = cos(a)*cos(da) + sin(a)*sin(da) ~= cos(a) + da * sin(a)
-// sin(a + da) = sin(a)*cos(da) + cos(a)*sin(da) ~= sin(a) + da * cos(a)
-static void s2SolveContactPosition_NGS(s2World* world, s2ContactConstraint* constraints, int constraintCount)
-{
-	s2Body* bodies = world->bodies;
-	float slop = s2_linearSlop;
-
-	for (int i = 0; i < constraintCount; ++i)
-	{
-		s2ContactConstraint* constraint = constraints + i;
-
-		s2Body* bodyA = bodies + constraint->indexA;
-		s2Body* bodyB = bodies + constraint->indexB;
-
-		float mA = bodyA->invMass;
-		float iA = bodyA->invI;
-		float mB = bodyB->invMass;
-		float iB = bodyB->invI;
-		int pointCount = constraint->pointCount;
-
-		s2Vec2 cA = bodyA->position;
-		float aA = bodyA->angle;
-		s2Vec2 cB = bodyB->position;
-		float aB = bodyB->angle;
-
-		s2Vec2 normal = constraint->normal;
-
-		for (int j = 0; j < pointCount; ++j)
-		{
-			s2ContactConstraintPoint* cp = constraint->points + j;
-
-			s2Rot qA = s2MakeRot(aA);
-			s2Rot qB = s2MakeRot(aB);
-
-			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
-			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
-
-			// Current separation
-			s2Vec2 d = s2Sub(s2Add(cB, rB), s2Add(cA, rA));
-			float separation = s2Dot(d, normal) + cp->separation;
-
-			// Prevent large corrections. Need to maintain a small overlap to avoid overshoot.
-			// This improves stacking stability significantly.
-			float C = S2_CLAMP(s2_baumgarte * (separation + slop), -s2_maxLinearCorrection, 0.0f);
-
-			// Compute the effective mass.
-			float rnA = s2Cross(rA, normal);
-			float rnB = s2Cross(rB, normal);
-			float K = mA + mB + iA * rnA * rnA + iB * rnB * rnB;
-
-			// Compute normal impulse
-			float impulse = K > 0.0f ? -C / K : 0.0f;
-
-			s2Vec2 P = s2MulSV(impulse, normal);
-
-			cA = s2MulSub(cA, mA, P);
-			aA -= iA * s2Cross(rA, P);
-
-			cB = s2MulAdd(cB, mB, P);
-			aB += iB * s2Cross(rB, P);
-		}
-
-		bodyA->position = cA;
-		bodyA->angle = aA;
-		bodyB->position = cB;
-		bodyB->angle = aB;
-	}
-}
-
 void s2Solve_TGS_NGS(s2World* world, s2StepContext* context)
 {
 	s2Contact* contacts = world->contacts;
@@ -374,7 +255,7 @@ void s2Solve_TGS_NGS(s2World* world, s2StepContext* context)
 		s2PrepareJoint(joint, context);
 	}
 
-	int substepCount = context->velocityIterations;
+	int substepCount = context->iterations;
 	float h = context->dt / substepCount;
 	float inv_h = 1.0f / h;
 
@@ -395,7 +276,7 @@ void s2Solve_TGS_NGS(s2World* world, s2StepContext* context)
 				s2WarmStartJoint(joint, context);
 			}
 
-			s2SubStepWarmStartContacts(world, constraints, constraintCount);
+			s2WarmStartContacts(world, constraints, constraintCount);
 		}
 
 		for (int i = 0; i < jointCapacity; ++i)
@@ -406,7 +287,7 @@ void s2Solve_TGS_NGS(s2World* world, s2StepContext* context)
 				continue;
 			}
 
-			s2SolveJoint(joint, context);
+			s2SolveJoint(joint, context, h);
 		}
 
 		s2SolveContacts_TGS(world, constraints, constraintCount, inv_h);
@@ -424,7 +305,7 @@ void s2Solve_TGS_NGS(s2World* world, s2StepContext* context)
 			s2SolveJointPosition(joint, context);
 		}
 
-		s2SolveContactPosition_NGS(world, constraints, constraintCount);
+		s2SolveContact_NGS(world, constraints, constraintCount);
 	}
 
 	s2StoreContactImpulses(constraints, constraintCount);

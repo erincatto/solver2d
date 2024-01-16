@@ -696,77 +696,6 @@ static void s2ContactSolver_SolveVelocityConstraints(s2ContactSolver* solver)
 	}
 }
 
-void s2ContactSolver_ApplyRestitution(s2ContactSolver* solver)
-{
-	int32_t count = solver->constraintCount;
-	float threshold = solver->context->restitutionThreshold;
-
-	s2World* world = solver->world;
-	s2Body* bodies = world->bodies;
-
-	for (int32_t i = 0; i < count; ++i)
-	{
-		s2ContactVelocityConstraint* vc = solver->velocityConstraints + i;
-		const s2Contact* contact = vc->contact;
-
-		int32_t indexA = contact->edges[0].bodyIndex;
-		int32_t indexB = contact->edges[1].bodyIndex;
-		s2Body* bodyA = bodies + indexA;
-		s2Body* bodyB = bodies + indexB;
-
-		if (vc->restitution == 0.0f)
-		{
-			continue;
-		}
-
-		float mA = bodyA->invMass;
-		float iA = bodyA->invI;
-		float mB = bodyB->invMass;
-		float iB = bodyB->invI;
-		int32_t pointCount = vc->pointCount;
-
-		s2Vec2 vA = bodyA->linearVelocity;
-		float wA = bodyA->angularVelocity;
-		s2Vec2 vB = bodyB->linearVelocity;
-		float wB = bodyB->angularVelocity;
-
-		s2Vec2 normal = vc->normal;
-
-		for (int32_t j = 0; j < pointCount; ++j)
-		{
-			s2VelocityConstraintPoint* vcp = vc->points + j;
-
-			// if the normal impulse is zero then there was no collision
-			if (vcp->relativeVelocity > -threshold || vcp->normalImpulse == 0.0f)
-			{
-				continue;
-			}
-
-			// Relative velocity at contact
-			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, vcp->rB));
-			s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, vcp->rA));
-			s2Vec2 dv = s2Sub(vrB, vrA);
-
-			// Compute normal impulse
-			float vn = s2Dot(dv, normal);
-			float lambda = -vcp->normalMass * (vn + vc->restitution * vcp->relativeVelocity);
-
-			// Apply contact impulse
-			s2Vec2 P = s2MulSV(lambda, normal);
-			vA = s2MulSub(vA, mA, P);
-			wA -= iA * s2Cross(vcp->rA, P);
-
-			vB = s2MulAdd(vB, mB, P);
-			wB += iB * s2Cross(vcp->rB, P);
-		}
-
-		bodyA->linearVelocity = vA;
-		bodyA->angularVelocity = wA;
-		bodyB->linearVelocity = vB;
-		bodyB->angularVelocity = wB;
-	}
-}
-
 static void s2ContactSolver_StoreImpulses(s2ContactSolver* solver)
 {
 	int32_t count = solver->constraintCount;
@@ -1023,7 +952,7 @@ void s2Solve_PGS_NGS_Block(s2World* world, s2StepContext* context)
 	}
 
 	// Solve velocity constraints
-	for (int i = 0; i < context->velocityIterations; ++i)
+	for (int i = 0; i < context->iterations; ++i)
 	{
 		for (int i = 0; i < jointCapacity; ++i)
 		{
@@ -1033,14 +962,11 @@ void s2Solve_PGS_NGS_Block(s2World* world, s2StepContext* context)
 				continue;
 			}
 
-			s2SolveJoint(joint, context);
+			s2SolveJoint(joint, context, h);
 		}
 
 		s2ContactSolver_SolveVelocityConstraints(&contactSolver);
 	}
-
-	// Special handling for restitution
-	s2ContactSolver_ApplyRestitution(&contactSolver);
 
 	// Store impulses for warm starting
 	s2ContactSolver_StoreImpulses(&contactSolver);
@@ -1048,7 +974,7 @@ void s2Solve_PGS_NGS_Block(s2World* world, s2StepContext* context)
 	s2IntegratePositions(world, h);
 
 	// Solve position constraints
-	for (int i = 0; i < context->positionIterations; ++i)
+	for (int i = 0; i < context->extraIterations; ++i)
 	{
 		s2ContactSolver_SolvePositionConstraintsBlock(&contactSolver);
 
