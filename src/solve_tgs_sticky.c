@@ -330,7 +330,7 @@ void s2Solve_TGS_Sticky(s2World* world, s2StepContext* context)
 
 	s2PrepareContacts_Sticky(world, constraints, constraintCount);
 
-	int substepCount = context->velocityIterations;
+	int substepCount = context->iterations;
 	float h = context->dt / substepCount;
 	float inv_h = substepCount / context->dt;
 
@@ -345,7 +345,7 @@ void s2Solve_TGS_Sticky(s2World* world, s2StepContext* context)
 
 	// Relax
 	useBias = false;
-	int positionIterations = context->positionIterations;
+	int positionIterations = context->extraIterations;
 	for (int iter = 0; iter < positionIterations; ++iter)
 	{
 		// relax constraints

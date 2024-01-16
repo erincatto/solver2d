@@ -66,3 +66,14 @@ void s2CreateContact(s2World* world, s2Shape* shapeA, s2Shape* shapeB);
 void s2DestroyContact(s2World* world, s2Contact* contact);
 
 void s2UpdateContact(s2World* world, s2Contact* contact, s2Shape* shapeA, s2Body* bodyA, s2Shape* shapeB, s2Body* bodyB);
+
+static inline bool s2ShouldShapesCollide(s2Filter filterA, s2Filter filterB)
+{
+	if (filterA.groupIndex == filterB.groupIndex && filterA.groupIndex != 0)
+	{
+		return filterA.groupIndex > 0;
+	}
+
+	bool collide = (filterA.maskBits & filterB.categoryBits) != 0 && (filterA.categoryBits & filterB.maskBits) != 0;
+	return collide;
+}

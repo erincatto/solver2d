@@ -29,6 +29,7 @@ typedef struct s2Shape
 	float density;
 	float friction;
 	float restitution;
+	s2Filter filter;
 
 	s2Box aabb;
 	s2Box fatAABB;

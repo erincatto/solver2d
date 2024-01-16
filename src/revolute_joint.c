@@ -9,6 +9,8 @@
 
 #include "solver2d/debug_draw.h"
 
+#include <assert.h>
+
 // Point-to-point constraint
 // C = p2 - p1
 // Cdot = v2 - v1
@@ -145,7 +147,7 @@ void s2WarmStartRevolute(s2Joint* base, s2StepContext* context)
 	bodyB->angularVelocity = wB;
 }
 
-void s2SolveRevolute(s2Joint* base, s2StepContext* context)
+void s2SolveRevolute(s2Joint* base, s2StepContext* context, float h)
 {
 	S2_ASSERT(base->type == s2_revoluteJoint);
 
@@ -173,7 +175,7 @@ void s2SolveRevolute(s2Joint* base, s2StepContext* context)
 		float Cdot = wB - wA - joint->motorSpeed;
 		float impulse = -joint->axialMass * Cdot;
 		float oldImpulse = joint->motorImpulse;
-		float maxImpulse = context->dt * joint->maxMotorTorque;
+		float maxImpulse = h * joint->maxMotorTorque;
 		joint->motorImpulse = S2_CLAMP(joint->motorImpulse + impulse, -maxImpulse, maxImpulse);
 		impulse = joint->motorImpulse - oldImpulse;
 
@@ -189,7 +191,7 @@ void s2SolveRevolute(s2Joint* base, s2StepContext* context)
 		{
 			float C = angle - joint->lowerAngle;
 			float Cdot = wB - wA;
-			float impulse = -joint->axialMass * (Cdot + S2_MAX(C, 0.0f) * context->inv_dt);
+			float impulse = -joint->axialMass * (Cdot + S2_MAX(C, 0.0f) / h);
 			float oldImpulse = joint->lowerImpulse;
 			joint->lowerImpulse = S2_MAX(joint->lowerImpulse + impulse, 0.0f);
 			impulse = joint->lowerImpulse - oldImpulse;
@@ -204,7 +206,7 @@ void s2SolveRevolute(s2Joint* base, s2StepContext* context)
 		{
 			float C = joint->upperAngle - angle;
 			float Cdot = wA - wB;
-			float impulse = -joint->axialMass * (Cdot + S2_MAX(C, 0.0f) * context->inv_dt);
+			float impulse = -joint->axialMass * (Cdot + S2_MAX(C, 0.0f) / h);
 			float oldImpulse = joint->upperImpulse;
 			joint->upperImpulse = S2_MAX(joint->upperImpulse + impulse, 0.0f);
 			impulse = joint->upperImpulse - oldImpulse;
@@ -316,7 +318,7 @@ void s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
 	bodyB->angle = aB;
 }
 
-void s2PrepareRevolute_Soft(s2Joint* base, s2StepContext* context, float hertz)
+void s2PrepareRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float hertz, bool warmStart)
 {
 	S2_ASSERT(base->type == s2_revoluteJoint);
 
@@ -363,7 +365,6 @@ void s2PrepareRevolute_Soft(s2Joint* base, s2StepContext* context, float hertz)
 	{
 		const float zeta = 1.0f;
 		float omega = 2.0f * s2_pi * hertz;
-		float h = context->dt;
 		joint->biasCoefficient = omega / (2.0f * zeta + h * omega);
 		float c = h * omega * (2.0f * zeta + h * omega);
 		joint->impulseCoefficient = 1.0f / (1.0f + c);
@@ -382,24 +383,24 @@ void s2PrepareRevolute_Soft(s2Joint* base, s2StepContext* context, float hertz)
 		fixedRotation = true;
 	}
 
-	if (joint->enableLimit == false || fixedRotation || context->warmStart == false)
+	if (joint->enableLimit == false || fixedRotation || warmStart == false)
 	{
 		joint->lowerImpulse = 0.0f;
 		joint->upperImpulse = 0.0f;
 	}
 
-	if (joint->enableMotor == false || fixedRotation || context->warmStart == false)
+	if (joint->enableMotor == false || fixedRotation || warmStart == false)
 	{
 		joint->motorImpulse = 0.0f;
 	}
 
-	//if (context->warmStart == false)
+	if (warmStart == false)
 	{
 		joint->impulse = s2Vec2_zero;
 	}
 }
 
-void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, bool useBias)
+void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float inv_h, bool useBias)
 {
 	S2_ASSERT(base->type == s2_revoluteJoint);
 
@@ -434,16 +435,43 @@ void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, bool useBias)
 
 	if (joint->enableLimit && fixedRotation == false)
 	{
-		float angle = bodyB->angle - bodyA->angle - joint->referenceAngle;
+		float jointAngle = bodyB->angle - bodyA->angle - joint->referenceAngle;
+
+		//float C = angle - joint->lowerAngle;
+		//float Cdot = wB - wA;
+		//float impulse = -joint->axialMass * (Cdot + S2_MAX(C, 0.0f) / h);
+		//float oldImpulse = joint->lowerImpulse;
+		//joint->lowerImpulse = S2_MAX(joint->lowerImpulse + impulse, 0.0f);
+		//impulse = joint->lowerImpulse - oldImpulse;
 
 		// Lower limit
 		{
-			float C = angle - joint->lowerAngle;
+			float C = jointAngle - joint->lowerAngle;
+			float bias = 0.0f;
+			float massScale = 1.0f;
+			float impulseScale = 0.0f;
+			if (C > 0.0f)
+			{
+				// speculation
+				bias = C * inv_h;
+			}
+			else if (useBias)
+			{
+				bias = joint->biasCoefficient * C;
+				massScale = joint->massCoefficient;
+				impulseScale = joint->impulseCoefficient;
+			}
+
 			float Cdot = wB - wA;
-			float impulse = -joint->axialMass * (Cdot + S2_MAX(C, 0.0f) * context->inv_dt);
+			float impulse = -joint->axialMass * massScale * (Cdot + bias) - impulseScale * joint->lowerImpulse;
 			float oldImpulse = joint->lowerImpulse;
 			joint->lowerImpulse = S2_MAX(joint->lowerImpulse + impulse, 0.0f);
 			impulse = joint->lowerImpulse - oldImpulse;
+
+			if (C > 0.0f && useBias == false && impulse != 0.0f)
+			{
+				impulse += 0.0f;
+			}
 
 			wA -= iA * impulse;
 			wB += iB * impulse;
@@ -453,12 +481,33 @@ void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, bool useBias)
 		// Note: signs are flipped to keep C positive when the constraint is satisfied.
 		// This also keeps the impulse positive when the limit is active.
 		{
-			float C = joint->upperAngle - angle;
+			float C = joint->upperAngle - jointAngle;
+
+			float bias = 0.0f;
+			float massScale = 1.0f;
+			float impulseScale = 0.0f;
+			if (C > 0.0f)
+			{
+				// speculation
+				bias = C * inv_h;
+			}
+			else if (useBias)
+			{
+				bias = joint->biasCoefficient * C;
+				massScale = joint->massCoefficient;
+				impulseScale = joint->impulseCoefficient;
+			}
+
 			float Cdot = wA - wB;
-			float impulse = -joint->axialMass * (Cdot + S2_MAX(C, 0.0f) * context->inv_dt);
+			float impulse = -joint->axialMass * massScale * (Cdot + bias) - impulseScale * joint->lowerImpulse;
 			float oldImpulse = joint->upperImpulse;
 			joint->upperImpulse = S2_MAX(joint->upperImpulse + impulse, 0.0f);
 			impulse = joint->upperImpulse - oldImpulse;
+
+			if (C > 0.0f && useBias == false && impulse != 0.0f)
+			{
+				impulse += 0.0f;
+			}
 
 			wA += iA * impulse;
 			wB -= iB * impulse;
@@ -550,9 +599,12 @@ void s2PrepareRevolute_XPBD(s2Joint* base, s2StepContext* context)
 	joint->motorImpulse = 0.0f;
 }
 
-void s2SolveRevolute_XPBD(s2Joint* base, s2StepContext* context)
+void s2SolveRevolute_XPBD(s2Joint* base, s2StepContext* context, float inv_h)
 {
 	S2_ASSERT(base->type == s2_revoluteJoint);
+
+	// joint grid sample blows up (more quickly) without compliance
+	float compliance = 0.00005f * inv_h * inv_h;
 
 	s2RevoluteJoint* joint = &base->revoluteJoint;
 
@@ -577,6 +629,13 @@ void s2SolveRevolute_XPBD(s2Joint* base, s2StepContext* context)
 		s2Vec2 n = s2Normalize(deltaX);
 
 		float mA = joint->invMassA, mB = joint->invMassB;
+
+		if (mA == 0.0f && mB == 0.0f)
+		{
+			// static connection
+			return;
+		}
+
 		float iA = joint->invIA, iB = joint->invIB;
 
 		float rnA = s2Cross(rA, n);
@@ -586,7 +645,10 @@ void s2SolveRevolute_XPBD(s2Joint* base, s2StepContext* context)
 		float kA = mA + iA * rnA * rnA;
 		float kB = mB + iB * rnB * rnB;
 
-		float lambda = -c / (kA + kB);
+		assert(kA + kB > 0.0f);
+
+		//float lambda = -c / (kA + kB);
+		float lambda = -c / (kA + kB + compliance);
 
 		s2Vec2 p = s2MulSV(lambda, n);
 
@@ -702,7 +764,7 @@ void s2DrawRevolute(s2DebugDraw* draw, s2Joint* base, s2Body* bodyA, s2Body* bod
 	float aB = bodyB->angle;
 	float angle = aB - aA - joint->referenceAngle;
 
-	const float L = 0.5f;
+	const float L = base->drawSize;
 
 	s2Vec2 r = {L * cosf(angle), L * sinf(angle)};
 	draw->DrawSegment(pB, s2Add(pB, r), c1, draw->context);

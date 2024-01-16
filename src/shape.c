@@ -49,9 +49,13 @@ void s2Shape_CreateProxy(s2Shape* shape, s2BroadPhase* bp, s2BodyType type, s2Tr
 {
 	// Create proxies in the broad-phase.
 	shape->aabb = s2Shape_ComputeAABB(shape, xf);
+	shape->aabb.lowerBound.x -= s2_speculativeDistance;
+	shape->aabb.lowerBound.y -= s2_speculativeDistance;
+	shape->aabb.upperBound.x += s2_speculativeDistance;
+	shape->aabb.upperBound.y += s2_speculativeDistance;
 
 	// Smaller margin for static bodies. Cannot be zero due to TOI tolerance.
-	float margin = type == s2_staticBody ? 4.0f * s2_linearSlop : s2_aabbMargin;
+	float margin = type == s2_staticBody ? s2_speculativeDistance : s2_aabbMargin + s2_speculativeDistance;
 	shape->fatAABB.lowerBound.x = shape->aabb.lowerBound.x - margin;
 	shape->fatAABB.lowerBound.y = shape->aabb.lowerBound.y - margin;
 	shape->fatAABB.upperBound.x = shape->aabb.upperBound.x + margin;

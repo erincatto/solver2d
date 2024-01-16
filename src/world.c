@@ -167,8 +167,8 @@ void s2World_Step(s2WorldId worldId, float timeStep, int velIters, int posIters,
 	// Stage 3: Integrate velocities, solve velocity constraints, and integrate positions.
 	s2StepContext context = {0};
 	context.dt = timeStep;
-	context.velocityIterations = velIters;
-	context.positionIterations = posIters;
+	context.iterations = velIters;
+	context.extraIterations = posIters;
 	context.warmStart = warmStart;
 	if (timeStep > 0.0f)
 	{
@@ -179,7 +179,6 @@ void s2World_Step(s2WorldId worldId, float timeStep, int velIters, int posIters,
 		context.inv_dt = 0.0f;
 	}
 
-	context.restitutionThreshold = world->restitutionThreshold;
 	context.bodies = world->bodies;
 	context.bodyCapacity = world->bodyPool.capacity;
 
@@ -200,7 +199,7 @@ void s2World_Step(s2WorldId worldId, float timeStep, int velIters, int posIters,
 				break;
 
 			case s2_solverXPBD:
-				s2Solve_XPDB(world, &context);
+				s2Solve_XPBD(world, &context);
 				break;
 
 			case s2_solverTGS_Soft:
@@ -247,6 +246,10 @@ void s2World_Step(s2WorldId worldId, float timeStep, int velIters, int posIters,
 			s2Shape* shape = world->shapes + shapeIndex;
 
 			shape->aabb = s2Shape_ComputeAABB(shape, body->transform);
+			shape->aabb.lowerBound.x -= s2_speculativeDistance;
+			shape->aabb.lowerBound.y -= s2_speculativeDistance;
+			shape->aabb.upperBound.x += s2_speculativeDistance;
+			shape->aabb.upperBound.y += s2_speculativeDistance;
 
 			if (s2AABB_Contains(shape->fatAABB, shape->aabb) == false)
 			{

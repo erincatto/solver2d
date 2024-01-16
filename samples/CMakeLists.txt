@@ -63,6 +63,8 @@ set(S2D_SAMPLES
 	settings.h
 	settings.cpp
 
+	collection/human.cpp
+	collection/human.h
 	collection/sample_contact.cpp
 	collection/sample_joints.cpp
 )

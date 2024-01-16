@@ -14,9 +14,8 @@ typedef struct s2StepContext
 {
 	float dt;
 	float inv_dt;
-	int32_t velocityIterations;
-	int32_t positionIterations;
-	float restitutionThreshold;
+	int32_t iterations;
+	int32_t extraIterations;
 	s2Body* bodies;
 	int32_t bodyCapacity;
 	bool warmStart;
@@ -49,23 +48,23 @@ typedef struct s2ContactConstraint
 	s2ContactConstraintPoint points[2];
 	s2Vec2 normal;
 	float friction;
-	float restitution;
 	int pointCount;
 } s2ContactConstraint;
 
 // common
 void s2IntegrateVelocities(s2World* world, float h);
 void s2IntegratePositions(s2World* world, float h);
-void s2PrepareContacts_Soft(s2World* world, s2ContactConstraint* constraints, int constraintCount, float h, float hertz,
-							bool warmStart);
+void s2PrepareContacts_Soft(s2World* world, s2ContactConstraint* constraints, int constraintCount, s2StepContext* context,
+							float h, float hertz);
 void s2WarmStartContacts(s2World* world, s2ContactConstraint* constraints, int constraintCount);
+void s2SolveContact_NGS(s2World* world, s2ContactConstraint* constraints, int constraintCount);
 void s2StoreContactImpulses(s2ContactConstraint* constraints, int constraintCount);
 
 // many solvers
 void s2Solve_PGS_NGS_Block(s2World* world, s2StepContext* stepContext);
 void s2Solve_PGS_NGS(s2World* world, s2StepContext* context);
 void s2Solve_PGS_Soft(s2World* world, s2StepContext* stepContext);
-void s2Solve_XPDB(s2World* world, s2StepContext* stepContext);
+void s2Solve_XPBD(s2World* world, s2StepContext* stepContext);
 void s2Solve_TGS_Soft(s2World* world, s2StepContext* stepContext);
 void s2Solve_TGS_Sticky(s2World* world, s2StepContext* stepContext);
 void s2Solve_TGS_NGS(s2World* world, s2StepContext* stepContext);

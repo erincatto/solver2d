@@ -154,14 +154,17 @@ void s2Solve_PGS_Soft(s2World* world, s2StepContext* context)
 		constraintCount += 1;
 	}
 
-	int velocityIterations = context->velocityIterations;
-	int positionIterations = context->positionIterations;
+	int velocityIterations = context->iterations;
+	int positionIterations = context->extraIterations;
 	float h = context->dt;
 	float inv_h = context->inv_dt;
 
+	float contactHertz = 30.0f;
+	float jointHertz = 30.0f;
+
 	s2IntegrateVelocities(world, h);
 
-	s2PrepareContacts_Soft(world, constraints, constraintCount, h, 30.0f, context->warmStart);
+	s2PrepareContacts_Soft(world, constraints, constraintCount, context, h, contactHertz);
 	
 	if (context->warmStart)
 	{
@@ -176,7 +179,7 @@ void s2Solve_PGS_Soft(s2World* world, s2StepContext* context)
 			continue;
 		}
 
-		s2PrepareJoint_Soft(joint, context, 30.0f);
+		s2PrepareJoint_Soft(joint, context, h, jointHertz, context->warmStart);
 
 		if (context->warmStart)
 		{
@@ -195,16 +198,21 @@ void s2Solve_PGS_Soft(s2World* world, s2StepContext* context)
 				continue;
 			}
 
-			s2SolveJoint_Soft(joint, context, useBias);
+			s2SolveJoint_Soft(joint, context, inv_h, useBias);
 		}
 
 		s2SolveContacts_PGS_Soft(world, constraints, constraintCount, inv_h, useBias);
 	}
 
+	// Update positions from velocity
+	s2IntegratePositions(world, h);
+
 	// Relax
 	useBias = false;
 	for (int iter = 0; iter < positionIterations; ++iter)
 	{
+		// todo any need to relax joints?
+		#if 1
 		for (int i = 0; i < jointCapacity; ++i)
 		{
 			s2Joint* joint = joints + i;
@@ -213,16 +221,14 @@ void s2Solve_PGS_Soft(s2World* world, s2StepContext* context)
 				continue;
 			}
 
-			s2SolveJoint_Soft(joint, context, useBias);
+			s2SolveJoint_Soft(joint, context, inv_h, useBias);
 		}
+		#endif
 
 		s2SolveContacts_PGS_Soft(world, constraints, constraintCount, inv_h, useBias);
 	}
 
 	s2StoreContactImpulses(constraints, constraintCount);
-
-	// Update positions from velocity
-	s2IntegratePositions(world, h);
 
 	s2FreeStackItem(world->stackAllocator, constraints);
 }

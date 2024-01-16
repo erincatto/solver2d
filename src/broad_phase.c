@@ -216,6 +216,11 @@ static bool s2PairQueryCallback(int proxyId, int shapeIndex, void* context)
 		return true;
 	}
 
+	if (s2ShouldShapesCollide(shapeA->filter, shapeB->filter) == false)
+	{
+		return true;
+	}
+
 	int bodyIndexA = shapeA->bodyIndex;
 	int bodyIndexB = shapeB->bodyIndex;
 	s2Body* bodyA = world->bodies + bodyIndexA;

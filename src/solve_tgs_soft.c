@@ -18,7 +18,7 @@
 #include <stdlib.h>
 
 // this differes from PGS because it uses updated anchors
-static void s2SolveContact_TGS_Soft(s2World* world, s2ContactConstraint* constraints, int constraintCount, float inv_h,
+static void s2SolveContacts_TGS_Soft(s2World* world, s2ContactConstraint* constraints, int constraintCount, float inv_h,
 											  bool useBias)
 {
 	s2Body* bodies = world->bodies;
@@ -138,6 +138,7 @@ static void s2SolveContact_TGS_Soft(s2World* world, s2ContactConstraint* constra
 	}
 }
 
+// Warm starting and relaxing in the substep loop
 void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
 {
 	s2Contact* contacts = world->contacts;
@@ -168,22 +169,15 @@ void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
 		constraintCount += 1;
 	}
 
-	// Full step apply gravity
-	s2IntegrateVelocities(world, context->dt);
-
-	s2PrepareContacts_Soft(world, constraints, constraintCount, context->dt, 30.0f, context->warmStart);
-	
-	// Full warm start
-	if (context->warmStart)
-	{
-		s2WarmStartContacts(world, constraints, constraintCount);
-	}
-
-	int substepCount = context->velocityIterations;
+	int substepCount = context->iterations;
 	float h = context->dt / substepCount;
 	float inv_h = 1.0f / h;
 
-	float jointHertz =  0.25f * inv_h;
+	float contactHertz = S2_MIN(30.0f, 0.125f * inv_h);
+	float jointHertz = S2_MIN(60.0f, 0.125f * inv_h);
+
+	// Prepare
+	s2PrepareContacts_Soft(world, constraints, constraintCount, context, h, contactHertz);
 
 	for (int i = 0; i < jointCapacity; ++i)
 	{
@@ -193,19 +187,35 @@ void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
 			continue;
 		}
 
-		s2PrepareJoint_Soft(joint, context, jointHertz);
-
-		// Full warm start
-		if (context->warmStart)
-		{
-			s2WarmStartJoint(joint, context);
-		}
+		bool warmStart = true;
+		s2PrepareJoint_Soft(joint, context, h, jointHertz, warmStart);
 	}
 
 	// Solve
-	bool useBias = true;
 	for (int substep = 0; substep < substepCount; ++substep)
 	{
+		// Integrate gravity and forces
+		s2IntegrateVelocities(world, h);
+
+		// Apply warm starting
+		if (context->warmStart)
+		{
+			for (int i = 0; i < jointCapacity; ++i)
+			{
+				s2Joint* joint = joints + i;
+				if (s2IsFree(&joint->object))
+				{
+					continue;
+				}
+
+				s2WarmStartJoint(joint, context);
+			}
+
+			s2WarmStartContacts(world, constraints, constraintCount);
+		}
+
+		// Solve velocities using position bias
+		bool useBias = true;
 		for (int i = 0; i < jointCapacity; ++i)
 		{
 			s2Joint* joint = joints + i;
@@ -214,20 +224,17 @@ void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
 				continue;
 			}
 
-			s2SolveJoint_Soft(joint, context, true);
+			s2SolveJoint_Soft(joint, context, inv_h, useBias);
 		}
 
-		s2SolveContact_TGS_Soft(world, constraints, constraintCount, inv_h, useBias);
+		s2SolveContacts_TGS_Soft(world, constraints, constraintCount, inv_h, useBias);
 
+		// Integrate positions using biased velocities
 		s2IntegratePositions(world, h);
-	}
 
-	// Relax
-	useBias = false;
-	int positionIterations = context->positionIterations;
-	for (int iter = 0; iter < positionIterations; ++iter)
-	{
-
+		// Relax biased velocities and impulses.
+		// Relaxing the impulses reduces warm starting overshoot.
+		useBias = false;
 		for (int i = 0; i < jointCapacity; ++i)
 		{
 			s2Joint* joint = joints + i;
@@ -236,14 +243,16 @@ void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
 				continue;
 			}
 
-			s2SolveJoint_Soft(joint, context, useBias);
+			s2SolveJoint_Soft(joint, context, inv_h, useBias);
 		}
-
-		// This could use fixed anchors
-		s2SolveContact_TGS_Soft(world, constraints, constraintCount, 0.0f, useBias);
+		
+		s2SolveContacts_TGS_Soft(world, constraints, constraintCount, inv_h, useBias);
 	}
 
+	// Store results
 	s2StoreContactImpulses(constraints, constraintCount);
+
+	// no separate relax stage!
 
 	s2FreeStackItem(world->stackAllocator, constraints);
 }

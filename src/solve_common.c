@@ -85,10 +85,10 @@ void s2IntegratePositions(s2World* world, float h)
 // float impulse = -cp->normalMass * (vn + bias + cp->gamma * cp->normalImpulse);
 // = -meff * mscale * (vn + bias) - imp_scale * impulse
 
-void s2PrepareContacts_Soft(s2World* world, s2ContactConstraint* constraints, int constraintCount, float h, float hertz,
-								   bool warmStart)
+void s2PrepareContacts_Soft(s2World* world, s2ContactConstraint* constraints, int constraintCount, s2StepContext* context, float h, float hertz)
 {
 	s2Body* bodies = world->bodies;
+	bool warmStart = context->warmStart;
 
 	for (int i = 0; i < constraintCount; ++i)
 	{
@@ -163,8 +163,9 @@ void s2PrepareContacts_Soft(s2World* world, s2ContactConstraint* constraints, in
 			float kTangent = mA + mB + iA * rtA * rtA + iB * rtB * rtB;
 			cp->tangentMass = kTangent > 0.0f ? 1.0f / kTangent : 0.0f;
 
-			// Soft contact
-			const float zeta = 1.0f;
+			// soft contact
+			// should use the substep not the full time step
+			const float zeta = 0.1f;
 			float omega = 2.0f * s2_pi * contactHertz;
 			float c = h * omega * (2.0f * zeta + h * omega);
 			cp->biasCoefficient = omega / (2.0f * zeta + h * omega);
@@ -223,6 +224,73 @@ void s2WarmStartContacts(s2World* world, s2ContactConstraint* constraints, int c
 		bodyA->angularVelocity = wA;
 		bodyB->linearVelocity = vB;
 		bodyB->angularVelocity = wB;
+	}
+}
+
+void s2SolveContact_NGS(s2World* world, s2ContactConstraint* constraints, int constraintCount)
+{
+	s2Body* bodies = world->bodies;
+	float slop = s2_linearSlop;
+
+	for (int i = 0; i < constraintCount; ++i)
+	{
+		s2ContactConstraint* constraint = constraints + i;
+
+		s2Body* bodyA = bodies + constraint->indexA;
+		s2Body* bodyB = bodies + constraint->indexB;
+
+		float mA = bodyA->invMass;
+		float iA = bodyA->invI;
+		float mB = bodyB->invMass;
+		float iB = bodyB->invI;
+		int pointCount = constraint->pointCount;
+
+		s2Vec2 cA = bodyA->position;
+		float aA = bodyA->angle;
+		s2Vec2 cB = bodyB->position;
+		float aB = bodyB->angle;
+
+		s2Vec2 normal = constraint->normal;
+
+		for (int j = 0; j < pointCount; ++j)
+		{
+			s2ContactConstraintPoint* cp = constraint->points + j;
+
+			s2Rot qA = s2MakeRot(aA);
+			s2Rot qB = s2MakeRot(aB);
+
+			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
+			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
+
+			// Current separation
+			s2Vec2 d = s2Sub(s2Add(cB, rB), s2Add(cA, rA));
+			float separation = s2Dot(d, normal) + cp->separation;
+
+			// Prevent large corrections. Need to maintain a small overlap to avoid overshoot.
+			// This improves stacking stability significantly.
+			float C = S2_CLAMP(s2_baumgarte * (separation + slop), -s2_maxLinearCorrection, 0.0f);
+
+			// Compute the effective mass.
+			float rnA = s2Cross(rA, normal);
+			float rnB = s2Cross(rB, normal);
+			float K = mA + mB + iA * rnA * rnA + iB * rnB * rnB;
+
+			// Compute normal impulse
+			float impulse = K > 0.0f ? -C / K : 0.0f;
+
+			s2Vec2 P = s2MulSV(impulse, normal);
+
+			cA = s2MulSub(cA, mA, P);
+			aA -= iA * s2Cross(rA, P);
+
+			cB = s2MulAdd(cB, mB, P);
+			aB += iB * s2Cross(rB, P);
+		}
+
+		bodyA->position = cA;
+		bodyA->angle = aA;
+		bodyB->position = cB;
+		bodyB->angle = aB;
 	}
 }
 

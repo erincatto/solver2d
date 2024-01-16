@@ -14,9 +14,10 @@
 
 #include "solver2d/aabb.h"
 
+#include <assert.h>
 #include <stdbool.h>
 
-static void s2PrepareContacts_XBPD(s2World* world, s2ContactConstraint* constraints, int constraintCount)
+static void s2PrepareContacts_XPBD(s2World* world, s2ContactConstraint* constraints, int constraintCount)
 {
 	s2Body* bodies = world->bodies;
 
@@ -34,11 +35,7 @@ static void s2PrepareContacts_XBPD(s2World* world, s2ContactConstraint* constrai
 		constraint->indexA = indexA;
 		constraint->indexB = indexB;
 		constraint->normal = manifold->normal;
-
-		// XPBD friction is very strong
 		constraint->friction = contact->friction;
-
-		constraint->restitution = contact->restitution;
 		constraint->pointCount = pointCount;
 
 		s2Body* bodyA = bodies + indexA;
@@ -92,6 +89,10 @@ static void s2PrepareContacts_XBPD(s2World* world, s2ContactConstraint* constrai
 static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* constraints, int constraintCount, float h)
 {
 	s2Body* bodies = world->bodies;
+	float inv_h = h > 0.0f ? 1.0f / h : 0.0f;
+
+	// compliance because contacts are too energetic otherwise
+	float baseCompliance = 0.00001f * inv_h * inv_h;
 
 	for (int i = 0; i < constraintCount; ++i)
 	{
@@ -105,6 +106,8 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 		float mB = bodyB->invMass;
 		float iB = bodyB->invI;
 		int pointCount = constraint->pointCount;
+
+		float compliance = (mA == 0.0f || mB == 0.0f) ? 0.25f * baseCompliance : baseCompliance;
 
 		s2Vec2 cA = bodyA->position;
 		float aA = bodyA->angle;
@@ -134,7 +137,7 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 				continue;
 			}
 
-			// this clamping is not in the paper
+			// this clamping is not in the paper, but it is used in other solvers
 			float C_clamped = S2_MAX(-s2_maxBaumgarteVelocity * h, C);
 
 			float rnA = s2Cross(rA, normal);
@@ -144,7 +147,7 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 			float kA = mA + iA * rnA * rnA;
 			float kB = mB + iB * rnB * rnB;
 
-			float lambda = -C_clamped / (kA + kB);
+			float lambda = -C_clamped / (kA + kB + compliance);
 			cp->normalImpulse = lambda;
 
 			s2Vec2 P = s2MulSV(lambda, normal);
@@ -247,18 +250,11 @@ static void s2SolveContactVelocities_XPBD(s2World* world, s2ContactConstraint* c
 		s2Vec2 normal = constraint->normal;
 		s2Vec2 tangent = s2CrossVS(normal, 1.0f);
 		float friction = constraint->friction;
-		float restitution = constraint->restitution;
 
 		// relax non-penetration
 		for (int j = 0; j < pointCount; ++j)
 		{
 			s2ContactConstraintPoint* cp = constraint->points + j;
-
-			// Skip if there was no overlap at the beginning of this time step
-			if (cp->separation > 0.0f)
-			{
-				continue;
-			}
 
 			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
 			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
@@ -282,8 +278,7 @@ static void s2SolveContactVelocities_XPBD(s2World* world, s2ContactConstraint* c
 			float vn0 = s2Dot(dv0, normal);
 			float vn = s2Dot(dv, normal);
 
-			float e = S2_ABS(vn) < threshold ? 0.0f : restitution;
-			float Cdot = vn + S2_MIN(e * vn0, 0.0f);
+			float Cdot = vn;
 			float lambda = -Cdot / (kA + kB);
 
 			s2Vec2 P = s2MulSV(lambda, normal);
@@ -344,9 +339,9 @@ static void s2SolveContactVelocities_XPBD(s2World* world, s2ContactConstraint* c
 
 // Detailed Rigid Body Simulation with Extended Position Based Dynamics, 2020
 // Matthias Müller, Miles Macklin, Nuttapong Chentanez, Stefan Jeschke, Tae-Yong Kim
-void s2Solve_XPDB(s2World* world, s2StepContext* context)
+void s2Solve_XPBD(s2World* world, s2StepContext* context)
 {
-	int substepCount = context->velocityIterations;
+	int substepCount = context->iterations;
 	if (substepCount == 0)
 	{
 		return;
@@ -384,7 +379,7 @@ void s2Solve_XPDB(s2World* world, s2StepContext* context)
 		constraintCount += 1;
 	}
 
-	s2PrepareContacts_XBPD(world, constraints, constraintCount);
+	s2PrepareContacts_XPBD(world, constraints, constraintCount);
 
 	for (int i = 0; i < jointCapacity; ++i)
 	{
@@ -456,7 +451,7 @@ void s2Solve_XPDB(s2World* world, s2StepContext* context)
 				continue;
 			}
 
-			s2SolveJoint_XPBD(joint, context);
+			s2SolveJoint_XPBD(joint, context, inv_h);
 		}
 
 		s2SolveContactPositions_XPBD(world, constraints, constraintCount, h);

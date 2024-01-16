@@ -124,45 +124,35 @@ static const s2BodyDef s2_defaultBodyDef = {
 	NULL,		   // userData
 };
 
+typedef struct s2Filter
+{
+	uint32_t categoryBits;
+	uint32_t maskBits;
+	int32_t groupIndex;
+} s2Filter;
+
+static const s2Filter s2_defaultFilter = {0x00000001, 0xFFFFFFFF, 0};
+
 typedef struct s2ShapeDef
 {
 	void* userData;
 	float friction;
 	float restitution;
 	float density;
+	s2Filter filter;
 } s2ShapeDef;
 
 static const s2ShapeDef s2_defaultShapeDef = {
-	NULL, // userData
-	0.6f, // friction
-	0.0f, // restitution
-	1.0f, // density
+	NULL,						 // userData
+	0.6f,						 // friction
+	0.0f,						 // restitution
+	1.0f,						 // density
+	{0x00000001, 0xFFFFFFFF, 0}, // filter
 };
 
 static inline s2WorldDef s2DefaultWorldDef(void)
 {
 	s2WorldDef def = S2_ZERO_INIT;
 	def.solverType = s2_solverPGS_NGS_Block;
-	return def;
-}
-
-static inline s2BodyDef s2DefaultBodyDef(void)
-{
-	s2BodyDef def = S2_ZERO_INIT;
-	def.type = s2_staticBody;
-	def.position = S2_LITERAL(s2Vec2){0.0f, 0.0f};
-	def.angle = 0.0f;
-	def.linearVelocity = S2_LITERAL(s2Vec2){0.0f, 0.0f};
-	def.angularVelocity = 0.0f;
-	def.userData = NULL;
-	return def;
-}
-
-static inline struct s2ShapeDef s2DefaultShapeDef(void)
-{
-	s2ShapeDef def = S2_ZERO_INIT;
-	def.friction = 0.6f;
-	def.restitution = 0.0f;
-	def.density = 1.0f;
 	return def;
 }
