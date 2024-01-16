@@ -8,6 +8,7 @@
 #include "core.h"
 
 #include <stdbool.h>
+#include <string.h>
 
 typedef struct s2StackEntry
 {

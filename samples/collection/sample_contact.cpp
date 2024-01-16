@@ -510,12 +510,15 @@ public:
 
 static int samplePyramid = RegisterSample("Contact", "Pyramid", Pyramid::Create);
 
+// This sample shows an artifact of sub-stepping. The velocity impulse is resolved
+// in the first sub-step and then normal impulse drops to zero and so does friction.
+// A better result would be had using a force that is applied each substep.
 class Rush : public Sample
 {
 public:
 	enum
 	{
-		e_count = 100
+		e_count = 10
 	};
 
 	Rush(const Settings& settings, s2SolverType solverType)
@@ -523,8 +526,8 @@ public:
 	{
 		if (settings.restart == false)
 		{
-			g_camera.m_center = {0.0f, 14.0f};
-			g_camera.m_zoom = 0.6f;
+			g_camera.m_center = {0.0f, 0.0f};
+			g_camera.m_zoom = 0.5f;
 		}
 
 		s2BodyDef bodyDef = s2_defaultBodyDef;
