@@ -38,6 +38,7 @@ s2Vec2 s2Body_GetLocalPoint(s2BodyId bodyId, s2Vec2 globalPoint);
 void s2Body_SetTransform(s2BodyId bodyId, s2Vec2 position, float angle);
 void s2Body_SetLinearVelocity(s2BodyId bodyId, s2Vec2 linearVelocity);
 void s2Body_SetAngularVelocity(s2BodyId bodyId, float angularVelocity);
+void s2Body_ApplyForceToCenter(s2BodyId bodyId, s2Vec2 force);
 
 s2BodyType s2Body_GetType(s2BodyId bodyId);
 float s2Body_GetMass(s2BodyId bodyId);

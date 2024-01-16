@@ -1,17 +1,18 @@
 // SPDX-FileCopyrightText: 2024 Erin Catto
 // SPDX-License-Identifier: MIT
 
-#include "solver2d/aabb.h"
-#include "solver2d/id.h"
+#include "body.h"
 
 #include "array.h"
 #include "block_allocator.h"
-#include "body.h"
 #include "contact.h"
 #include "core.h"
 #include "joint.h"
-#include "world.h"
 #include "shape.h"
+#include "world.h"
+
+#include "solver2d/aabb.h"
+#include "solver2d/id.h"
 
 s2BodyId s2CreateBody(s2WorldId worldId, const s2BodyDef* def)
 {
@@ -59,6 +60,15 @@ s2BodyId s2CreateBody(s2WorldId worldId, const s2BodyDef* def)
 
 	s2BodyId id = {b->object.index, worldId.index, b->object.revision};
 	return id;
+}
+
+s2Body* s2GetBody(s2World* world, s2BodyId id)
+{
+	S2_ASSERT(0 <= id.index && id.index < world->bodyPool.capacity);
+	s2Body* body = world->bodies + id.index;
+	S2_ASSERT(s2ObjectValid(&body->object));
+	S2_ASSERT(id.revision == body->object.revision);
+	return body;
 }
 
 void s2DestroyBody(s2BodyId bodyId)
@@ -224,25 +234,25 @@ static s2ShapeId s2CreateShape(s2BodyId bodyId, const s2ShapeDef* def, const voi
 
 	switch (shapeType)
 	{
-	case s2_capsuleShape:
+		case s2_capsuleShape:
 			shape->capsule = *(const s2Capsule*)geometry;
-		break;
+			break;
 
-	case s2_circleShape:
+		case s2_circleShape:
 			shape->circle = *(const s2Circle*)geometry;
-		break;
+			break;
 
-	case s2_polygonShape:
+		case s2_polygonShape:
 			shape->polygon = *(const s2Polygon*)geometry;
-		break;
+			break;
 
-	case s2_segmentShape:
+		case s2_segmentShape:
 			shape->segment = *(const s2Segment*)geometry;
-		break;
+			break;
 
-	default:
-		S2_ASSERT(false);
-		break;
+		default:
+			S2_ASSERT(false);
+			break;
 	}
 
 	shape->bodyIndex = body->object.index;
@@ -335,7 +345,15 @@ void s2Body_SetAngularVelocity(s2BodyId bodyId, float angularVelocity)
 {
 	s2World* world = s2GetWorldFromIndex(bodyId.world);
 	S2_ASSERT(0 <= bodyId.index && bodyId.index < world->bodyPool.capacity);
+
 	world->bodies[bodyId.index].angularVelocity = angularVelocity;
+}
+
+void s2Body_ApplyForceToCenter(s2BodyId bodyId, s2Vec2 force)
+{
+	s2World* world = s2GetWorldFromIndex(bodyId.world);
+	s2Body* body = s2GetBody(world, bodyId);
+	body->force = s2Add(body->force, force);
 }
 
 s2BodyType s2Body_GetType(s2BodyId bodyId)

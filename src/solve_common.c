@@ -227,7 +227,7 @@ void s2WarmStartContacts(s2World* world, s2ContactConstraint* constraints, int c
 	}
 }
 
-void s2SolveContact_NGS(s2World* world, s2ContactConstraint* constraints, int constraintCount)
+void s2SolveContact_NGS(s2World* world, s2ContactConstraint* constraints, int constraintCount, float fraction)
 {
 	s2Body* bodies = world->bodies;
 	float slop = s2_linearSlop;
@@ -268,7 +268,7 @@ void s2SolveContact_NGS(s2World* world, s2ContactConstraint* constraints, int co
 
 			// Prevent large corrections. Need to maintain a small overlap to avoid overshoot.
 			// This improves stacking stability significantly.
-			float C = S2_CLAMP(s2_baumgarte * (separation + slop), -s2_maxLinearCorrection, 0.0f);
+			float C = S2_CLAMP(separation + slop, -s2_maxLinearCorrection, 0.0f);
 
 			// Compute the effective mass.
 			float rnA = s2Cross(rA, normal);
@@ -276,7 +276,7 @@ void s2SolveContact_NGS(s2World* world, s2ContactConstraint* constraints, int co
 			float K = mA + mB + iA * rnA * rnA + iB * rnB * rnB;
 
 			// Compute normal impulse
-			float impulse = K > 0.0f ? -C / K : 0.0f;
+			float impulse = K > 0.0f ? -fraction * s2_baumgarte * C / K : 0.0f;
 
 			s2Vec2 P = s2MulSV(impulse, normal);
 

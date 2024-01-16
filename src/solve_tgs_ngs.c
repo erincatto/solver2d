@@ -258,6 +258,8 @@ void s2Solve_TGS_NGS(s2World* world, s2StepContext* context)
 	int substepCount = context->iterations;
 	float h = context->dt / substepCount;
 	float inv_h = 1.0f / h;
+	//float ngs_fraction = 1.0f / substepCount;
+	float ngs_fraction = 1.0f;
 
 	for (int substep = 0; substep < substepCount; ++substep)
 	{
@@ -305,7 +307,7 @@ void s2Solve_TGS_NGS(s2World* world, s2StepContext* context)
 			s2SolveJointPosition(joint, context);
 		}
 
-		s2SolveContact_NGS(world, constraints, constraintCount);
+		s2SolveContact_NGS(world, constraints, constraintCount, ngs_fraction);
 	}
 
 	s2StoreContactImpulses(constraints, constraintCount);

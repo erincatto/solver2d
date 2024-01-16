@@ -92,7 +92,9 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 	float inv_h = h > 0.0f ? 1.0f / h : 0.0f;
 
 	// compliance because contacts are too energetic otherwise
-	float baseCompliance = 0.00005f * inv_h * inv_h;
+	float baseCompliance = 0.00001f * inv_h* inv_h;
+	// but the rush sample has too much overlap ...
+	//float baseCompliance = 0.0f;
 
 	for (int i = 0; i < constraintCount; ++i)
 	{
@@ -138,7 +140,7 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 			}
 
 			// this clamping is not in the paper, but it is used in other solvers
-			float C_clamped = S2_MAX(-s2_maxBaumgarteVelocity * h, C);
+			//float C_clamped = S2_MAX(-s2_maxBaumgarteVelocity * h, C);
 
 			float rnA = s2Cross(rA, normal);
 			float rnB = s2Cross(rB, normal);
@@ -147,7 +149,8 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 			float kA = mA + iA * rnA * rnA;
 			float kB = mB + iB * rnB * rnB;
 
-			float lambda = -C_clamped / (kA + kB + compliance);
+			//float lambda = -C_clamped / (kA + kB + compliance);
+			float lambda = -C / (kA + kB + compliance);
 			cp->normalImpulse = lambda;
 
 			s2Vec2 P = s2MulSV(lambda, normal);

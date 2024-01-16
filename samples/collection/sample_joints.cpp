@@ -392,8 +392,8 @@ public:
 		int numi = 100;
 		int numk = 100;
 #else
-		int numi = 10;
-		int numk = 10;
+		int numi = 20;
+		int numk = 20;
 #endif
 
 		float shift = 1.0f;
