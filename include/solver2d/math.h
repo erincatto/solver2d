@@ -188,14 +188,32 @@ static inline float s2DistanceSquared(s2Vec2 a, s2Vec2 b)
 /// Set using an angle in radians.
 static inline s2Rot s2MakeRot(float angle)
 {
-	s2Rot q = {sinf(angle), cosf(angle)};
+	s2Rot q = {sinf(0.5f * angle), cosf(0.5f * angle)};
 	return q;
+}
+
+static inline s2Rot s2NormalizeRot(s2Rot q)
+{
+	float mag = sqrtf(q.c * q.c + q.s * q.s);
+	float invMag = mag > 0.0 ? 1.0f / mag : 0.0f;
+	s2Rot qn = {q.c * invMag, q.s * invMag};
+	return qn;
+}
+
+static inline s2Rot s2IntegrateRot(s2Rot q1, float omegah)
+{
+	// dc/dt = -omega * sin(t)
+	// ds/dt = omega * cos(t)
+	// c2 = c1 - omega * h * s1
+	// s2 = s2 + omega * h * c1
+	s2Rot q2 = {q1.c - omegah * q1.s, q1.s + omegah * q1.c};
+	return s2NormalizeRot(q2);
 }
 
 /// Get the angle in radians
 static inline float s2Rot_GetAngle(s2Rot q)
 {
-	return atan2f(q.s, q.c);
+	return 2.0f * atan2f(q.s, q.c);
 }
 
 /// Get the x-axis
@@ -241,6 +259,13 @@ static inline s2Rot s2InvMulRot(s2Rot q, s2Rot r)
 /// Rotate a vector
 static inline s2Vec2 s2RotateVector(s2Rot q, s2Vec2 v)
 {
+	// s2CrossSV(s,v) = {-s * v.y, s * v.x}
+	// v + 2.0f * s2CrossSV(q.z, s2CrossSV(q.z, v) + q.w * v)
+	// v + 2.0f * s2CrossSV(q.z, {-q.z * v.y, q.z * v.x} + q.w * v)
+	// v + 2.0f * s2CrossSV(q.z, {-q.z * v.y + q.w * v.x, q.z * v.x + q.w * v.y})
+	// v + 2.0f * {-q.z * (q.z * v.x + q.w * v.y), q.z * (-q.z * v.y + q.w * v.x)}
+	// {v.x - 2.0f * q.z * (q.z * v.x + q.w * v.y), v.y - 2.0f * q.z * (q.z * v.y - q.w * v.x)}
+
 	return S2_LITERAL(s2Vec2){q.c * v.x - q.s * v.y, q.s * v.x + q.c * v.y};
 }
 

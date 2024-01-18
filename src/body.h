@@ -19,16 +19,16 @@ typedef struct s2Body
 
 	enum s2BodyType type;
 
-	// the body origin transform (not center of mass)
-	s2Transform transform;
+	// the body origin (not center of mass)
+	s2Vec2 origin;
 	
 	// center of mass position in world
 	s2Vec2 position0;
 	s2Vec2 position;
 
 	// rotation in radians
-	float angle0;
-	float angle;
+	s2Rot rot0;
+	s2Rot rot;
 
 	// location of center of mass relative to the body origin
 	s2Vec2 localCenter;

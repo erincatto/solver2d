@@ -28,12 +28,11 @@ s2BodyId s2CreateBody(s2WorldId worldId, const s2BodyDef* def)
 	S2_ASSERT(s2IsValid(def->angularVelocity));
 
 	b->type = def->type;
-	b->transform.p = def->position;
-	b->transform.q = s2MakeRot(def->angle);
+	b->origin = def->position;
 	b->position0 = def->position;
 	b->position = def->position;
-	b->angle0 = def->angle;
-	b->angle = def->angle;
+	b->rot0 = s2MakeRot(def->angle);
+	b->rot = b->rot0;
 	b->localCenter = s2Vec2_zero;
 	b->linearVelocity = def->linearVelocity;
 	b->angularVelocity = def->angularVelocity;
@@ -161,7 +160,7 @@ static void s2ComputeMass(s2World* w, s2Body* b)
 	// Static and kinematic bodies have zero mass.
 	if (b->type == s2_staticBody || b->type == s2_kinematicBody)
 	{
-		b->position = b->transform.p;
+		b->position = b->origin;
 		return;
 	}
 
@@ -210,7 +209,7 @@ static void s2ComputeMass(s2World* w, s2Body* b)
 	// Move center of mass.
 	s2Vec2 oldCenter = b->position;
 	b->localCenter = localCenter;
-	b->position = s2TransformPoint(b->transform, b->localCenter);
+	b->position = s2Add(s2RotateVector(b->rot, b->localCenter), b->origin);
 
 	// Update center of mass velocity.
 	s2Vec2 deltaLinear = s2CrossSV(b->angularVelocity, s2Sub(b->position, oldCenter));
@@ -264,7 +263,7 @@ static s2ShapeId s2CreateShape(s2BodyId bodyId, const s2ShapeDef* def, const voi
 	shape->filter = def->filter;
 	shape->enlargedAABB = false;
 
-	s2Shape_CreateProxy(shape, &w->broadPhase, body->type, body->transform);
+	s2Shape_CreateProxy(shape, &w->broadPhase, body->type, (s2Transform){body->origin, body->rot});
 
 	// Add to shape linked list
 	shape->nextShapeIndex = body->shapeList;
@@ -317,21 +316,21 @@ s2Vec2 s2Body_GetPosition(s2BodyId bodyId)
 {
 	s2World* world = s2GetWorldFromIndex(bodyId.world);
 	S2_ASSERT(0 <= bodyId.index && bodyId.index < world->bodyPool.capacity);
-	return world->bodies[bodyId.index].transform.p;
+	return world->bodies[bodyId.index].origin;
 }
 
 float s2Body_GetAngle(s2BodyId bodyId)
 {
 	s2World* world = s2GetWorldFromIndex(bodyId.world);
 	S2_ASSERT(0 <= bodyId.index && bodyId.index < world->bodyPool.capacity);
-	return world->bodies[bodyId.index].angle;
+	return s2Rot_GetAngle(world->bodies[bodyId.index].rot);
 }
 
 s2Vec2 s2Body_GetLocalPoint(s2BodyId bodyId, s2Vec2 globalPoint)
 {
 	s2World* world = s2GetWorldFromIndex(bodyId.world);
-	S2_ASSERT(0 <= bodyId.index && bodyId.index < world->bodyPool.capacity);
-	return s2InvTransformPoint(world->bodies[bodyId.index].transform, globalPoint);
+	s2Body* body = s2GetBody(world, bodyId);
+	return s2InvTransformPoint((s2Transform){body->origin, body->rot}, globalPoint);
 }
 
 void s2Body_SetLinearVelocity(s2BodyId bodyId, s2Vec2 linearVelocity)

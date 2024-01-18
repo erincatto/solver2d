@@ -63,7 +63,7 @@ void s2IntegratePositions(s2World* world, float h)
 		}
 
 		body->position = s2MulAdd(body->position, h, body->linearVelocity);
-		body->angle += h * body->angularVelocity;
+		body->transform.q = s2IntegrateRot(body->transform.q, h * body->angularVelocity);
 	}
 }
 
