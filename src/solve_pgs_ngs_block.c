@@ -224,14 +224,10 @@ static s2ContactSolver s2CreateContactSolver(s2World* world, s2StepContext* cont
 		float mB = bodyB->invMass;
 		float iB = bodyB->invI;
 
-		s2Rot qA = bodyA->transform.q;
+		s2Rot qA = bodyA->rot;
 		s2Vec2 cA = bodyA->position;
-		s2Rot qB = bodyB->transform.q;
+		s2Rot qB = bodyB->rot;
 		s2Vec2 cB = bodyB->position;
-
-		// TODO_ERIN testing
-		// qA = s2MakeRot(bodyA->angle);
-		// qB = s2MakeRot(bodyB->angle);
 
 		s2Vec2 vA = bodyA->linearVelocity;
 		float wA = bodyA->angularVelocity;
@@ -741,27 +737,24 @@ static void s2ContactSolver_SolvePositionConstraintsBlock(s2ContactSolver* solve
 		int32_t pointCount = pc->pointCount;
 
 		s2Vec2 cA = bodyA->position;
-		float aA = bodyA->angle;
+		s2Rot qA = bodyA->rot;
 		s2Vec2 cB = bodyB->position;
-		float aB = bodyB->angle;
+		s2Rot qB = bodyB->rot;
 
 		s2Vec2 normal = pc->normal;
 
 		if (pointCount == 2)
 		{
-			s2Rot qA = s2MakeRot(aA);
-			s2Rot qB = s2MakeRot(aB);
-
 			s2Vec2 rA1 = s2RotateVector(qA, pc->localAnchorsA[0]);
 			s2Vec2 rB1 = s2RotateVector(qB, pc->localAnchorsB[0]);
 			s2Vec2 rA2 = s2RotateVector(qA, pc->localAnchorsA[1]);
-			s2Vec2 rS2 = s2RotateVector(qB, pc->localAnchorsB[1]);
+			s2Vec2 rB2 = s2RotateVector(qB, pc->localAnchorsB[1]);
 
 			// Current separation
 			s2Vec2 d1 = s2Sub(s2Add(cB, rB1), s2Add(cA, rA1));
 			float separation1 = s2Dot(d1, normal) + pc->separations[0];
 
-			s2Vec2 d2 = s2Sub(s2Add(cB, rS2), s2Add(cA, rA2));
+			s2Vec2 d2 = s2Sub(s2Add(cB, rB2), s2Add(cA, rA2));
 			float separation2 = s2Dot(d2, normal) + pc->separations[1];
 
 			float C1 = S2_CLAMP(s2_baumgarte * (separation1 + slop), -s2_maxLinearCorrection, 0.0f);
@@ -772,7 +765,7 @@ static void s2ContactSolver_SolvePositionConstraintsBlock(s2ContactSolver* solve
 			float rn1A = s2Cross(rA1, normal);
 			float rn1B = s2Cross(rB1, normal);
 			float rn2A = s2Cross(rA2, normal);
-			float rn2B = s2Cross(rS2, normal);
+			float rn2B = s2Cross(rB2, normal);
 
 			float k11 = mA + mB + iA * rn1A * rn1A + iB * rn1B * rn1B;
 			float k22 = mA + mB + iA * rn2A * rn2A + iB * rn2B * rn2B;
@@ -822,10 +815,10 @@ static void s2ContactSolver_SolvePositionConstraintsBlock(s2ContactSolver* solve
 					s2Vec2 P2 = s2MulSV(d.y, normal);
 
 					cA = s2MulSub(cA, mA, s2Add(P1, P2));
-					aA -= iA * (s2Cross(rA1, P1) + s2Cross(rA2, P2));
+					qA = s2IntegrateRot(qA, -iA * (s2Cross(rA1, P1) + s2Cross(rA2, P2)));
 
 					cB = s2MulAdd(cB, mB, s2Add(P1, P2));
-					aB += iB * (s2Cross(rB1, P1) + s2Cross(rS2, P2));
+					qB = s2IntegrateRot(qB, iB * (s2Cross(rB1, P1) + s2Cross(rB2, P2)));
 					break;
 				}
 
@@ -848,10 +841,10 @@ static void s2ContactSolver_SolvePositionConstraintsBlock(s2ContactSolver* solve
 					s2Vec2 P2 = s2MulSV(d.y, normal);
 
 					cA = s2MulSub(cA, mA, s2Add(P1, P2));
-					aA -= iA * (s2Cross(rA1, P1) + s2Cross(rA2, P2));
+					qA = s2IntegrateRot(qA, -iA * (s2Cross(rA1, P1) + s2Cross(rA2, P2)));
 
 					cB = s2MulAdd(cB, mB, s2Add(P1, P2));
-					aB += iB * (s2Cross(rB1, P1) + s2Cross(rS2, P2));
+					qB = s2IntegrateRot(qB, iB * (s2Cross(rB1, P1) + s2Cross(rB2, P2)));
 					break;
 				}
 
@@ -874,10 +867,10 @@ static void s2ContactSolver_SolvePositionConstraintsBlock(s2ContactSolver* solve
 					s2Vec2 P2 = s2MulSV(d.y, normal);
 
 					cA = s2MulSub(cA, mA, s2Add(P1, P2));
-					aA -= iA * (s2Cross(rA1, P1) + s2Cross(rA2, P2));
+					qA = s2IntegrateRot(qA, -iA * (s2Cross(rA1, P1) + s2Cross(rA2, P2)));
 
 					cB = s2MulAdd(cB, mB, s2Add(P1, P2));
-					aB += iB * (s2Cross(rB1, P1) + s2Cross(rS2, P2));
+					qB = s2IntegrateRot(qB, iB * (s2Cross(rB1, P1) + s2Cross(rB2, P2)));
 					break;
 				}
 				break;
@@ -888,9 +881,6 @@ static void s2ContactSolver_SolvePositionConstraintsBlock(s2ContactSolver* solve
 		manifold_degenerate:
 			for (int32_t j = 0; j < pointCount; ++j)
 			{
-				s2Rot qA = s2MakeRot(aA);
-				s2Rot qB = s2MakeRot(aB);
-
 				s2Vec2 rA = s2RotateVector(qA, pc->localAnchorsA[j]);
 				s2Vec2 rB = s2RotateVector(qB, pc->localAnchorsB[j]);
 
@@ -913,17 +903,17 @@ static void s2ContactSolver_SolvePositionConstraintsBlock(s2ContactSolver* solve
 				s2Vec2 P = s2MulSV(impulse, normal);
 
 				cA = s2MulSub(cA, mA, P);
-				aA -= iA * s2Cross(rA, P);
+				qA = s2IntegrateRot(qA, -iA * s2Cross(rA, P));
 
 				cB = s2MulAdd(cB, mB, P);
-				aB += iB * s2Cross(rB, P);
+				qB = s2IntegrateRot(qB, iB * s2Cross(rB, P));
 			}
 		}
 
 		bodyA->position = cA;
-		bodyA->angle = aA;
+		bodyA->rot = qA;
 		bodyB->position = cB;
-		bodyB->angle = aB;
+		bodyB->rot = qB;
 	}
 }
 

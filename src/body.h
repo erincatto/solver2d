@@ -70,3 +70,9 @@ bool s2ShouldBodiesCollide(s2World* world, s2Body* bodyA, s2Body* bodyB);
 
 s2ShapeId s2CreatePolygonShape(s2BodyId bodyId, const s2ShapeDef* def, const s2Polygon* polygon);
 void s2Body_DestroyShape(s2ShapeId shapeId);
+
+#define S2_TRANSFORM(body)                                                                                                     \
+	(s2Transform)                                                                                                                \
+	{                                                                                                                            \
+		body->origin, body->rot                                                                                                  \
+	}

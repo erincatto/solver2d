@@ -51,8 +51,8 @@ static void s2PrepareContacts(s2World* world, s2ContactConstraint* constraints, 
 
 		s2Vec2 cA = bodyA->position;
 		s2Vec2 cB = bodyB->position;
-		s2Rot qA = s2MakeRot(bodyA->angle);
-		s2Rot qB = s2MakeRot(bodyB->angle);
+		s2Rot qA = bodyA->rot;
+		s2Rot qB = bodyB->rot;
 
 		s2Vec2 vA = bodyA->linearVelocity;
 		float wA = bodyA->angularVelocity;
@@ -126,8 +126,8 @@ static void s2SolveContacts_TGS(s2World* world, s2ContactConstraint* constraints
 
 		s2Vec2 cA = bodyA->position;
 		s2Vec2 cB = bodyB->position;
-		s2Rot qA = s2MakeRot(bodyA->angle);
-		s2Rot qB = s2MakeRot(bodyB->angle);
+		s2Rot qA = bodyA->rot;
+		s2Rot qB = bodyB->rot;
 
 		s2Vec2 normal = constraint->normal;
 		s2Vec2 tangent = s2RightPerp(normal);

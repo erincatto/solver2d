@@ -48,8 +48,8 @@ static void s2PrepareContacts_XPBD(s2World* world, s2ContactConstraint* constrai
 
 		s2Vec2 cA = bodyA->position;
 		s2Vec2 cB = bodyB->position;
-		s2Rot qA = s2MakeRot(bodyA->angle);
-		s2Rot qB = s2MakeRot(bodyB->angle);
+		s2Rot qA = bodyA->rot;
+		s2Rot qB = bodyB->rot;
 
 		s2Vec2 normal = constraint->normal;
 		s2Vec2 tangent = s2RightPerp(normal);
@@ -112,9 +112,9 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 		float compliance = (mA == 0.0f || mB == 0.0f) ? 0.25f * baseCompliance : baseCompliance;
 
 		s2Vec2 cA = bodyA->position;
-		float aA = bodyA->angle;
+		s2Rot qA = bodyA->rot;
 		s2Vec2 cB = bodyB->position;
-		float aB = bodyB->angle;
+		s2Rot qB = bodyB->rot;
 
 		s2Vec2 normal = constraint->normal;
 		s2Vec2 tangent = s2CrossVS(normal, 1.0f);
@@ -123,9 +123,6 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 		for (int j = 0; j < pointCount; ++j)
 		{
 			s2ContactConstraintPoint* cp = constraint->points + j;
-
-			s2Rot qA = s2MakeRot(aA);
-			s2Rot qB = s2MakeRot(aB);
 
 			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
 			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
@@ -156,10 +153,10 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 			s2Vec2 P = s2MulSV(lambda, normal);
 
 			cA = s2MulSub(cA, mA, P);
-			aA -= iA * s2Cross(rA, P);
+			qA = s2IntegrateRot(qA, -iA * s2Cross(rA, P));
 
 			cB = s2MulAdd(cB, mB, P);
-			aB += iB * s2Cross(rB, P);
+			qB = s2IntegrateRot(qB, iB * s2Cross(rB, P));
 		}
 
 		// static friction constraints
@@ -168,9 +165,6 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 		for (int j = 0; j < pointCount; ++j)
 		{
 			s2ContactConstraintPoint* cp = constraint->points + j;
-
-			s2Rot qA = s2MakeRot(aA);
-			s2Rot qB = s2MakeRot(aB);
 
 			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
 			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
@@ -200,16 +194,16 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 			s2Vec2 P = s2MulSV(lambda, tangent);
 
 			cA = s2MulSub(cA, mA, P);
-			aA -= iA * s2Cross(rA, P);
+			qA = s2IntegrateRot(qA, -iA * s2Cross(rA, P));
 
 			cB = s2MulAdd(cB, mB, P);
-			aB += iB * s2Cross(rB, P);
+			qB = s2IntegrateRot(qB, iB * s2Cross(rB, P));
 		}
 
 		bodyA->position = cA;
-		bodyA->angle = aA;
+		bodyA->rot = qA;
 		bodyB->position = cB;
-		bodyB->angle = aB;
+		bodyB->rot = qB;
 	}
 }
 
@@ -233,12 +227,9 @@ static void s2SolveContactVelocities_XPBD(s2World* world, s2ContactConstraint* c
 		int pointCount = constraint->pointCount;
 
 		s2Vec2 cA = bodyA->position;
-		float aA = bodyA->angle;
+		s2Rot qA = bodyA->rot;
 		s2Vec2 cB = bodyB->position;
-		float aB = bodyB->angle;
-
-		s2Rot qA = s2MakeRot(aA);
-		s2Rot qB = s2MakeRot(aB);
+		s2Rot qB = bodyB->rot;
 
 		s2Vec2 vA = bodyA->linearVelocity;
 		float wA = bodyA->angularVelocity;
@@ -438,16 +429,16 @@ void s2Solve_XPBD(s2World* world, s2StepContext* context)
 			body->angularVelocity = w;
 
 			s2Vec2 c = body->position;
-			float a = body->angle;
+			s2Rot q = body->rot;
 
 			// store previous position
 			body->position0 = c;
-			body->angle0 = a;
+			body->rot0 = q;
 
 			// integrate positions
 			// this is unique to XPBD, no other solvers update position immediately
 			body->position = s2MulAdd(c, h, v);
-			body->angle += h * w;
+			body->rot = s2IntegrateRot(body->rot, h * w);
 		}
 
 		for (int i = 0; i < jointCapacity; ++i)
@@ -481,7 +472,7 @@ void s2Solve_XPBD(s2World* world, s2StepContext* context)
 			body->angularVelocity0 = body->angularVelocity;
 
 			body->linearVelocity = s2MulSV(inv_h, s2Sub(body->position, body->position0));
-			body->angularVelocity = inv_h * (body->angle - body->angle0);
+			body->angularVelocity = s2ComputeAngularVelocity(body->rot, body->rot0, inv_h);
 		}
 
 		// Relax contact velocities

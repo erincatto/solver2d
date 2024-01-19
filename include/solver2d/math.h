@@ -188,7 +188,7 @@ static inline float s2DistanceSquared(s2Vec2 a, s2Vec2 b)
 /// Set using an angle in radians.
 static inline s2Rot s2MakeRot(float angle)
 {
-	s2Rot q = {sinf(0.5f * angle), cosf(0.5f * angle)};
+	s2Rot q = {cosf(angle), sinf(angle)};
 	return q;
 }
 
@@ -205,9 +205,50 @@ static inline s2Rot s2IntegrateRot(s2Rot q1, float omegah)
 	// dc/dt = -omega * sin(t)
 	// ds/dt = omega * cos(t)
 	// c2 = c1 - omega * h * s1
-	// s2 = s2 + omega * h * c1
+	// s2 = s1 + omega * h * c1
 	s2Rot q2 = {q1.c - omegah * q1.s, q1.s + omegah * q1.c};
 	return s2NormalizeRot(q2);
+
+
+	// quaternion multiplication
+	// q1 * q2 = {cross(q1.v, q2.v) + q2.v * q1.s + q1.v * q2.s, q1.s * q2.s - dot(q1.v, q2.v)}
+	// in 2d this reduces to
+	// q1 * q2 = {q2.z * q1.w + q1.z * q2.w, q1.w * q2.w - q1.z * q2.z}
+
+	// integration
+	// q2 = q1 + 0.5 * {omegah, 0} * q1
+	// = q1 + 0.5 * {omegah * q1.w, -omegah * q1.z}
+	// this is identical to the trig version above
+	// conclusion: no reason to use 2d quaternions, instead use sine and cosine
+	// with explicit integration
+}
+
+static inline float s2ComputeAngularVelocity(s2Rot q1, s2Rot q2, float inv_h)
+{
+	// dc/dt = -omega * sin(t)
+	// ds/dt = omega * cos(t)
+	// c2 = c1 - omega * h * s1
+	// s2 = s1 + omega * h * c1
+
+	// omega * h * s1 = c1 - c2
+	// omega * h * c1 = s2 - s1
+	// omega * h = (c1 - c2) * s1 + (s2 - s1) * c1;
+	// omega * h = s1 * c1 - c2 * s1 + s2 * c1 - s1 * c1
+	// omega * h = s2 * c1 - c2 * s1 = sin(a2 - a1) ~= a2 - a1 for small delta
+	float omega = inv_h * (q2.s * q1.c - q2.c * q1.s);
+	return omega;
+
+	// quaternion multiplication
+	// q1 * q2 = {cross(q1.v, q2.v) + q2.v * q1.s + q1.v * q2.s, q1.s * q2.s - dot(q1.v, q2.v)}
+	// in 2d this reduces to
+	// q1 * q2 = {q2.z * q1.w + q1.z * q2.w, q1.w * q2.w - q1.z * q2.z}
+
+	// integration
+	// q2 = q1 + 0.5 * {omegah, 0} * q1
+	// = q1 + 0.5 * {omegah * q1.w, -omegah * q1.z}
+	// this is identical to the trig version above
+	// conclusion: no reason to use 2d quaternions, instead use sine and cosine
+	// with explicit integration
 }
 
 /// Get the angle in radians
@@ -231,6 +272,9 @@ static inline s2Vec2 s2Rot_GetYAxis(s2Rot q)
 }
 
 /// Multiply two rotations: q * r
+/// equivalent to angle addition via trig identity:
+///	sin(q + r) = sin(q) * cos(r) + cos(q) * sin(r)
+///	cos(q + r) = cos(q) * cos(r) - sin(q) * sin(r)
 static inline s2Rot s2MulRot(s2Rot q, s2Rot r)
 {
 	// [qc -qs] * [rc -rs] = [qc*rc-qs*rs -qc*rs-qs*rc]
@@ -244,6 +288,9 @@ static inline s2Rot s2MulRot(s2Rot q, s2Rot r)
 }
 
 /// Transpose multiply two rotations: qT * r
+/// equivalent to angle subtraction via trig identity:
+///	sin(q - r) = sin(q) * cos(r) - cos(q) * sin(r)
+///	cos(q - r) = cos(q) * cos(r) + sin(q) * sin(r)
 static inline s2Rot s2InvMulRot(s2Rot q, s2Rot r)
 {
 	// [ qc qs] * [rc -rs] = [qc*rc+qs*rs -qc*rs+qs*rc]
@@ -256,9 +303,17 @@ static inline s2Rot s2InvMulRot(s2Rot q, s2Rot r)
 	return qr;
 }
 
+static inline float s2RelativeAngle(s2Rot b, s2Rot a)
+{
+	float s = b.c * a.s - b.s * a.c;
+	float c = b.c * a.c + b.s * a.s;
+	return atan2f(s, c);
+}
+
 /// Rotate a vector
 static inline s2Vec2 s2RotateVector(s2Rot q, s2Vec2 v)
 {
+	// 2d quaternion
 	// s2CrossSV(s,v) = {-s * v.y, s * v.x}
 	// v + 2.0f * s2CrossSV(q.z, s2CrossSV(q.z, v) + q.w * v)
 	// v + 2.0f * s2CrossSV(q.z, {-q.z * v.y, q.z * v.x} + q.w * v)
