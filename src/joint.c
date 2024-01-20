@@ -165,8 +165,8 @@ s2JointId s2CreateMouseJoint(s2WorldId worldId, const s2MouseJointDef* def)
 
 	joint->type = s2_mouseJoint;
 	joint->drawSize = 1.0f;
-	joint->localAnchorA = s2InvTransformPoint(bodyA->transform, def->target);
-	joint->localAnchorB = s2InvTransformPoint(bodyB->transform, def->target);
+	joint->localAnchorA = s2InvTransformPoint(S2_TRANSFORM(bodyA), def->target);
+	joint->localAnchorB = s2InvTransformPoint(S2_TRANSFORM(bodyB), def->target);
 
 	s2MouseJoint empty = {0};
 	joint->mouseJoint = empty;
@@ -386,9 +386,9 @@ void s2PrepareJoint_Soft(s2Joint* joint, s2StepContext* context, float h, float 
 }
 
 extern void s2SolveMouse_Soft(s2Joint* base, s2StepContext* context, bool useBias);
-extern void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float inv_h, bool useBias);
+extern void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float inv_h, bool useBias);
 
-void s2SolveJoint_Soft(s2Joint* joint, s2StepContext* context, float inv_h, bool useBias)
+void s2SolveJoint_Soft(s2Joint* joint, s2StepContext* context, float h, float inv_h, bool useBias)
 {
 	switch (joint->type)
 	{
@@ -397,7 +397,7 @@ void s2SolveJoint_Soft(s2Joint* joint, s2StepContext* context, float inv_h, bool
 			break;
 
 		case s2_revoluteJoint:
-			s2SolveRevolute_Soft(joint, context, inv_h, useBias);
+			s2SolveRevolute_Soft(joint, context, h, inv_h, useBias);
 			break;
 
 		default:
@@ -452,10 +452,10 @@ void s2DrawJoint(s2DebugDraw* draw, s2World* world, s2Joint* joint)
 	s2Body* bodyA = world->bodies + joint->edges[0].bodyIndex;
 	s2Body* bodyB = world->bodies + joint->edges[1].bodyIndex;
 
-	s2Transform xfA = bodyA->transform;
-	s2Transform xfB = bodyB->transform;
-	s2Vec2 pA = s2TransformPoint(bodyA->transform, joint->localAnchorA);
-	s2Vec2 pB = s2TransformPoint(bodyB->transform, joint->localAnchorB);
+	s2Transform xfA = S2_TRANSFORM(bodyA);
+	s2Transform xfB = S2_TRANSFORM(bodyB);
+	s2Vec2 pA = s2TransformPoint(xfA, joint->localAnchorA);
+	s2Vec2 pB = s2TransformPoint(xfB, joint->localAnchorB);
 
 	s2Color color = {0.5f, 0.8f, 0.8f, 1.0f};
 

@@ -63,7 +63,7 @@ void s2IntegratePositions(s2World* world, float h)
 		}
 
 		body->position = s2MulAdd(body->position, h, body->linearVelocity);
-		body->angle += h * body->angularVelocity;
+		body->rot = s2IntegrateRot(body->rot, h * body->angularVelocity);
 	}
 }
 
@@ -120,8 +120,8 @@ void s2PrepareContacts_Soft(s2World* world, s2ContactConstraint* constraints, in
 
 		s2Vec2 cA = bodyA->position;
 		s2Vec2 cB = bodyB->position;
-		s2Rot qA = s2MakeRot(bodyA->angle);
-		s2Rot qB = s2MakeRot(bodyB->angle);
+		s2Rot qA = bodyA->rot;
+		s2Rot qB = bodyB->rot;
 
 		s2Vec2 normal = constraint->normal;
 		s2Vec2 tangent = s2RightPerp(constraint->normal);
@@ -199,8 +199,8 @@ void s2WarmStartContacts(s2World* world, s2ContactConstraint* constraints, int c
 		s2Vec2 vB = bodyB->linearVelocity;
 		float wB = bodyB->angularVelocity;
 
-		s2Rot qA = s2MakeRot(bodyA->angle);
-		s2Rot qB = s2MakeRot(bodyB->angle);
+		s2Rot qA = bodyA->rot;
+		s2Rot qB = bodyB->rot;
 
 		s2Vec2 normal = constraint->normal;
 		s2Vec2 tangent = s2RightPerp(normal);
@@ -246,18 +246,15 @@ void s2SolveContact_NGS(s2World* world, s2ContactConstraint* constraints, int co
 		int pointCount = constraint->pointCount;
 
 		s2Vec2 cA = bodyA->position;
-		float aA = bodyA->angle;
+		s2Rot qA = bodyA->rot;
 		s2Vec2 cB = bodyB->position;
-		float aB = bodyB->angle;
+		s2Rot qB = bodyB->rot;
 
 		s2Vec2 normal = constraint->normal;
 
 		for (int j = 0; j < pointCount; ++j)
 		{
 			s2ContactConstraintPoint* cp = constraint->points + j;
-
-			s2Rot qA = s2MakeRot(aA);
-			s2Rot qB = s2MakeRot(aB);
 
 			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
 			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
@@ -281,16 +278,16 @@ void s2SolveContact_NGS(s2World* world, s2ContactConstraint* constraints, int co
 			s2Vec2 P = s2MulSV(impulse, normal);
 
 			cA = s2MulSub(cA, mA, P);
-			aA -= iA * s2Cross(rA, P);
+			qA = s2IntegrateRot(qA, -iA * s2Cross(rA, P));
 
 			cB = s2MulAdd(cB, mB, P);
-			aB += iB * s2Cross(rB, P);
+			qB = s2IntegrateRot(qB, iB * s2Cross(rB, P));
 		}
 
 		bodyA->position = cA;
-		bodyA->angle = aA;
+		bodyA->rot = qA;
 		bodyB->position = cB;
-		bodyB->angle = aB;
+		bodyB->rot = qB;
 	}
 }
 

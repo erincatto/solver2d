@@ -308,7 +308,9 @@ void s2UpdateContact(s2World* world, s2Contact* contact, s2Shape* shapeA, s2Body
 	s2ManifoldFcn* fcn = s_registers[shapeA->type][shapeB->type].fcn;
 
 	float maxDistance = s2_speculativeDistance;
-	contact->manifold = fcn(shapeA, bodyA->transform, shapeB, bodyB->transform, maxDistance, &contact->cache);
+	s2Transform transformA = {bodyA->origin, bodyA->rot};
+	s2Transform transformB = {bodyB->origin, bodyB->rot};
+	contact->manifold = fcn(shapeA, transformA, shapeB, transformB, maxDistance, &contact->cache);
 
 	touching = contact->manifold.pointCount > 0;
 

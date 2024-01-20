@@ -235,17 +235,18 @@ void s2World_Step(s2WorldId worldId, float timeStep, int velIters, int posIters,
 			continue;
 		}
 
-		body->transform.q = s2MakeRot(body->angle);
-		body->transform.p = s2Sub(body->position, s2RotateVector(body->transform.q, body->localCenter));
+		body->origin = s2Sub(body->position, s2RotateVector(body->rot, body->localCenter));
 		body->force = s2Vec2_zero;
 		body->torque = 0.0f;
+
+		s2Transform transform = {body->origin, body->rot};
 
 		int shapeIndex = body->shapeList;
 		while (shapeIndex != S2_NULL_INDEX)
 		{
 			s2Shape* shape = world->shapes + shapeIndex;
 
-			shape->aabb = s2Shape_ComputeAABB(shape, body->transform);
+			shape->aabb = s2Shape_ComputeAABB(shape, transform);
 			shape->aabb.lowerBound.x -= s2_speculativeDistance;
 			shape->aabb.lowerBound.y -= s2_speculativeDistance;
 			shape->aabb.upperBound.x += s2_speculativeDistance;
@@ -267,15 +268,15 @@ void s2World_Step(s2WorldId worldId, float timeStep, int velIters, int posIters,
 	s2GrowStack(world->stackAllocator);
 }
 
-static void s2DrawShape(s2DebugDraw* draw, s2Shape* shape, s2Transform xf, s2Color color)
+static void s2DrawShape(s2DebugDraw* draw, s2Shape* shape, s2Transform transform, s2Color color)
 {
 	switch (shape->type)
 	{
 		case s2_capsuleShape:
 		{
 			s2Capsule* capsule = &shape->capsule;
-			s2Vec2 p1 = s2TransformPoint(xf, capsule->point1);
-			s2Vec2 p2 = s2TransformPoint(xf, capsule->point2);
+			s2Vec2 p1 = s2TransformPoint(transform, capsule->point1);
+			s2Vec2 p2 = s2TransformPoint(transform, capsule->point2);
 			draw->DrawSolidCapsule(p1, p2, capsule->radius, color, draw->context);
 		}
 		break;
@@ -283,8 +284,8 @@ static void s2DrawShape(s2DebugDraw* draw, s2Shape* shape, s2Transform xf, s2Col
 		case s2_circleShape:
 		{
 			s2Circle* circle = &shape->circle;
-			s2Vec2 center = s2TransformPoint(xf, circle->point);
-			s2Vec2 axis = s2RotateVector(xf.q, (s2Vec2){1.0f, 0.0f});
+			s2Vec2 center = s2TransformPoint(transform, circle->point);
+			s2Vec2 axis = s2RotateVector(transform.q, (s2Vec2){1.0f, 0.0f});
 			draw->DrawSolidCircle(center, circle->radius, axis, color, draw->context);
 		}
 		break;
@@ -300,7 +301,7 @@ static void s2DrawShape(s2DebugDraw* draw, s2Shape* shape, s2Transform xf, s2Col
 
 			for (int i = 0; i < count; ++i)
 			{
-				vertices[i] = s2TransformPoint(xf, poly->vertices[i]);
+				vertices[i] = s2TransformPoint(transform, poly->vertices[i]);
 			}
 
 			if (poly->radius > 0.0f)
@@ -317,8 +318,8 @@ static void s2DrawShape(s2DebugDraw* draw, s2Shape* shape, s2Transform xf, s2Col
 		case s2_segmentShape:
 		{
 			s2Segment* segment = &shape->segment;
-			s2Vec2 p1 = s2TransformPoint(xf, segment->point1);
-			s2Vec2 p2 = s2TransformPoint(xf, segment->point2);
+			s2Vec2 p1 = s2TransformPoint(transform, segment->point1);
+			s2Vec2 p2 = s2TransformPoint(transform, segment->point2);
 			draw->DrawSegment(p1, p2, color, draw->context);
 		}
 		break;
@@ -337,33 +338,33 @@ void s2World_Draw(s2WorldId worldId, s2DebugDraw* draw)
 		int count = world->bodyPool.capacity;
 		for (int i = 0; i < count; ++i)
 		{
-			s2Body* b = world->bodies + i;
-			if (b->object.next != i)
+			s2Body* body = world->bodies + i;
+			if (body->object.next != i)
 			{
 				continue;
 			}
 
-			s2Transform xf = b->transform;
-			int shapeIndex = b->shapeList;
+			s2Transform transform = {body->origin, body->rot};
+			int shapeIndex = body->shapeList;
 			while (shapeIndex != S2_NULL_INDEX)
 			{
 				s2Shape* shape = world->shapes + shapeIndex;
-				if (b->type == s2_dynamicBody && b->mass == 0.0f)
+				if (body->type == s2_dynamicBody && body->mass == 0.0f)
 				{
 					// Bad body
-					s2DrawShape(draw, shape, xf, (s2Color){1.0f, 0.0f, 0.0f, 1.0f});
+					s2DrawShape(draw, shape, transform, (s2Color){1.0f, 0.0f, 0.0f, 1.0f});
 				}
-				else if (b->type == s2_staticBody)
+				else if (body->type == s2_staticBody)
 				{
-					s2DrawShape(draw, shape, xf, (s2Color){0.5f, 0.9f, 0.5f, 1.0f});
+					s2DrawShape(draw, shape, transform, (s2Color){0.5f, 0.9f, 0.5f, 1.0f});
 				}
-				else if (b->type == s2_kinematicBody)
+				else if (body->type == s2_kinematicBody)
 				{
-					s2DrawShape(draw, shape, xf, (s2Color){0.5f, 0.5f, 0.9f, 1.0f});
+					s2DrawShape(draw, shape, transform, (s2Color){0.5f, 0.5f, 0.9f, 1.0f});
 				}
 				else
 				{
-					s2DrawShape(draw, shape, xf, draw->dynamicBodyColor);
+					s2DrawShape(draw, shape, transform, draw->dynamicBodyColor);
 				}
 
 				shapeIndex = shape->nextShapeIndex;
@@ -393,17 +394,17 @@ void s2World_Draw(s2WorldId worldId, s2DebugDraw* draw)
 		int count = world->bodyPool.capacity;
 		for (int i = 0; i < count; ++i)
 		{
-			s2Body* b = world->bodies + i;
-			if (b->object.next != i)
+			s2Body* body = world->bodies + i;
+			if (body->object.next != i)
 			{
 				continue;
 			}
 
 			char buffer[32];
-			sprintf(buffer, "%d", b->object.index);
-			draw->DrawString(b->position, buffer, draw->context);
+			sprintf(buffer, "%d", body->object.index);
+			draw->DrawString(body->position, buffer, draw->context);
 
-			int shapeIndex = b->shapeList;
+			int shapeIndex = body->shapeList;
 			while (shapeIndex != S2_NULL_INDEX)
 			{
 				s2Shape* shape = world->shapes + shapeIndex;
@@ -434,7 +435,7 @@ void s2World_Draw(s2WorldId worldId, s2DebugDraw* draw)
 				continue;
 			}
 
-			s2Transform transform = {body->position, body->transform.q};
+			s2Transform transform = {body->position, body->rot};
 			draw->DrawTransform(transform, draw->context);
 
 			s2Vec2 p = s2TransformPoint(transform, offset);
@@ -535,152 +536,6 @@ s2Statistics s2World_GetStatistics(s2WorldId worldId)
 	s.stackUsed = s2GetMaxStackAllocation(world->stackAllocator);
 	return s;
 }
-
-#if 0
-struct s2WorldRayCastWrapper
-{
-	float RayCastCallback(const s2RayCastInput& input, int32 proxyId)
-	{
-		void* userData = broadPhase->GetUserData(proxyId);
-		s2FixtureProxy* proxy = (s2FixtureProxy*)userData;
-		s2Shape* shape = proxy->shape;
-		int32 index = proxy->childIndex;
-		s2RayCastOutput output;
-		bool hit = shape->RayCast(&output, input, index);
-
-		if (hit)
-		{
-			float fraction = output.fraction;
-			s2Vec2 point = (1.0f - fraction) * input.p1 + fraction * input.p2;
-			return callback->ReportFixture(shape, point, output.normal, fraction);
-		}
-
-		return input.maxFraction;
-	}
-
-	const s2BroadPhase* broadPhase;
-	s2RayCastCallback* callback;
-};
-
-void s2World::RayCast(s2RayCastCallback* callback, const s2Vec2& point1, const s2Vec2& point2) const
-{
-	s2WorldRayCastWrapper wrapper;
-	wrapper.broadPhase = &m_contactManager.m_broadPhase;
-	wrapper.callback = callback;
-	s2RayCastInput input;
-	input.maxFraction = 1.0f;
-	input.p1 = point1;
-	input.p2 = point2;
-	m_contactManager.m_broadPhase.RayCast(&wrapper, input);
-}
-
-int32 s2World::GetProxyCount() const
-{
-	return m_contactManager.m_broadPhase.GetProxyCount();
-}
-
-int32 s2World::GetTreeHeight() const
-{
-	return m_contactManager.m_broadPhase.GetTreeHeight();
-}
-
-int32 s2World::GetTreeBalance() const
-{
-	return m_contactManager.m_broadPhase.GetTreeBalance();
-}
-
-float s2World::GetTreeQuality() const
-{
-	return m_contactManager.m_broadPhase.GetTreeQuality();
-}
-
-void s2World::ShiftOrigin(const s2Vec2& newOrigin)
-{
-	S2_ASSERT(m_locked == false);
-	if (m_locked)
-	{
-		return;
-	}
-
-	for (s2Body* b = m_bodyList; b; b = b->m_next)
-	{
-		b->m_xf.p -= newOrigin;
-		b->m_sweep.c0 -= newOrigin;
-		b->m_sweep.c -= newOrigin;
-	}
-
-	for (s2Joint* j = m_jointList; j; j = j->m_next)
-	{
-		j->ShiftOrigin(newOrigin);
-	}
-
-	m_contactManager.m_broadPhase.ShiftOrigin(newOrigin);
-}
-
-void s2World::Dump()
-{
-	if (m_locked)
-	{
-		return;
-	}
-
-	s2OpenDump("box2d_dump.inl");
-
-	s2Dump("s2Vec2 g(%.9g, %.9g);\n", m_gravity.x, m_gravity.y);
-	s2Dump("m_world->SetGravity(g);\n");
-
-	s2Dump("s2Body** bodies = (s2Body**)s2Alloc(%d * sizeof(s2Body*));\n", m_bodyCount);
-	s2Dump("s2Joint** joints = (s2Joint**)s2Alloc(%d * sizeof(s2Joint*));\n", m_jointCount);
-
-	int32 i = 0;
-	for (s2Body* b = m_bodyList; b; b = b->m_next)
-	{
-		b->m_islandIndex = i;
-		b->Dump();
-		++i;
-	}
-
-	i = 0;
-	for (s2Joint* j = m_jointList; j; j = j->m_next)
-	{
-		j->m_index = i;
-		++i;
-	}
-
-	// First pass on joints, skip gear joints.
-	for (s2Joint* j = m_jointList; j; j = j->m_next)
-	{
-		if (j->m_type == e_gearJoint)
-		{
-			continue;
-		}
-
-		s2Dump("{\n");
-		j->Dump();
-		s2Dump("}\n");
-	}
-
-	// Second pass on joints, only gear joints.
-	for (s2Joint* j = m_jointList; j; j = j->m_next)
-	{
-		if (j->m_type != e_gearJoint)
-		{
-			continue;
-		}
-
-		s2Dump("{\n");
-		j->Dump();
-		s2Dump("}\n");
-	}
-
-	s2Dump("s2Free(joints);\n");
-	s2Dump("s2Free(bodies);\n");
-	s2Dump("joints = nullptr;\n");
-	s2Dump("bodies = nullptr;\n");
-
-	s2CloseDump();
-}
-#endif
 
 typedef struct WorldQueryContext
 {

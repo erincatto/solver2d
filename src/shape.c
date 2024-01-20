@@ -118,7 +118,7 @@ bool s2Shape_TestPoint(s2ShapeId shapeId, s2Vec2 point)
 	s2Body* body = world->bodies + shape->bodyIndex;
 	S2_ASSERT(s2ObjectValid(&body->object));
 
-	s2Vec2 localPoint = s2InvTransformPoint(body->transform, point);
+	s2Vec2 localPoint = s2InvTransformPoint(S2_TRANSFORM(body), point);
 
 	switch (shape->type)
 	{

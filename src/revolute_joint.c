@@ -47,11 +47,11 @@ void s2PrepareRevolute(s2Joint* base, s2StepContext* context)
 	joint->invMassB = bodyB->invMass;
 	joint->invIB = bodyB->invI;
 
-	s2Rot qA = s2MakeRot(bodyA->angle);
+	s2Rot qA = bodyA->rot;
 	s2Vec2 vA = bodyA->linearVelocity;
 	float wA = bodyA->angularVelocity;
 
-	s2Rot qB = s2MakeRot(bodyB->angle);
+	s2Rot qB = bodyB->rot;
 	s2Vec2 vB = bodyB->linearVelocity;
 	float wB = bodyB->angularVelocity;
 
@@ -118,11 +118,11 @@ void s2WarmStartRevolute(s2Joint* base, s2StepContext* context)
 
 	s2RevoluteJoint* joint = &base->revoluteJoint;
 
-	s2Rot qA = s2MakeRot(bodyA->angle);
+	s2Rot qA = bodyA->rot;
 	s2Vec2 vA = bodyA->linearVelocity;
 	float wA = bodyA->angularVelocity;
 
-	s2Rot qB = s2MakeRot(bodyB->angle);
+	s2Rot qB = bodyB->rot;
 	s2Vec2 vB = bodyB->linearVelocity;
 	float wB = bodyB->angularVelocity;
 
@@ -156,8 +156,8 @@ void s2SolveRevolute(s2Joint* base, s2StepContext* context, float h)
 	s2Body* bodyA = context->bodies + base->edges[0].bodyIndex;
 	s2Body* bodyB = context->bodies + base->edges[1].bodyIndex;
 
-	s2Rot qA = s2MakeRot(bodyA->angle);
-	s2Rot qB = s2MakeRot(bodyB->angle);
+	s2Rot qA = bodyA->rot;
+	s2Rot qB = bodyB->rot;
 
 	s2Vec2 vA = bodyA->linearVelocity;
 	float wA = bodyA->angularVelocity;
@@ -185,7 +185,7 @@ void s2SolveRevolute(s2Joint* base, s2StepContext* context, float h)
 
 	if (joint->enableLimit && fixedRotation == false)
 	{
-		float angle = bodyB->angle - bodyA->angle - joint->referenceAngle;
+		float angle = s2RelativeAngle(qB, qA) - joint->referenceAngle;
 
 		// Lower limit
 		{
@@ -250,18 +250,16 @@ void s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
 	s2Body* bodyB = context->bodies + base->edges[1].bodyIndex;
 
 	s2Vec2 cA = bodyA->position;
-	float aA = bodyA->angle;
+	s2Rot qA = bodyA->rot;
 	s2Vec2 cB = bodyB->position;
-	float aB = bodyB->angle;
-
-	s2Rot qA = s2MakeRot(aA), qB = s2MakeRot(aB);
+	s2Rot qB = bodyB->rot;
 
 	bool fixedRotation = (joint->invIA + joint->invIB == 0.0f);
 
 	// Solve angular limit constraint
 	if (joint->enableLimit && fixedRotation == false)
 	{
-		float angle = aB - aA - joint->referenceAngle;
+		float angle = s2RelativeAngle(qB, qA) - joint->referenceAngle;
 		float C = 0.0f;
 
 		if (S2_ABS(joint->upperAngle - joint->lowerAngle) < 2.0f * s2_angularSlop)
@@ -281,14 +279,12 @@ void s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
 		}
 
 		float limitImpulse = -joint->axialMass * C;
-		aA -= joint->invIA * limitImpulse;
-		aB += joint->invIB * limitImpulse;
+		qA = s2IntegrateRot(qA, -joint->invIA * limitImpulse);
+		qB = s2IntegrateRot(qB, joint->invIB * limitImpulse);
 	}
 
 	// Solve point-to-point constraint.
 	{
-		qA = s2MakeRot(aA);
-		qB = s2MakeRot(aB);
 		s2Vec2 rA = s2RotateVector(qA, s2Sub(base->localAnchorA, joint->localCenterA));
 		s2Vec2 rB = s2RotateVector(qB, s2Sub(base->localAnchorB, joint->localCenterB));
 
@@ -306,16 +302,16 @@ void s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
 		s2Vec2 impulse = s2Solve22(K, s2Neg(C));
 
 		cA = s2MulSub(cA, mA, impulse);
-		aA -= iA * s2Cross(rA, impulse);
+		qA = s2IntegrateRot(qA, -iA * s2Cross(rA, impulse));
 
 		cB = s2MulAdd(cB, mB, impulse);
-		aB += iB * s2Cross(rB, impulse);
+		qB = s2IntegrateRot(qB, iB * s2Cross(rB, impulse));
 	}
 
 	bodyA->position = cA;
-	bodyA->angle = aA;
+	bodyA->rot = qA;
 	bodyB->position = cB;
-	bodyB->angle = aB;
+	bodyB->rot = qB;
 }
 
 void s2PrepareRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float hertz, bool warmStart)
@@ -341,8 +337,8 @@ void s2PrepareRevolute_Soft(s2Joint* base, s2StepContext* context, float h, floa
 	joint->invMassB = bodyB->invMass;
 	joint->invIB = bodyB->invI;
 
-	s2Rot qA = s2MakeRot(bodyA->angle);
-	s2Rot qB = s2MakeRot(bodyB->angle);
+	s2Rot qA = bodyA->rot;
+	s2Rot qB = bodyB->rot;
 
 	s2Vec2 rA = s2RotateVector(qA, s2Sub(base->localAnchorA, joint->localCenterA));
 	s2Vec2 rB = s2RotateVector(qB, s2Sub(base->localAnchorB, joint->localCenterB));
@@ -400,7 +396,7 @@ void s2PrepareRevolute_Soft(s2Joint* base, s2StepContext* context, float h, floa
 	}
 }
 
-void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float inv_h, bool useBias)
+void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float inv_h, bool useBias)
 {
 	S2_ASSERT(base->type == s2_revoluteJoint);
 
@@ -425,7 +421,7 @@ void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float inv_h, bo
 		float Cdot = wB - wA - joint->motorSpeed;
 		float impulse = -joint->axialMass * Cdot;
 		float oldImpulse = joint->motorImpulse;
-		float maxImpulse = context->dt * joint->maxMotorTorque;
+		float maxImpulse = h * joint->maxMotorTorque;
 		joint->motorImpulse = S2_CLAMP(joint->motorImpulse + impulse, -maxImpulse, maxImpulse);
 		impulse = joint->motorImpulse - oldImpulse;
 
@@ -435,14 +431,7 @@ void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float inv_h, bo
 
 	if (joint->enableLimit && fixedRotation == false)
 	{
-		float jointAngle = bodyB->angle - bodyA->angle - joint->referenceAngle;
-
-		//float C = angle - joint->lowerAngle;
-		//float Cdot = wB - wA;
-		//float impulse = -joint->axialMass * (Cdot + S2_MAX(C, 0.0f) / h);
-		//float oldImpulse = joint->lowerImpulse;
-		//joint->lowerImpulse = S2_MAX(joint->lowerImpulse + impulse, 0.0f);
-		//impulse = joint->lowerImpulse - oldImpulse;
+		float jointAngle = s2RelativeAngle(bodyB->rot, bodyA->rot) - joint->referenceAngle;
 
 		// Lower limit
 		{
@@ -518,8 +507,8 @@ void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float inv_h, bo
 	{
 		// Update anchors for TGS solvers.
 		// Anchors are wastfully recomputed for PGS solvers or relax stages.
-		s2Rot qA = s2MakeRot(bodyA->angle);
-		s2Rot qB = s2MakeRot(bodyB->angle);
+		s2Rot qA = bodyA->rot;
+		s2Rot qB = bodyB->rot;
 
 		s2Vec2 rA = s2RotateVector(qA, s2Sub(base->localAnchorA, joint->localCenterA));
 		s2Vec2 rB = s2RotateVector(qB, s2Sub(base->localAnchorB, joint->localCenterB));
@@ -612,11 +601,9 @@ void s2SolveRevolute_XPBD(s2Joint* base, s2StepContext* context, float inv_h)
 	s2Body* bodyB = context->bodies + base->edges[1].bodyIndex;
 
 	s2Vec2 cA = bodyA->position;
-	float aA = bodyA->angle;
+	s2Rot qA = bodyA->rot;
 	s2Vec2 cB = bodyB->position;
-	float aB = bodyB->angle;
-
-	s2Rot qA = s2MakeRot(aA), qB = s2MakeRot(aB);
+	s2Rot qB = bodyB->rot;
 
 	// Solve point-to-point constraint.
 	{
@@ -653,16 +640,16 @@ void s2SolveRevolute_XPBD(s2Joint* base, s2StepContext* context, float inv_h)
 		s2Vec2 p = s2MulSV(lambda, n);
 
 		cA = s2MulSub(cA, mA, p);
-		aA -= iA * s2Cross(rA, p);
+		qA = s2IntegrateRot(qA, -iA * s2Cross(rA, p));
 
 		cB = s2MulAdd(cB, mB, p);
-		aB += iB * s2Cross(rB, p);
+		qB = s2IntegrateRot(qB, iB * s2Cross(rB, p));
 	}
 
 	bodyA->position = cA;
-	bodyA->angle = aA;
+	bodyA->rot = qA;
 	bodyB->position = cB;
-	bodyB->angle = aB;
+	bodyB->rot = qB;
 }
 
 void s2RevoluteJoint_EnableLimit(s2JointId jointId, bool enableLimit)
@@ -746,8 +733,8 @@ void s2DrawRevolute(s2DebugDraw* draw, s2Joint* base, s2Body* bodyA, s2Body* bod
 
 	s2RevoluteJoint* joint = &base->revoluteJoint;
 
-	s2Transform xfA = bodyA->transform;
-	s2Transform xfB = bodyB->transform;
+	s2Transform xfA = S2_TRANSFORM(bodyA);
+	s2Transform xfB = S2_TRANSFORM(bodyB);
 	s2Vec2 pA = s2TransformPoint(xfA, base->localAnchorA);
 	s2Vec2 pB = s2TransformPoint(xfB, base->localAnchorB);
 
@@ -760,20 +747,19 @@ void s2DrawRevolute(s2DebugDraw* draw, s2Joint* base, s2Body* bodyA, s2Body* bod
 	draw->DrawPoint(pA, 5.0f, c4, draw->context);
 	draw->DrawPoint(pB, 5.0f, c5, draw->context);
 
-	float aA = bodyA->angle;
-	float aB = bodyB->angle;
-	float angle = aB - aA - joint->referenceAngle;
+	s2Rot qA = bodyA->rot;
+	s2Rot qB = bodyB->rot;
 
 	const float L = base->drawSize;
 
-	s2Vec2 r = {L * cosf(angle), L * sinf(angle)};
+	s2Vec2 r = s2RotateVector(qB, (s2Vec2){L * cosf(joint->referenceAngle), L * sinf(joint->referenceAngle)});
 	draw->DrawSegment(pB, s2Add(pB, r), c1, draw->context);
 	draw->DrawCircle(pB, L, c1, draw->context);
 
 	if (joint->enableLimit)
 	{
-		s2Vec2 rlo = {L * cosf(joint->lowerAngle), L * sinf(joint->lowerAngle)};
-		s2Vec2 rhi = {L * cosf(joint->upperAngle), L * sinf(joint->upperAngle)};
+		s2Vec2 rlo = s2RotateVector(qA, (s2Vec2){L * cosf(joint->lowerAngle), L * sinf(joint->lowerAngle)});
+		s2Vec2 rhi = s2RotateVector(qA, (s2Vec2){L * cosf(joint->upperAngle), L * sinf(joint->upperAngle)});
 
 		draw->DrawSegment(pB, s2Add(pB, rlo), c2, draw->context);
 		draw->DrawSegment(pB, s2Add(pB, rhi), c3, draw->context);

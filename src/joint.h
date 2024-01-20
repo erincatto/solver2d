@@ -103,7 +103,7 @@ void s2PrepareJoint(s2Joint* joint, s2StepContext* context);
 void s2SolveJoint(s2Joint* joint, s2StepContext* context, float h);
 
 void s2PrepareJoint_Soft(s2Joint* joint, s2StepContext* context, float h, float hertz, bool warmStart);
-void s2SolveJoint_Soft(s2Joint* joint, s2StepContext* context, float inv_h, bool useBias);
+void s2SolveJoint_Soft(s2Joint* joint, s2StepContext* context, float h, float inv_h, bool useBias);
 
 void s2PrepareJoint_XPBD(s2Joint* joint, s2StepContext* context);
 void s2SolveJoint_XPBD(s2Joint* joint, s2StepContext* context, float inv_h);

@@ -44,11 +44,9 @@ void s2PrepareMouse(s2Joint* base, s2StepContext* context)
 	joint->invIB = bodyB->invI;
 
 	s2Vec2 cB = bodyB->position;
-	float aB = bodyB->angle;
+	s2Rot qB = bodyB->rot;
 	s2Vec2 vB = bodyB->linearVelocity;
 	float wB = bodyB->angularVelocity;
-
-	s2Rot qB = s2MakeRot(aB);
 
 	float d = joint->damping;
 	float k = joint->stiffness;
@@ -157,11 +155,9 @@ void s2PrepareMouse_Soft(s2Joint* base, s2StepContext* context)
 	joint->invIB = bodyB->invI;
 
 	s2Vec2 cB = bodyB->position;
-	float aB = bodyB->angle;
+	s2Rot qB = bodyB->rot;
 	s2Vec2 vB = bodyB->linearVelocity;
 	float wB = bodyB->angularVelocity;
-
-	s2Rot qB = s2MakeRot(aB);
 
 	float d = joint->damping;
 	float k = joint->stiffness;
@@ -251,11 +247,9 @@ void s2PrepareMouse_XPBD(s2Joint* base, s2StepContext* context)
 	joint->invIB = bodyB->invI;
 
 	s2Vec2 cB = bodyB->position;
-	float aB = bodyB->angle;
+	s2Rot qB = bodyB->rot;
 	s2Vec2 vB = bodyB->linearVelocity;
 	float wB = bodyB->angularVelocity;
-
-	s2Rot qB = s2MakeRot(aB);
 
 	float d = joint->damping;
 	float k = joint->stiffness;

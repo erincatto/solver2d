@@ -35,7 +35,7 @@ typedef struct s2Vec2
 
 typedef struct s2Rot
 {
-	/// Sine and cosine
+	// sine and cosine
 	float s, c;
 } s2Rot;
 

@@ -43,8 +43,8 @@ static void s2SolveContacts_TGS_Soft(s2World* world, s2ContactConstraint* constr
 
 		s2Vec2 cA = bodyA->position;
 		s2Vec2 cB = bodyB->position;
-		s2Rot qA = s2MakeRot(bodyA->angle);
-		s2Rot qB = s2MakeRot(bodyB->angle);
+		s2Rot qA = bodyA->rot;
+		s2Rot qB = bodyB->rot;
 
 		s2Vec2 normal = constraint->normal;
 		s2Vec2 tangent = s2RightPerp(normal);
@@ -224,7 +224,7 @@ void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
 				continue;
 			}
 
-			s2SolveJoint_Soft(joint, context, inv_h, useBias);
+			s2SolveJoint_Soft(joint, context, h, inv_h, useBias);
 		}
 
 		s2SolveContacts_TGS_Soft(world, constraints, constraintCount, inv_h, useBias);
@@ -243,7 +243,7 @@ void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
 				continue;
 			}
 
-			s2SolveJoint_Soft(joint, context, inv_h, useBias);
+			s2SolveJoint_Soft(joint, context, h, inv_h, useBias);
 		}
 		
 		s2SolveContacts_TGS_Soft(world, constraints, constraintCount, inv_h, useBias);
