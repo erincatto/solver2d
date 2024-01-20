@@ -90,7 +90,7 @@ static inline s2Vec2 s2Sub(s2Vec2 a, s2Vec2 b)
 /// Vector subtraction
 static inline s2Vec2 s2Neg(s2Vec2 a)
 {
-return S2_LITERAL(s2Vec2){-a.x, -a.y};
+	return S2_LITERAL(s2Vec2){-a.x, -a.y};
 }
 
 /// Vector linear interpolation
@@ -188,27 +188,26 @@ static inline float s2DistanceSquared(s2Vec2 a, s2Vec2 b)
 /// Set using an angle in radians.
 static inline s2Rot s2MakeRot(float angle)
 {
-	s2Rot q = {cosf(angle), sinf(angle)};
+	s2Rot q = {sinf(angle), cosf(angle)};
 	return q;
 }
 
 static inline s2Rot s2NormalizeRot(s2Rot q)
 {
-	float mag = sqrtf(q.c * q.c + q.s * q.s);
+	float mag = sqrtf(q.s * q.s + q.c * q.c);
 	float invMag = mag > 0.0 ? 1.0f / mag : 0.0f;
-	s2Rot qn = {q.c * invMag, q.s * invMag};
+	s2Rot qn = {q.s * invMag, q.c * invMag};
 	return qn;
 }
 
 static inline s2Rot s2IntegrateRot(s2Rot q1, float omegah)
 {
-	// dc/dt = -omega * sin(t)
 	// ds/dt = omega * cos(t)
-	// c2 = c1 - omega * h * s1
+	// dc/dt = -omega * sin(t)
 	// s2 = s1 + omega * h * c1
-	s2Rot q2 = {q1.c - omegah * q1.s, q1.s + omegah * q1.c};
+	// c2 = c1 - omega * h * s1
+	s2Rot q2 = {q1.s + omegah * q1.c, q1.c - omegah * q1.s};
 	return s2NormalizeRot(q2);
-
 
 	// quaternion multiplication
 	// q1 * q2 = {cross(q1.v, q2.v) + q2.v * q1.s + q1.v * q2.s, q1.s * q2.s - dot(q1.v, q2.v)}
@@ -271,41 +270,44 @@ static inline s2Vec2 s2Rot_GetYAxis(s2Rot q)
 	return v;
 }
 
-/// Multiply two rotations: q * r
+/// Multiply two rotations: b * a
 /// equivalent to angle addition via trig identity:
-///	sin(q + r) = sin(q) * cos(r) + cos(q) * sin(r)
-///	cos(q + r) = cos(q) * cos(r) - sin(q) * sin(r)
-static inline s2Rot s2MulRot(s2Rot q, s2Rot r)
+///	sin(b + a) = sin(b) * cos(a) + cos(b) * sin(a)
+///	cos(b + a) = cos(b) * cos(a) - sin(b) * sin(a)
+static inline s2Rot s2MulRot(s2Rot b, s2Rot a)
 {
-	// [qc -qs] * [rc -rs] = [qc*rc-qs*rs -qc*rs-qs*rc]
-	// [qs  qc]   [rs  rc]   [qs*rc+qc*rs -qs*rs+qc*rc]
-	// s = qs * rc + qc * rs
-	// c = qc * rc - qs * rs
-	s2Rot qr;
-	qr.s = q.s * r.c + q.c * r.s;
-	qr.c = q.c * r.c - q.s * r.s;
-	return qr;
+	// [bc -bs] * [ac -as] = [bc*ac-bs*as -bc*as-bs*ac]
+	// [bs  bc]   [as  ac]   [bs*ac+bc*as -bs*as+bc*ac]
+	// s = bs * ac + bc * as
+	// c = bc * ac - bs * as
+	s2Rot ba;
+	ba.s = b.s * a.c + b.c * a.s;
+	ba.c = b.c * a.c - b.s * a.s;
+	return ba;
 }
 
-/// Transpose multiply two rotations: qT * r
+/// Transpose multiply two rotations: inv(b) * a
 /// equivalent to angle subtraction via trig identity:
-///	sin(q - r) = sin(q) * cos(r) - cos(q) * sin(r)
-///	cos(q - r) = cos(q) * cos(r) + sin(q) * sin(r)
-static inline s2Rot s2InvMulRot(s2Rot q, s2Rot r)
+///	sin(a - b) = sin(b) * cos(a) - cos(b) * sin(a)
+///	cos(a - b) = cos(b) * cos(a) + sin(b) * sin(a)
+static inline s2Rot s2InvMulRot(s2Rot b, s2Rot a)
 {
-	// [ qc qs] * [rc -rs] = [qc*rc+qs*rs -qc*rs+qs*rc]
-	// [-qs qc]   [rs  rc]   [-qs*rc+qc*rs qs*rs+qc*rc]
-	// s = qc * rs - qs * rc
-	// c = qc * rc + qs * rs
-	s2Rot qr;
-	qr.s = q.c * r.s - q.s * r.c;
-	qr.c = q.c * r.c + q.s * r.s;
-	return qr;
+	// [ bc bs] * [ac -as] = [ bc*ac+bs*as -bc*as+bs*ac]
+	// [-bs bc]   [as  ac]   [-bs*ac+bc*as  bs*as+bc*ac]
+	// s = bc * as - bs * ac
+	// c = bc * ac + bs * as
+	s2Rot bTa;
+	bTa.s = b.c * a.s - b.s * a.c;
+	bTa.c = b.c * a.c + b.s * a.s;
+	return bTa;
 }
 
+// relative angle between b and a (rot_b * inv(rot_a))
 static inline float s2RelativeAngle(s2Rot b, s2Rot a)
 {
-	float s = b.c * a.s - b.s * a.c;
+	// sin(b - a) = bs * ac - bc * as
+	// cos(b - a) = bc * ac + bs * as
+	float s = b.s * a.c - b.c * a.s;
 	float c = b.c * a.c + b.s * a.s;
 	return atan2f(s, c);
 }

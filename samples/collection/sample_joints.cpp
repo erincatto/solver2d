@@ -321,7 +321,7 @@ public:
 			return;
 		}
 
-		s2Vec2 center = {m_side, 28.5f};
+		s2Vec2 center = {m_side, 28.0f};
 
 		Human* human = m_humans + index;
 		human->Spawn(m_worldId, center, 1.5f, index + 1, human);

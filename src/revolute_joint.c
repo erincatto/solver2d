@@ -396,7 +396,7 @@ void s2PrepareRevolute_Soft(s2Joint* base, s2StepContext* context, float h, floa
 	}
 }
 
-void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float inv_h, bool useBias)
+void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float inv_h, bool useBias)
 {
 	S2_ASSERT(base->type == s2_revoluteJoint);
 
@@ -421,7 +421,7 @@ void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float inv_h, bo
 		float Cdot = wB - wA - joint->motorSpeed;
 		float impulse = -joint->axialMass * Cdot;
 		float oldImpulse = joint->motorImpulse;
-		float maxImpulse = context->dt * joint->maxMotorTorque;
+		float maxImpulse = h * joint->maxMotorTorque;
 		joint->motorImpulse = S2_CLAMP(joint->motorImpulse + impulse, -maxImpulse, maxImpulse);
 		impulse = joint->motorImpulse - oldImpulse;
 
@@ -432,13 +432,6 @@ void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float inv_h, bo
 	if (joint->enableLimit && fixedRotation == false)
 	{
 		float jointAngle = s2RelativeAngle(bodyB->rot, bodyA->rot) - joint->referenceAngle;
-
-		//float C = angle - joint->lowerAngle;
-		//float Cdot = wB - wA;
-		//float impulse = -joint->axialMass * (Cdot + S2_MAX(C, 0.0f) / h);
-		//float oldImpulse = joint->lowerImpulse;
-		//joint->lowerImpulse = S2_MAX(joint->lowerImpulse + impulse, 0.0f);
-		//impulse = joint->lowerImpulse - oldImpulse;
 
 		// Lower limit
 		{
@@ -756,18 +749,17 @@ void s2DrawRevolute(s2DebugDraw* draw, s2Joint* base, s2Body* bodyA, s2Body* bod
 
 	s2Rot qA = bodyA->rot;
 	s2Rot qB = bodyB->rot;
-	float angle = s2RelativeAngle(qB, qA) - joint->referenceAngle;
 
 	const float L = base->drawSize;
 
-	s2Vec2 r = {L * cosf(angle), L * sinf(angle)};
+	s2Vec2 r = s2RotateVector(qB, (s2Vec2){L * cosf(joint->referenceAngle), L * sinf(joint->referenceAngle)});
 	draw->DrawSegment(pB, s2Add(pB, r), c1, draw->context);
 	draw->DrawCircle(pB, L, c1, draw->context);
 
 	if (joint->enableLimit)
 	{
-		s2Vec2 rlo = {L * cosf(joint->lowerAngle), L * sinf(joint->lowerAngle)};
-		s2Vec2 rhi = {L * cosf(joint->upperAngle), L * sinf(joint->upperAngle)};
+		s2Vec2 rlo = s2RotateVector(qA, (s2Vec2){L * cosf(joint->lowerAngle), L * sinf(joint->lowerAngle)});
+		s2Vec2 rhi = s2RotateVector(qA, (s2Vec2){L * cosf(joint->upperAngle), L * sinf(joint->upperAngle)});
 
 		draw->DrawSegment(pB, s2Add(pB, rlo), c2, draw->context);
 		draw->DrawSegment(pB, s2Add(pB, rhi), c3, draw->context);

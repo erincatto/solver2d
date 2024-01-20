@@ -239,8 +239,16 @@ static s2ContactSolver s2CreateContactSolver(s2World* world, s2StepContext* cont
 			const s2ManifoldPoint* cp = manifold->points + j;
 			s2VelocityConstraintPoint* vcp = vc->points + j;
 
-			vcp->normalImpulse = cp->normalImpulse;
-			vcp->tangentImpulse = cp->tangentImpulse;
+			if (context->warmStart)
+			{
+				vcp->normalImpulse = cp->normalImpulse;
+				vcp->tangentImpulse = cp->tangentImpulse;
+			}
+			else
+			{
+				vcp->normalImpulse = 0.0f;
+				vcp->tangentImpulse = 0.0f;
+			}
 
 			vcp->rA = s2Sub(cp->point, cA);
 			vcp->rB = s2Sub(cp->point, cB);
@@ -939,6 +947,11 @@ void s2Solve_PGS_NGS_Block(s2World* world, s2StepContext* context)
 			continue;
 		}
 		s2PrepareJoint(joint, context);
+
+		if (context->warmStart)
+		{
+			s2WarmStartJoint(joint, context);
+		}
 	}
 
 	// Solve velocity constraints

@@ -85,6 +85,7 @@ void Human::Spawn(s2WorldId worldId, s2Vec2 position, float scale, int groupInde
 		bone->jointId = s2CreateRevoluteJoint(worldId, &jointDef);
 	}
 
+	#if 1
 	// head
 	{
 		Bone* bone = m_bones + Bone::e_head;
@@ -116,7 +117,6 @@ void Human::Spawn(s2WorldId worldId, s2Vec2 position, float scale, int groupInde
 		bone->jointId = s2CreateRevoluteJoint(worldId, &jointDef);
 	}
 
-	#if 1
 	// upper left leg
 	{
 		Bone* bone = m_bones + Bone::e_upperLeftLeg;
