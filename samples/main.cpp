@@ -399,6 +399,11 @@ static void UpdateUI(s2Color* solverColors)
 			ImGui::Checkbox("TGS NGS", &s_settings.enablesSolvers[s2_solverTGS_NGS]);
 			ImGui::PopStyleColor();
 
+			c = solverColors[s2_solverPGS];
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{c.r, c.g, c.b, c.a});
+			ImGui::Checkbox("PGS", &s_settings.enablesSolvers[s2_solverPGS]);
+			ImGui::PopStyleColor();
+
 			ImGui::Separator();
 
 			ImGui::Checkbox("Shapes", &s_settings.drawShapes);
@@ -602,13 +607,10 @@ int main(int, char**)
 
 	float colorAlpha = 1.0f;
 	s2Color solverColors[s2_solverTypeCount] = {
-		s2MakeColor(s2_colorBlueViolet, colorAlpha),
-		s2MakeColor(s2_colorDodgerBlue, colorAlpha),
-		s2MakeColor(s2_colorCoral, colorAlpha),
-		s2MakeColor(s2_colorSpringGreen, colorAlpha),
-		s2MakeColor(s2_colorYellow2, colorAlpha),
-		s2MakeColor(s2_colorLavenderBlush, colorAlpha),
-		s2MakeColor(s2_colorOrchid, colorAlpha),
+		s2MakeColor(s2_colorBlueViolet, colorAlpha), s2MakeColor(s2_colorDodgerBlue, colorAlpha),
+		s2MakeColor(s2_colorCoral, colorAlpha),		 s2MakeColor(s2_colorSpringGreen, colorAlpha),
+		s2MakeColor(s2_colorYellow2, colorAlpha),	 s2MakeColor(s2_colorLavenderBlush, colorAlpha),
+		s2MakeColor(s2_colorOrchid, colorAlpha),	 s2MakeColor(s2_colorThistle, colorAlpha),
 	};
 
 	static_assert(S2_ARRAY_COUNT(solverColors) == s2_solverTypeCount);
@@ -732,7 +734,7 @@ int main(int, char**)
 
 		UpdateUI(solverColors);
 
-		//ImGui::ShowDemoWindow();
+		// ImGui::ShowDemoWindow();
 
 		// if (g_draw.m_showUI)
 		{

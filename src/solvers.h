@@ -54,6 +54,7 @@ typedef struct s2ContactConstraint
 // common
 void s2IntegrateVelocities(s2World* world, float h);
 void s2IntegratePositions(s2World* world, float h);
+void s2PrepareContacts_PGS(s2World* world, s2ContactConstraint* constraints, int constraintCount);
 void s2PrepareContacts_Soft(s2World* world, s2ContactConstraint* constraints, int constraintCount, s2StepContext* context,
 							float h, float hertz);
 void s2WarmStartContacts(s2World* world, s2ContactConstraint* constraints, int constraintCount);
@@ -68,3 +69,4 @@ void s2Solve_XPBD(s2World* world, s2StepContext* stepContext);
 void s2Solve_TGS_Soft(s2World* world, s2StepContext* stepContext);
 void s2Solve_TGS_Sticky(s2World* world, s2StepContext* stepContext);
 void s2Solve_TGS_NGS(s2World* world, s2StepContext* stepContext);
+void s2Solve_PGS(s2World* world, s2StepContext* stepContext);

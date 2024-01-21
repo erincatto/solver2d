@@ -405,6 +405,25 @@ void s2SolveJoint_Soft(s2Joint* joint, s2StepContext* context, float h, float in
 	}
 }
 
+extern void s2SolveRevolute_Baumgarte(s2Joint* base, s2StepContext* context, float inv_h);
+
+void s2SolveJoint_Baumgarte(s2Joint* joint, s2StepContext* context, float inv_h)
+{
+	switch (joint->type)
+	{
+		case s2_mouseJoint:
+			s2SolveMouse(joint, context);
+			break;
+
+		case s2_revoluteJoint:
+			s2SolveRevolute_Baumgarte(joint, context, inv_h);
+			break;
+
+		default:
+			S2_ASSERT(false);
+	}
+}
+
 extern void s2PrepareMouse_XPBD(s2Joint* base, s2StepContext* context);
 extern void s2PrepareRevolute_XPBD(s2Joint* base, s2StepContext* context);
 

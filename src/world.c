@@ -214,6 +214,10 @@ void s2World_Step(s2WorldId worldId, float timeStep, int velIters, int posIters,
 				s2Solve_TGS_NGS(world, &context);
 				break;
 
+			case s2_solverPGS:
+				s2Solve_PGS(world, &context);
+				break;
+
 			default:
 				break;
 		}
