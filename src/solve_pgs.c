@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 #include "allocate.h"
-#include "array.h"
 #include "body.h"
 #include "contact.h"
 #include "core.h"
@@ -11,12 +10,11 @@
 #include "stack_allocator.h"
 #include "world.h"
 
-#include "solver2d/aabb.h"
-
 #include <stdbool.h>
-#include <stdlib.h>
 
-static void s2SolveContacts_PGS(s2World* world, s2ContactConstraint* constraints, int constraintCount, float inv_dt)
+// Baumgarte, J.: Stabilization of constraints and integrals of motion in dynamical systems. Comp. Meth. in Appl.
+// Mech. and Eng. 1 (1972), 1–16.
+static void s2SolveContacts_PGS_Baumgarte(s2World* world, s2ContactConstraint* constraints, int constraintCount, float inv_h)
 {
 	s2Body* bodies = world->bodies;
 
@@ -39,12 +37,23 @@ static void s2SolveContacts_PGS(s2World* world, s2ContactConstraint* constraints
 		float wB = bodyB->angularVelocity;
 
 		s2Vec2 normal = constraint->normal;
-		s2Vec2 tangent = s2CrossVS(normal, 1.0f);
+		s2Vec2 tangent = s2RightPerp(normal);
 		float friction = constraint->friction;
 
 		for (int j = 0; j < pointCount; ++j)
 		{
 			s2ContactConstraintPoint* cp = constraint->points + j;
+
+			float bias = 0.0f;
+			if (cp->separation > 0.0f)
+			{
+				// Speculative
+				bias = cp->separation * inv_h;
+			}
+			else
+			{
+				bias = s2_baumgarte * inv_h * S2_MIN(0.0f, cp->separation + s2_linearSlop);
+			}
 
 			// static anchors
 			s2Vec2 rA = cp->rAs;
@@ -56,7 +65,7 @@ static void s2SolveContacts_PGS(s2World* world, s2ContactConstraint* constraints
 			float vn = s2Dot(s2Sub(vrB, vrA), normal);
 
 			// Compute normal impulse
-			float impulse = -cp->normalMass * (vn + cp->biasCoefficient * cp->separation * inv_dt);
+			float impulse = -cp->normalMass * (vn + bias);
 
 			// Clamp the accumulated impulse
 			float newImpulse = S2_MAX(cp->normalImpulse + impulse, 0.0f);
@@ -83,9 +92,10 @@ static void s2SolveContacts_PGS(s2World* world, s2ContactConstraint* constraints
 			// Relative velocity at contact
 			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rB));
 			s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, rA));
-			float vt = s2Dot(s2Sub(vrB, vrA), tangent);
+			s2Vec2 dv = s2Sub(vrB, vrA);
 
 			// Compute tangent force
+			float vt = s2Dot(dv, tangent);
 			float lambda = cp->tangentMass * (-vt);
 
 			// Clamp the accumulated force
@@ -98,10 +108,10 @@ static void s2SolveContacts_PGS(s2World* world, s2ContactConstraint* constraints
 			s2Vec2 P = s2MulSV(lambda, tangent);
 
 			vA = s2MulSub(vA, mA, P);
-			wA -= iA * s2Cross(cp->rAs, P);
+			wA -= iA * s2Cross(rA, P);
 
 			vB = s2MulAdd(vB, mB, P);
-			wB += iB * s2Cross(cp->rBs, P);
+			wB += iB * s2Cross(rB, P);
 		}
 
 		bodyA->linearVelocity = vA;
@@ -111,7 +121,8 @@ static void s2SolveContacts_PGS(s2World* world, s2ContactConstraint* constraints
 	}
 }
 
-void s2Solve_PGS_NGS(s2World* world, s2StepContext* context)
+// This is the solver in box2d_lite
+void s2Solve_PGS(s2World* world, s2StepContext* context)
 {
 	s2Contact* contacts = world->contacts;
 	int contactCapacity = world->contactPool.capacity;
@@ -119,8 +130,9 @@ void s2Solve_PGS_NGS(s2World* world, s2StepContext* context)
 	s2Joint* joints = world->joints;
 	int jointCapacity = world->jointPool.capacity;
 
-	s2ContactConstraint* constraints = s2AllocateStackItem(world->stackAllocator, contactCapacity * sizeof(s2ContactConstraint), "constraint");
-	
+	s2ContactConstraint* constraints =
+		s2AllocateStackItem(world->stackAllocator, contactCapacity * sizeof(s2ContactConstraint), "constraint");
+
 	int constraintCount = 0;
 	for (int i = 0; i < contactCapacity; ++i)
 	{
@@ -140,8 +152,7 @@ void s2Solve_PGS_NGS(s2World* world, s2StepContext* context)
 		constraintCount += 1;
 	}
 
-	int velocityIterations = context->iterations;
-	int positionIterations = context->extraIterations;
+	int iterations = context->iterations;
 	float h = context->dt;
 	float inv_h = context->inv_dt;
 
@@ -161,6 +172,7 @@ void s2Solve_PGS_NGS(s2World* world, s2StepContext* context)
 		{
 			continue;
 		}
+
 		s2PrepareJoint(joint, context);
 
 		if (context->warmStart)
@@ -169,7 +181,7 @@ void s2Solve_PGS_NGS(s2World* world, s2StepContext* context)
 		}
 	}
 
-	for (int iter = 0; iter < velocityIterations; ++iter)
+	for (int iter = 0; iter < iterations; ++iter)
 	{
 		for (int i = 0; i < jointCapacity; ++i)
 		{
@@ -179,31 +191,16 @@ void s2Solve_PGS_NGS(s2World* world, s2StepContext* context)
 				continue;
 			}
 
-			s2SolveJoint(joint, context, h);
+			s2SolveJoint_Baumgarte(joint, context, inv_h);
 		}
 
-		s2SolveContacts_PGS(world, constraints, constraintCount, inv_h);
+		s2SolveContacts_PGS_Baumgarte(world, constraints, constraintCount, inv_h);
 	}
 
+	// Update positions from velocity
 	s2IntegratePositions(world, h);
 
 	s2StoreContactImpulses(constraints, constraintCount);
-
-	for (int iter = 0; iter < positionIterations; ++iter)
-	{
-		for (int i = 0; i < jointCapacity; ++i)
-		{
-			s2Joint* joint = joints + i;
-			if (s2IsFree(&joint->object))
-			{
-				continue;
-			}
-
-			s2SolveJointPosition(joint, context);
-		}
-
-		s2SolveContact_NGS(world, constraints, constraintCount);
-	}
 
 	s2FreeStackItem(world->stackAllocator, constraints);
 }

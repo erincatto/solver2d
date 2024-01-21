@@ -556,6 +556,64 @@ void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float 
 	bodyB->angularVelocity = wB;
 }
 
+// similar to box2d_lite
+void s2SolveRevolute_Baumgarte(s2Joint* base, s2StepContext* context, float inv_h)
+{
+	S2_ASSERT(base->type == s2_revoluteJoint);
+
+	s2RevoluteJoint* joint = &base->revoluteJoint;
+
+	s2Body* bodyA = context->bodies + base->edges[0].bodyIndex;
+	s2Body* bodyB = context->bodies + base->edges[1].bodyIndex;
+
+	s2Vec2 vA = bodyA->linearVelocity;
+	float wA = bodyA->angularVelocity;
+	s2Vec2 vB = bodyB->linearVelocity;
+	float wB = bodyB->angularVelocity;
+
+	float mA = joint->invMassA, mB = joint->invMassB;
+	float iA = joint->invIA, iB = joint->invIB;
+
+	// Solve point-to-point constraint
+	{
+		s2Rot qA = bodyA->rot;
+		s2Rot qB = bodyB->rot;
+		s2Vec2 cA = bodyA->position;
+		s2Vec2 cB = bodyB->position;
+
+		s2Vec2 rA = s2RotateVector(qA, s2Sub(base->localAnchorA, joint->localCenterA));
+		s2Vec2 rB = s2RotateVector(qB, s2Sub(base->localAnchorB, joint->localCenterB));
+
+		s2Mat22 K;
+		K.cx.x = mA + mB + rA.y * rA.y * iA + rB.y * rB.y * iB;
+		K.cy.x = -rA.y * rA.x * iA - rB.y * rB.x * iB;
+		K.cx.y = K.cy.x;
+		K.cy.y = mA + mB + rA.x * rA.x * iA + rB.x * rB.x * iB;
+
+		s2Vec2 Cdot = s2Sub(s2Add(vB, s2CrossSV(wB, rB)), s2Add(vA, s2CrossSV(wA, rA)));
+
+		s2Vec2 separation = s2Add(s2Sub(rB, rA), s2Sub(cB, cA));
+		s2Vec2 bias = s2MulSV(s2_baumgarte * inv_h, separation);
+
+		// s2Vec2 b = s2MulMV(joint->pivotMass, s2Add(Cdot, bias));
+		s2Vec2 b = s2Solve22(K, s2Add(Cdot, bias));
+
+		s2Vec2 impulse = {-b.x, -b.y};
+		joint->impulse.x += impulse.x;
+		joint->impulse.y += impulse.y;
+
+		vA = s2MulSub(vA, mA, impulse);
+		wA -= iA * s2Cross(rA, impulse);
+		vB = s2MulAdd(vB, mB, impulse);
+		wB += iB * s2Cross(rB, impulse);
+	}
+
+	bodyA->linearVelocity = vA;
+	bodyA->angularVelocity = wA;
+	bodyB->linearVelocity = vB;
+	bodyB->angularVelocity = wB;
+}
+
 void s2PrepareRevolute_XPBD(s2Joint* base, s2StepContext* context)
 {
 	S2_ASSERT(base->type == s2_revoluteJoint);
