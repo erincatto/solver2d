@@ -16,7 +16,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-static void s2PrepareContacts_PGS(s2World* world, s2ContactConstraint* constraints, int constraintCount)
+static void s2PrepareContacts_PGS(s2World* world, s2ContactConstraint* constraints, int constraintCount, bool warmStart)
 {
 	s2Body* bodies = world->bodies;
 
@@ -58,8 +58,16 @@ static void s2PrepareContacts_PGS(s2World* world, s2ContactConstraint* constrain
 			const s2ManifoldPoint* mp = manifold->points + j;
 			s2ContactConstraintPoint* cp = constraint->points + j;
 
-			cp->normalImpulse = mp->normalImpulse;
-			cp->tangentImpulse = mp->tangentImpulse;
+			if (warmStart)
+			{
+				cp->normalImpulse = mp->normalImpulse;
+				cp->tangentImpulse = mp->tangentImpulse;
+			}
+			else
+			{
+				cp->normalImpulse = 0.0f;
+				cp->tangentImpulse = 0.0f;
+			}
 
 			s2Vec2 rA = s2Sub(mp->point, cA);
 			s2Vec2 rB = s2Sub(mp->point, cB);
@@ -216,7 +224,7 @@ void s2Solve_PGS_NGS(s2World* world, s2StepContext* context)
 
 	s2IntegrateVelocities(world, h);
 
-	s2PrepareContacts_PGS(world, constraints, constraintCount);
+	s2PrepareContacts_PGS(world, constraints, constraintCount, context->warmStart);
 
 	if (context->warmStart)
 	{
@@ -271,7 +279,7 @@ void s2Solve_PGS_NGS(s2World* world, s2StepContext* context)
 			s2SolveJointPosition(joint, context);
 		}
 
-		s2SolveContact_NGS(world, constraints, constraintCount, 1.0f);
+		s2SolveContact_NGS(world, constraints, constraintCount);
 	}
 
 	s2FreeStackItem(world->stackAllocator, constraints);

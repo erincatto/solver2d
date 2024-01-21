@@ -1,18 +1,19 @@
-// SPDX-FileCopyrightText: 2024 Erin Catto
+// SPDX-FileCopyrightText: 2023 Erin Catto
 // SPDX-License-Identifier: MIT
 
 #include "solver2d/manifold.h"
 
-#include "core.h"
-
 #include "solver2d/distance.h"
 #include "solver2d/geometry.h"
 #include "solver2d/math.h"
+#include "core.h"
 
 #include <float.h>
 #include <string.h>
 
-s2Manifold s2CollideCircles(const s2Circle* circleA, s2Transform xfA, const s2Circle* circleB, s2Transform xfB, float maxDistance)
+#define S2_MAKE_ID(A, B) ((uint8_t)(A) << 8 | (uint8_t)(B))
+
+s2Manifold s2CollideCircles(const s2Circle* circleA, s2Transform xfA, const s2Circle* circleB, s2Transform xfB)
 {
 	s2Manifold manifold = {0};
 
@@ -22,17 +23,17 @@ s2Manifold s2CollideCircles(const s2Circle* circleA, s2Transform xfA, const s2Ci
 	float distance;
 	s2Vec2 normal = s2GetLengthAndNormalize(&distance, s2Sub(pointB, pointA));
 
-	float rA = circleA->radius;
-	float rB = circleB->radius;
+	float radiusA = circleA->radius;
+	float radiusB = circleB->radius;
 
-	float separation = distance - rA - rB;
-	if (separation > maxDistance)
+	float separation = distance - radiusA - radiusB;
+	if (separation > s2_speculativeDistance)
 	{
 		return manifold;
 	}
 
-	s2Vec2 cA = s2MulAdd(pointA, rA, normal);
-	s2Vec2 cB = s2MulAdd(pointB, -rB, normal);
+	s2Vec2 cA = s2MulAdd(pointA, radiusA, normal);
+	s2Vec2 cB = s2MulAdd(pointB, -radiusB, normal);
 	manifold.normal = normal;
 	manifold.points[0].point = s2Lerp(cA, cB, 0.5f);
 	manifold.points[0].separation = separation;
@@ -42,8 +43,7 @@ s2Manifold s2CollideCircles(const s2Circle* circleA, s2Transform xfA, const s2Ci
 }
 
 /// Compute the collision manifold between a capsule and circle
-s2Manifold s2CollideCapsuleAndCircle(const s2Capsule* capsuleA, s2Transform xfA, const s2Circle* circleB, s2Transform xfB,
-									 float maxDistance)
+s2Manifold s2CollideCapsuleAndCircle(const s2Capsule* capsuleA, s2Transform xfA, const s2Circle* circleB, s2Transform xfB)
 {
 	s2Manifold manifold = {0};
 
@@ -82,16 +82,16 @@ s2Manifold s2CollideCapsuleAndCircle(const s2Capsule* capsuleA, s2Transform xfA,
 	float distance;
 	s2Vec2 normal = s2GetLengthAndNormalize(&distance, s2Sub(pB, pA));
 
-	float rA = capsuleA->radius;
-	float rB = circleB->radius;
-	float separation = distance - rA - rB;
-	if (separation > maxDistance)
+	float radiusA = capsuleA->radius;
+	float radiusB = circleB->radius;
+	float separation = distance - radiusA - radiusB;
+	if (separation > s2_speculativeDistance)
 	{
 		return manifold;
 	}
 
-	s2Vec2 cA = s2MulAdd(pA, rA, normal);
-	s2Vec2 cB = s2MulAdd(pB, -rB, normal);
+	s2Vec2 cA = s2MulAdd(pA, radiusA, normal);
+	s2Vec2 cB = s2MulAdd(pB, -radiusB, normal);
 	manifold.normal = s2RotateVector(xfA.q, normal);
 	manifold.points[0].point = s2TransformPoint(xfA, s2Lerp(cA, cB, 0.5f));
 	manifold.points[0].separation = separation;
@@ -100,14 +100,15 @@ s2Manifold s2CollideCapsuleAndCircle(const s2Capsule* capsuleA, s2Transform xfA,
 	return manifold;
 }
 
-s2Manifold s2CollidePolygonAndCircle(const s2Polygon* polygonA, s2Transform xfA, const s2Circle* circleB, s2Transform xfB,
-									 float maxDistance)
+s2Manifold s2CollidePolygonAndCircle(const s2Polygon* polygonA, s2Transform xfA, const s2Circle* circleB, s2Transform xfB)
 {
 	s2Manifold manifold = {0};
 
 	// Compute circle position in the frame of the polygon.
 	s2Vec2 c = s2InvTransformPoint(xfA, s2TransformPoint(xfB, circleB->point));
-	float radius = polygonA->radius + circleB->radius;
+	float radiusA = polygonA->radius;
+	float radiusB = circleB->radius;
+	float radius = radiusA + radiusB;
 
 	// Find the min separating edge.
 	int32_t normalIndex = 0;
@@ -126,7 +127,7 @@ s2Manifold s2CollidePolygonAndCircle(const s2Polygon* polygonA, s2Transform xfA,
 		}
 	}
 
-	if (separation - radius > maxDistance)
+	if (separation > radius + s2_speculativeDistance)
 	{
 		return manifold;
 	}
@@ -145,25 +146,37 @@ s2Manifold s2CollidePolygonAndCircle(const s2Polygon* polygonA, s2Transform xfA,
 	{
 		// Circle center is closest to v1 and safely outside the polygon
 		s2Vec2 normal = s2Normalize(s2Sub(c, v1));
-		manifold.pointCount = 1;
+		separation = s2Dot(s2Sub(c, v1), normal);
+		if (separation > radius + s2_speculativeDistance)
+		{
+			return manifold;
+		}
+
+		s2Vec2 cA = s2MulAdd(v1, radiusA, normal);
+		s2Vec2 cB = s2MulSub(c, radiusB, normal);
 		manifold.normal = s2RotateVector(xfA.q, normal);
-		s2Vec2 cA = v1;
-		s2Vec2 cB = s2MulAdd(c, -radius, normal);
 		manifold.points[0].point = s2TransformPoint(xfA, s2Lerp(cA, cB, 0.5f));
 		manifold.points[0].separation = s2Dot(s2Sub(cB, cA), normal);
 		manifold.points[0].id = 0;
+		manifold.pointCount = 1;
 	}
 	else if (u2 < 0.0f && separation > FLT_EPSILON)
 	{
 		// Circle center is closest to v2 and safely outside the polygon
 		s2Vec2 normal = s2Normalize(s2Sub(c, v2));
-		manifold.pointCount = 1;
+		separation = s2Dot(s2Sub(c, v2), normal);
+		if (separation > radius + s2_speculativeDistance)
+		{
+			return manifold;
+		}
+
+		s2Vec2 cA = s2MulAdd(v2, radiusA, normal);
+		s2Vec2 cB = s2MulSub(c, radiusB, normal);
 		manifold.normal = s2RotateVector(xfA.q, normal);
-		s2Vec2 cA = v2;
-		s2Vec2 cB = s2MulAdd(c, -radius, normal);
 		manifold.points[0].point = s2TransformPoint(xfA, s2Lerp(cA, cB, 0.5f));
 		manifold.points[0].separation = s2Dot(s2Sub(cB, cA), normal);
 		manifold.points[0].id = 0;
+		manifold.pointCount = 1;
 	}
 	else
 	{
@@ -172,10 +185,10 @@ s2Manifold s2CollidePolygonAndCircle(const s2Polygon* polygonA, s2Transform xfA,
 		manifold.normal = s2RotateVector(xfA.q, normal);
 
 		// cA is the projection of the circle center onto to the reference edge
-		s2Vec2 cA = s2MulAdd(c, -s2Dot(s2Sub(c, v1), normal), normal);
+		s2Vec2 cA = s2MulAdd(c, radiusA - s2Dot(s2Sub(c, v1), normal), normal);
 
 		// cB is the deepest point on the circle with respect to the reference edge
-		s2Vec2 cB = s2MulAdd(c, -radius, normal);
+		s2Vec2 cB = s2MulSub(c, radiusB, normal);
 
 		// The contact point is the midpoint in world space
 		manifold.points[0].point = s2TransformPoint(xfA, s2Lerp(cA, cB, 0.5f));
@@ -187,32 +200,32 @@ s2Manifold s2CollidePolygonAndCircle(const s2Polygon* polygonA, s2Transform xfA,
 	return manifold;
 }
 
-s2Manifold s2CollideCapsules(const s2Capsule* capsuleA, s2Transform xfA, const s2Capsule* capsuleB, s2Transform xfB, float maxDistance,
+s2Manifold s2CollideCapsules(const s2Capsule* capsuleA, s2Transform xfA, const s2Capsule* capsuleB, s2Transform xfB,
 							 s2DistanceCache* cache)
 {
 	s2Polygon polyA = s2MakeCapsule(capsuleA->point1, capsuleA->point2, capsuleA->radius);
 	s2Polygon polyB = s2MakeCapsule(capsuleB->point1, capsuleB->point2, capsuleB->radius);
-	return s2CollidePolygons(&polyA, xfA, &polyB, xfB, maxDistance, cache);
+	return s2CollidePolygons(&polyA, xfA, &polyB, xfB, cache);
 }
 
 s2Manifold s2CollideSegmentAndCapsule(const s2Segment* segmentA, s2Transform xfA, const s2Capsule* capsuleB, s2Transform xfB,
-									  float maxDistance, s2DistanceCache* cache)
+									  s2DistanceCache* cache)
 {
 	s2Polygon polyA = s2MakeCapsule(segmentA->point1, segmentA->point2, 0.0f);
 	s2Polygon polyB = s2MakeCapsule(capsuleB->point1, capsuleB->point2, capsuleB->radius);
-	return s2CollidePolygons(&polyA, xfA, &polyB, xfB, maxDistance, cache);
+	return s2CollidePolygons(&polyA, xfA, &polyB, xfB, cache);
 }
 
 s2Manifold s2CollidePolygonAndCapsule(const s2Polygon* polygonA, s2Transform xfA, const s2Capsule* capsuleB, s2Transform xfB,
-									  float maxDistance, s2DistanceCache* cache)
+									  s2DistanceCache* cache)
 {
 	s2Polygon polyB = s2MakeCapsule(capsuleB->point1, capsuleB->point2, capsuleB->radius);
-	return s2CollidePolygons(polygonA, xfA, &polyB, xfB, maxDistance, cache);
+	return s2CollidePolygons(polygonA, xfA, &polyB, xfB, cache);
 }
 
 // Polygon clipper used by GJK and SAT to compute contact points when there are potentially two contact points.
-static s2Manifold s2PolygonClip(const s2Polygon* polyA, s2Transform xfA, const s2Polygon* polyB, s2Transform xfB, int32_t edgeA,
-								int32_t edgeB, float maxDistance, bool flip)
+static s2Manifold s2ClipPolygons(const s2Polygon* polyA, s2Transform xfA, const s2Polygon* polyB, s2Transform xfB, int32_t edgeA,
+								 int32_t edgeB, bool flip)
 {
 	s2Manifold manifold = {0};
 
@@ -316,7 +329,6 @@ static s2Manifold s2PolygonClip(const s2Polygon* polyA, s2Transform xfA, const s
 		manifold.normal = s2RotateVector(xfA.q, normal);
 		s2ManifoldPoint* cp = manifold.points + 0;
 
-		if (separationLower <= radius + maxDistance)
 		{
 			cp->point = s2TransformPoint(xfA, vLower);
 			cp->separation = separationLower - radius;
@@ -325,7 +337,6 @@ static s2Manifold s2PolygonClip(const s2Polygon* polyA, s2Transform xfA, const s
 			cp += 1;
 		}
 
-		if (separationUpper <= radius + maxDistance)
 		{
 			cp->point = s2TransformPoint(xfA, vUpper);
 			cp->separation = separationUpper - radius;
@@ -338,7 +349,6 @@ static s2Manifold s2PolygonClip(const s2Polygon* polyA, s2Transform xfA, const s
 		manifold.normal = s2RotateVector(xfB.q, s2Neg(normal));
 		s2ManifoldPoint* cp = manifold.points + 0;
 
-		if (separationUpper <= radius + maxDistance)
 		{
 			cp->point = s2TransformPoint(xfB, vUpper);
 			cp->separation = separationUpper - radius;
@@ -347,7 +357,6 @@ static s2Manifold s2PolygonClip(const s2Polygon* polyA, s2Transform xfA, const s
 			cp += 1;
 		}
 
-		if (separationLower <= radius + maxDistance)
 		{
 			cp->point = s2TransformPoint(xfB, vLower);
 			cp->separation = separationLower - radius;
@@ -360,7 +369,8 @@ static s2Manifold s2PolygonClip(const s2Polygon* polyA, s2Transform xfA, const s
 }
 
 // Find the max separation between poly1 and poly2 using edge normals from poly1.
-static float s2FindMaxSeparation(int32_t* edgeIndex, const s2Polygon* poly1, s2Transform xf1, const s2Polygon* poly2, s2Transform xf2)
+static float s2FindMaxSeparation(int32_t* edgeIndex, const s2Polygon* poly1, s2Transform xf1, const s2Polygon* poly2,
+								 s2Transform xf2)
 {
 	int32_t count1 = poly1->count;
 	int32_t count2 = poly2->count;
@@ -400,7 +410,7 @@ static float s2FindMaxSeparation(int32_t* edgeIndex, const s2Polygon* poly1, s2T
 }
 
 // This function assumes there is overlap
-static s2Manifold s2PolygonSAT(const s2Polygon* polyA, s2Transform xfA, const s2Polygon* polyB, s2Transform xfB, float maxDistance)
+static s2Manifold s2PolygonSAT(const s2Polygon* polyA, s2Transform xfA, const s2Polygon* polyB, s2Transform xfB)
 {
 	int32_t edgeA = 0;
 	float separationA = s2FindMaxSeparation(&edgeA, polyA, xfA, polyB, xfB);
@@ -453,7 +463,7 @@ static s2Manifold s2PolygonSAT(const s2Polygon* polyA, s2Transform xfA, const s2
 		}
 	}
 
-	return s2PolygonClip(polyA, xfA, polyB, xfB, edgeA, edgeB, maxDistance, flip);
+	return s2ClipPolygons(polyA, xfA, polyB, xfB, edgeA, edgeB, flip);
 }
 
 // Due to speculation, every polygon is rounded
@@ -470,7 +480,7 @@ static s2Manifold s2PolygonSAT(const s2Polygon* polyA, s2Transform xfA, const s2
 //     vertex-vertex
 //   end
 // end
-s2Manifold s2CollidePolygons(const s2Polygon* polyA, s2Transform xfA, const s2Polygon* polyB, s2Transform xfB, float maxDistance,
+s2Manifold s2CollidePolygons(const s2Polygon* polyA, s2Transform xfA, const s2Polygon* polyB, s2Transform xfB,
 							 s2DistanceCache* cache)
 {
 	s2Manifold manifold = {0};
@@ -485,7 +495,7 @@ s2Manifold s2CollidePolygons(const s2Polygon* polyA, s2Transform xfA, const s2Po
 
 	s2DistanceOutput output = s2ShapeDistance(cache, &input);
 
-	if (output.distance > radius + maxDistance)
+	if (output.distance > radius + s2_speculativeDistance)
 	{
 		return manifold;
 	}
@@ -493,7 +503,7 @@ s2Manifold s2CollidePolygons(const s2Polygon* polyA, s2Transform xfA, const s2Po
 	if (output.distance < 0.1f * s2_linearSlop)
 	{
 		// distance is small or zero, fallback to SAT
-		return s2PolygonSAT(polyA, xfA, polyB, xfB, maxDistance);
+		return s2PolygonSAT(polyA, xfA, polyB, xfB);
 	}
 
 	if (cache->count == 1)
@@ -522,19 +532,19 @@ s2Manifold s2CollidePolygons(const s2Polygon* polyA, s2Transform xfA, const s2Po
 	int32_t a1 = cache->indexA[0];
 	int32_t a2 = cache->indexA[1];
 	int32_t b1 = cache->indexB[0];
-	int32_t bz2 = cache->indexB[1];
+	int32_t s2x = cache->indexB[1];
 
 	if (a1 == a2)
 	{
 		// 1 point on A, expect 2 points on B
-		S2_ASSERT(b1 != bz2);
+		S2_ASSERT(b1 != s2x);
 
 		// Find reference edge that most aligns with vector between closest points.
 		// This works for capsules and polygons
 		s2Vec2 axis = s2InvRotateVector(xfB.q, s2Sub(output.pointA, output.pointB));
 		float dot1 = s2Dot(axis, polyB->normals[b1]);
-		float dot2 = s2Dot(axis, polyB->normals[bz2]);
-		edgeB = dot1 > dot2 ? b1 : bz2;
+		float dot2 = s2Dot(axis, polyB->normals[s2x]);
+		edgeB = dot1 > dot2 ? b1 : s2x;
 
 		flip = true;
 
@@ -572,19 +582,18 @@ s2Manifold s2CollidePolygons(const s2Polygon* polyA, s2Transform xfA, const s2Po
 		edgeB = dot1 < dot2 ? edgeB1 : edgeB2;
 	}
 
-	return s2PolygonClip(polyA, xfA, polyB, xfB, edgeA, edgeB, maxDistance, flip);
+	return s2ClipPolygons(polyA, xfA, polyB, xfB, edgeA, edgeB, flip);
 }
 
-s2Manifold s2CollideSegmentAndCircle(const s2Segment* segmentA, s2Transform xfA, const s2Circle* circleB, s2Transform xfB, float maxDistance)
+s2Manifold s2CollideSegmentAndCircle(const s2Segment* segmentA, s2Transform xfA, const s2Circle* circleB, s2Transform xfB)
 {
 	s2Capsule capsuleA = {segmentA->point1, segmentA->point2, 0.0f};
-	return s2CollideCapsuleAndCircle(&capsuleA, xfA, circleB, xfB, maxDistance);
+	return s2CollideCapsuleAndCircle(&capsuleA, xfA, circleB, xfB);
 }
 
-
 s2Manifold s2CollideSegmentAndPolygon(const s2Segment* segmentA, s2Transform xfA, const s2Polygon* polygonB, s2Transform xfB,
-									  float maxDistance, s2DistanceCache* cache)
+									  s2DistanceCache* cache)
 {
 	s2Polygon polygonA = s2MakeCapsule(segmentA->point1, segmentA->point2, 0.0f);
-	return s2CollidePolygons(&polygonA, xfA, polygonB, xfB, maxDistance, cache);
+	return s2CollidePolygons(&polygonA, xfA, polygonB, xfB, cache);
 }

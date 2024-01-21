@@ -227,7 +227,7 @@ void s2WarmStartContacts(s2World* world, s2ContactConstraint* constraints, int c
 	}
 }
 
-void s2SolveContact_NGS(s2World* world, s2ContactConstraint* constraints, int constraintCount, float fraction)
+void s2SolveContact_NGS(s2World* world, s2ContactConstraint* constraints, int constraintCount)
 {
 	s2Body* bodies = world->bodies;
 	float slop = s2_linearSlop;
@@ -260,7 +260,7 @@ void s2SolveContact_NGS(s2World* world, s2ContactConstraint* constraints, int co
 			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
 
 			// Current separation
-			s2Vec2 d = s2Sub(s2Add(cB, rB), s2Add(cA, rA));
+			s2Vec2 d = s2Add(s2Sub(cB, cA), s2Sub(rB, rA));
 			float separation = s2Dot(d, normal) + cp->separation;
 
 			// Prevent large corrections. Need to maintain a small overlap to avoid overshoot.
@@ -273,7 +273,7 @@ void s2SolveContact_NGS(s2World* world, s2ContactConstraint* constraints, int co
 			float K = mA + mB + iA * rnA * rnA + iB * rnB * rnB;
 
 			// Compute normal impulse
-			float impulse = K > 0.0f ? -fraction * s2_baumgarte * C / K : 0.0f;
+			float impulse = K > 0.0f ? -s2_baumgarte * C / K : 0.0f;
 
 			s2Vec2 P = s2MulSV(impulse, normal);
 

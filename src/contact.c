@@ -51,7 +51,7 @@ static inline float s2MixRestitution(float restitution1, float restitution2)
 	return restitution1 > restitution2 ? restitution1 : restitution2;
 }
 
-typedef s2Manifold s2ManifoldFcn(const s2Shape* shapeA, s2Transform xfA, const s2Shape* shapeB, s2Transform xfB, float maxDistance,
+typedef s2Manifold s2ManifoldFcn(const s2Shape* shapeA, s2Transform xfA, const s2Shape* shapeB, s2Transform xfB, 
 								 s2DistanceCache* cache);
 
 struct s2ContactRegister
@@ -63,62 +63,62 @@ struct s2ContactRegister
 static struct s2ContactRegister s_registers[s2_shapeTypeCount][s2_shapeTypeCount];
 static bool s_initialized = false;
 
-static s2Manifold s2CircleManifold(const s2Shape* shapeA, s2Transform xfA, const s2Shape* shapeB, s2Transform xfB, float maxDistance,
+static s2Manifold s2CircleManifold(const s2Shape* shapeA, s2Transform xfA, const s2Shape* shapeB, s2Transform xfB, 
 								   s2DistanceCache* cache)
 {
 	S2_MAYBE_UNUSED(cache);
-	return s2CollideCircles(&shapeA->circle, xfA, &shapeB->circle, xfB, maxDistance);
+	return s2CollideCircles(&shapeA->circle, xfA, &shapeB->circle, xfB);
 }
 
-static s2Manifold s2CapsuleAndCircleManifold(const s2Shape* shapeA, s2Transform xfA, const s2Shape* shapeB, s2Transform xfB, float maxDistance,
+static s2Manifold s2CapsuleAndCircleManifold(const s2Shape* shapeA, s2Transform xfA, const s2Shape* shapeB, s2Transform xfB,
 								   s2DistanceCache* cache)
 {
 	S2_MAYBE_UNUSED(cache);
-	return s2CollideCapsuleAndCircle(&shapeA->capsule, xfA, &shapeB->circle, xfB, maxDistance);
+	return s2CollideCapsuleAndCircle(&shapeA->capsule, xfA, &shapeB->circle, xfB);
 }
 
-static s2Manifold s2CapsuleManifold(const s2Shape* shapeA, s2Transform xfA, const s2Shape* shapeB, s2Transform xfB, float maxDistance,
+static s2Manifold s2CapsuleManifold(const s2Shape* shapeA, s2Transform xfA, const s2Shape* shapeB, s2Transform xfB, 
 								   s2DistanceCache* cache)
 {
-	return s2CollideCapsules(&shapeA->capsule, xfA, &shapeB->capsule, xfB, maxDistance, cache);
+	return s2CollideCapsules(&shapeA->capsule, xfA, &shapeB->capsule, xfB, cache);
 }
 
 static s2Manifold s2PolygonAndCircleManifold(const s2Shape* shapeA, s2Transform xfA, const s2Shape* shapeB, s2Transform xfB,
-											 float maxDistance, s2DistanceCache* cache)
+											 s2DistanceCache* cache)
 {
 	S2_MAYBE_UNUSED(cache);
-	return s2CollidePolygonAndCircle(&shapeA->polygon, xfA, &shapeB->circle, xfB, maxDistance);
+	return s2CollidePolygonAndCircle(&shapeA->polygon, xfA, &shapeB->circle, xfB);
 }
 
 static s2Manifold s2PolygonAndCapsuleManifold(const s2Shape* shapeA, s2Transform xfA, const s2Shape* shapeB, s2Transform xfB,
-											 float maxDistance, s2DistanceCache* cache)
+											 s2DistanceCache* cache)
 {
-	return s2CollidePolygonAndCapsule(&shapeA->polygon, xfA, &shapeB->capsule, xfB, maxDistance, cache);
+	return s2CollidePolygonAndCapsule(&shapeA->polygon, xfA, &shapeB->capsule, xfB, cache);
 }
 
-static s2Manifold s2PolygonManifold(const s2Shape* shapeA, s2Transform xfA, const s2Shape* shapeB, s2Transform xfB, float maxDistance,
+static s2Manifold s2PolygonManifold(const s2Shape* shapeA, s2Transform xfA, const s2Shape* shapeB, s2Transform xfB,
 									s2DistanceCache* cache)
 {
-	return s2CollidePolygons(&shapeA->polygon, xfA, &shapeB->polygon, xfB, maxDistance, cache);
+	return s2CollidePolygons(&shapeA->polygon, xfA, &shapeB->polygon, xfB, cache);
 }
 
-static s2Manifold s2SegmentAndCircleManifold(const s2Shape* shapeA, s2Transform xfA, const s2Shape* shapeB, s2Transform xfB, float maxDistance,
+static s2Manifold s2SegmentAndCircleManifold(const s2Shape* shapeA, s2Transform xfA, const s2Shape* shapeB, s2Transform xfB,
 								   s2DistanceCache* cache)
 {
 	S2_MAYBE_UNUSED(cache);
-	return s2CollideSegmentAndCircle(&shapeA->segment, xfA, &shapeB->circle, xfB, maxDistance);
+	return s2CollideSegmentAndCircle(&shapeA->segment, xfA, &shapeB->circle, xfB);
 }
 
-static s2Manifold s2SegmentAndCapsuleManifold(const s2Shape* shapeA, s2Transform xfA, const s2Shape* shapeB, s2Transform xfB, float maxDistance,
+static s2Manifold s2SegmentAndCapsuleManifold(const s2Shape* shapeA, s2Transform xfA, const s2Shape* shapeB, s2Transform xfB, 
 								   s2DistanceCache* cache)
 {
-	return s2CollideSegmentAndCapsule(&shapeA->segment, xfA, &shapeB->capsule, xfB, maxDistance, cache);
+	return s2CollideSegmentAndCapsule(&shapeA->segment, xfA, &shapeB->capsule, xfB, cache);
 }
 
-static s2Manifold s2SegmentAndPolygonManifold(const s2Shape* shapeA, s2Transform xfA, const s2Shape* shapeB, s2Transform xfB, float maxDistance,
+static s2Manifold s2SegmentAndPolygonManifold(const s2Shape* shapeA, s2Transform xfA, const s2Shape* shapeB, s2Transform xfB, 
 								   s2DistanceCache* cache)
 {
-	return s2CollideSegmentAndPolygon(&shapeA->segment, xfA, &shapeB->polygon, xfB, maxDistance, cache);
+	return s2CollideSegmentAndPolygon(&shapeA->segment, xfA, &shapeB->polygon, xfB, cache);
 }
 
 static void s2AddType(s2ManifoldFcn* fcn, enum s2ShapeType type1, enum s2ShapeType type2)
@@ -307,10 +307,9 @@ void s2UpdateContact(s2World* world, s2Contact* contact, s2Shape* shapeA, s2Body
 
 	s2ManifoldFcn* fcn = s_registers[shapeA->type][shapeB->type].fcn;
 
-	float maxDistance = s2_speculativeDistance;
 	s2Transform transformA = {bodyA->origin, bodyA->rot};
 	s2Transform transformB = {bodyB->origin, bodyB->rot};
-	contact->manifold = fcn(shapeA, transformA, shapeB, transformB, maxDistance, &contact->cache);
+	contact->manifold = fcn(shapeA, transformA, shapeB, transformB, &contact->cache);
 
 	touching = contact->manifold.pointCount > 0;
 

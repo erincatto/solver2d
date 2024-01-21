@@ -204,17 +204,17 @@ static void s2SolveContacts_TGS_Sticky(s2World* world, s2ContactConstraint* cons
 
 			// Compute change in separation
 			s2Vec2 d = s2Sub(s2Add(cB, rB), s2Add(cA, rA));
-			float s = s2Dot(d, normal) + cp->separation;
+			float separation = s2Dot(d, normal) + cp->separation;
 
 			float bias = 0.0f;
-			if (s > 0.0f)
+			if (separation > 0.0f)
 			{
 				// Speculative
-				bias = s * inv_h;
+				bias = separation * inv_h;
 			}
 			else if (useBias)
 			{
-				bias = S2_MAX(-s2_maxBaumgarteVelocity, cp->baumgarte * s * inv_h);
+				bias = S2_MAX(-s2_maxBaumgarteVelocity, cp->baumgarte * separation * inv_h);
 			}
 
 			// Relative velocity at contact
@@ -349,7 +349,7 @@ void s2Solve_TGS_Sticky(s2World* world, s2StepContext* context)
 	for (int iter = 0; iter < positionIterations; ++iter)
 	{
 		// relax constraints
-		s2SolveContacts_TGS_Sticky(world, constraints, constraintCount, 0.0f, useBias);
+		s2SolveContacts_TGS_Sticky(world, constraints, constraintCount, inv_h, useBias);
 	}
 
 	// warm starting is not used, this is just for reporting

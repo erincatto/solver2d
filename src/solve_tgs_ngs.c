@@ -16,10 +16,6 @@
 
 #include <stdbool.h>
 
-// Should switch to quaternions or incremental rotation updates
-// cos(a + da) = cos(a)*cos(da) + sin(a)*sin(da) ~= cos(a) + da * sin(a)
-// sin(a + da) = sin(a)*cos(da) + cos(a)*sin(da) ~= sin(a) + da * cos(a)
-
 static void s2PrepareContacts(s2World* world, s2ContactConstraint* constraints, int constraintCount, bool warmStart)
 {
 	s2Body* bodies = world->bodies;
@@ -53,11 +49,6 @@ static void s2PrepareContacts(s2World* world, s2ContactConstraint* constraints, 
 		s2Vec2 cB = bodyB->position;
 		s2Rot qA = bodyA->rot;
 		s2Rot qB = bodyB->rot;
-
-		s2Vec2 vA = bodyA->linearVelocity;
-		float wA = bodyA->angularVelocity;
-		s2Vec2 vB = bodyB->linearVelocity;
-		float wB = bodyB->angularVelocity;
 
 		s2Vec2 normal = constraint->normal;
 		s2Vec2 tangent = s2RightPerp(constraint->normal);
@@ -94,11 +85,6 @@ static void s2PrepareContacts(s2World* world, s2ContactConstraint* constraints, 
 			float kTangent = mA + mB + iA * rtA * rtA + iB * rtB * rtB;
 			cp->tangentMass = kTangent > 0.0f ? 1.0f / kTangent : 0.0f;
 		}
-
-		bodyA->linearVelocity = vA;
-		bodyA->angularVelocity = wA;
-		bodyB->linearVelocity = vB;
-		bodyB->angularVelocity = wB;
 	}
 }
 
@@ -142,25 +128,28 @@ static void s2SolveContacts_TGS(s2World* world, s2ContactConstraint* constraints
 			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
 
 			// Compute separation
-			s2Vec2 d = s2Sub(s2Add(cB, rB), s2Add(cA, rA));
-			float s = s2Dot(d, normal) + cp->separation;
-			float bias = 0.0f;
-			if (s > 0.0f)
-			{
-				// Speculative
-				bias = s * inv_h;
-			}
+			s2Vec2 d = s2Add(s2Sub(cB, cA), s2Sub(rB, rA));
+			float separation = s2Dot(d, normal) + cp->separation;
+
+			// Speculative
+			float bias = separation > 0.0f ? separation * inv_h : 0.0f;
 
 			// Relative velocity at contact
 			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rB));
 			s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, rA));
 			float vn = s2Dot(s2Sub(vrB, vrA), normal);
 
+			//if (vn > 0.0f)
+			//{
+			//	bias = 0.0f;
+			//}
+
 			// Compute normal impulse
 			float impulse = -cp->normalMass * (vn + bias);
 
 			// Clamp the accumulated impulse
 			float newImpulse = S2_MAX(cp->normalImpulse + impulse, 0.0f);
+
 			impulse = newImpulse - cp->normalImpulse;
 			cp->normalImpulse = newImpulse;
 
@@ -171,6 +160,7 @@ static void s2SolveContacts_TGS(s2World* world, s2ContactConstraint* constraints
 
 			vB = s2MulAdd(vB, mB, P);
 			wB += iB * s2Cross(rB, P);
+
 		}
 
 		for (int j = 0; j < pointCount; ++j)
@@ -212,6 +202,10 @@ static void s2SolveContacts_TGS(s2World* world, s2ContactConstraint* constraints
 	}
 }
 
+// TGS_NGS does substepping of rigid contacts with speculation.
+// Each substep includes a single PGS iteration on velocities and
+// a single NGS iteration on positions using pseudo velocities.
+// TGS_NGS suffers from excessive and inaccurate warm starting, which leads to overly bouncy collisions.
 void s2Solve_TGS_NGS(s2World* world, s2StepContext* context)
 {
 	s2Contact* contacts = world->contacts;
@@ -258,8 +252,6 @@ void s2Solve_TGS_NGS(s2World* world, s2StepContext* context)
 	int substepCount = context->iterations;
 	float h = context->dt / substepCount;
 	float inv_h = 1.0f / h;
-	//float ngs_fraction = 1.0f / substepCount;
-	float ngs_fraction = 1.0f;
 
 	for (int substep = 0; substep < substepCount; ++substep)
 	{
@@ -281,33 +273,39 @@ void s2Solve_TGS_NGS(s2World* world, s2StepContext* context)
 			s2WarmStartContacts(world, constraints, constraintCount);
 		}
 
-		for (int i = 0; i < jointCapacity; ++i)
+		for (int iter = 0; iter < 1; ++iter)
 		{
-			s2Joint* joint = joints + i;
-			if (s2IsFree(&joint->object))
+			for (int i = 0; i < jointCapacity; ++i)
 			{
-				continue;
+				s2Joint* joint = joints + i;
+				if (s2IsFree(&joint->object))
+				{
+					continue;
+				}
+
+				s2SolveJoint(joint, context, h);
 			}
 
-			s2SolveJoint(joint, context, h);
+			s2SolveContacts_TGS(world, constraints, constraintCount, inv_h);
 		}
-
-		s2SolveContacts_TGS(world, constraints, constraintCount, inv_h);
 		
 		s2IntegratePositions(world, h);
 
-		for (int i = 0; i < jointCapacity; ++i)
+		for (int iter = 0; iter < 1; ++iter)
 		{
-			s2Joint* joint = joints + i;
-			if (s2IsFree(&joint->object))
+			for (int i = 0; i < jointCapacity; ++i)
 			{
-				continue;
+				s2Joint* joint = joints + i;
+				if (s2IsFree(&joint->object))
+				{
+					continue;
+				}
+
+				s2SolveJointPosition(joint, context);
 			}
 
-			s2SolveJointPosition(joint, context);
+			s2SolveContact_NGS(world, constraints, constraintCount);
 		}
-
-		s2SolveContact_NGS(world, constraints, constraintCount, ngs_fraction);
 	}
 
 	s2StoreContactImpulses(constraints, constraintCount);

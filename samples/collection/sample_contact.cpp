@@ -65,6 +65,8 @@ public:
 			g_camera.m_zoom = 0.2f;
 		}
 
+		m_topId = s2_nullBodyId;
+
 		s2BodyId groundId = s2CreateBody(m_worldId, &s2_defaultBodyDef);
 		s2Segment segment = {{-10.0f, 0.0f}, {10.0f, 0.0f}};
 		s2CreateSegmentShape(groundId, &s2_defaultShapeDef, &segment);

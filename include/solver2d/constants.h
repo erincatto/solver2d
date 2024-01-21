@@ -4,9 +4,9 @@
 #pragma once
 
 #define s2_pi 3.14159265359f
-#define s2_speculativeDistance (16.0f * s2_linearSlop)
-#define s2_aabbMargin (0.1f + s2_speculativeDistance)
 #define s2_linearSlop 0.005f
+#define s2_speculativeDistance (4.0f * s2_linearSlop)
+#define s2_aabbMargin (0.1f + s2_speculativeDistance)
 #define s2_angularSlop (2.0f / 180.0f * s2_pi)
 #define s2_maxPolygonVertices 8
 #define s2_maxWorlds 32

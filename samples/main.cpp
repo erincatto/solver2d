@@ -189,10 +189,6 @@ static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, i
 				RestartTest();
 				break;
 
-			case GLFW_KEY_O:
-				s_settings.singleStep = true;
-				break;
-
 			case GLFW_KEY_P:
 				s_settings.pause = !s_settings.pause;
 				break;
@@ -363,7 +359,7 @@ static void UpdateUI(s2Color* solverColors)
 			ImGui::SliderInt("Vel Iters", &s_settings.velocityIterations, 0, 50);
 			ImGui::SliderInt("Pos Iters", &s_settings.positionIterations, 0, 50);
 			ImGui::SliderInt("Multi-Steps", &s_settings.multiSteps, 1, 50);
-			ImGui::SliderFloat("Hertz", &s_settings.hertz, 5.0f, 240.0f, "%.0f hz");
+			ImGui::SliderFloat("Hertz", &s_settings.hertz, 5.0f, 480.0f, "%.0f hz");
 			ImGui::Checkbox("Warm Starting", &s_settings.enableWarmStarting);
 
 			ImGui::Separator();
@@ -644,6 +640,10 @@ int main(int, char**)
 		{
 			// Zoom in
 			g_camera.m_zoom = S2_MAX(0.995f * g_camera.m_zoom, 0.02f);
+		}
+		else if (glfwGetKey(g_mainWindow, GLFW_KEY_O) == GLFW_PRESS)
+		{
+			s_settings.singleStep = true;
 		}
 
 		glfwGetWindowSize(g_mainWindow, &g_camera.m_width, &g_camera.m_height);
