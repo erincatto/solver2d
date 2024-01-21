@@ -642,7 +642,7 @@ public:
 						{7.752568160730571f, 40.30450679009583f},
 						{3.016931552701656f, 44.28891593799322f}};
 
-		float scale = 0.25f;
+		float scale = 1.0f;
 		for (int i = 0; i < 9; ++i)
 		{
 			ps1[i] = s2MulSV(scale, ps1[i]);
