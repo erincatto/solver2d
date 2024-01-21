@@ -503,7 +503,7 @@ void s2World_Draw(s2WorldId worldId, s2DebugDraw* draw)
 					s2Vec2 p1 = point->point;
 					s2Vec2 p2 = s2MulAdd(p1, k_impulseScale * point->normalImpulse, normal);
 					draw->DrawSegment(p1, p2, impulseColor, draw->context);
-					snprintf(buffer, S2_ARRAY_COUNT(buffer), "%.2f", point->normalImpulse);
+					snprintf(buffer, S2_ARRAY_COUNT(buffer), "%.2g", point->normalImpulse);
 					draw->DrawString(p1, buffer, draw->context);
 				}
 
@@ -513,7 +513,7 @@ void s2World_Draw(s2WorldId worldId, s2DebugDraw* draw)
 					s2Vec2 p1 = point->point;
 					s2Vec2 p2 = s2MulAdd(p1, k_impulseScale * point->tangentImpulse, tangent);
 					draw->DrawSegment(p1, p2, frictionColor, draw->context);
-					snprintf(buffer, S2_ARRAY_COUNT(buffer), "%.2f", point->normalImpulse);
+					snprintf(buffer, S2_ARRAY_COUNT(buffer), "%.2g", point->normalImpulse);
 					draw->DrawString(p1, buffer, draw->context);
 				}
 			}

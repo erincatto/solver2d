@@ -75,6 +75,12 @@ static inline s2Vec2 s2RightPerp(s2Vec2 v)
 	return S2_LITERAL(s2Vec2){v.y, -v.x};
 }
 
+/// Get a left pointing perpendicular vector. Equivalent to b2CrossSV(1.0f, v)
+static inline s2Vec2 s2LeftPerp(s2Vec2 v)
+{
+	return S2_LITERAL(s2Vec2){-v.y, v.x};
+}
+
 /// Vector addition
 static inline s2Vec2 s2Add(s2Vec2 a, s2Vec2 b)
 {

@@ -64,39 +64,36 @@ extern "C"
 #endif
 
 /// Compute the collision manifold between two circles.
-s2Manifold s2CollideCircles(const s2Circle* circleA, s2Transform xfA, const s2Circle* circleB, s2Transform xfB, float maxDistance);
+s2Manifold s2CollideCircles(const s2Circle* circleA, s2Transform xfA, const s2Circle* circleB, s2Transform xfB);
 
 /// Compute the collision manifold between a capsule and circle
-s2Manifold s2CollideCapsuleAndCircle(const s2Capsule* capsuleA, s2Transform xfA, const s2Circle* circleB, s2Transform xfB,
-									 float maxDistance);
+s2Manifold s2CollideCapsuleAndCircle(const s2Capsule* capsuleA, s2Transform xfA, const s2Circle* circleB, s2Transform xfB);
 
 /// Compute the collision manifold between an segment and a circle.
-s2Manifold s2CollideSegmentAndCircle(const s2Segment* segmentA, s2Transform xfA, const s2Circle* circleB, s2Transform xfB,
-									 float maxDistance);
+s2Manifold s2CollideSegmentAndCircle(const s2Segment* segmentA, s2Transform xfA, const s2Circle* circleB, s2Transform xfB);
 
 /// Compute the collision manifold between a polygon and a circle.
-s2Manifold s2CollidePolygonAndCircle(const s2Polygon* polygonA, s2Transform xfA, const s2Circle* circleB, s2Transform xfB,
-									 float maxDistance);
+s2Manifold s2CollidePolygonAndCircle(const s2Polygon* polygonA, s2Transform xfA, const s2Circle* circleB, s2Transform xfB);
 
 /// Compute the collision manifold between a capsule and circle
-s2Manifold s2CollideCapsules(const s2Capsule* capsuleA, s2Transform xfA, const s2Capsule* capsuleB, s2Transform xfB, float maxDistance,
+s2Manifold s2CollideCapsules(const s2Capsule* capsuleA, s2Transform xfA, const s2Capsule* capsuleB, s2Transform xfB,
 							 s2DistanceCache* cache);
 
 /// Compute the collision manifold between an segment and a capsule.
 s2Manifold s2CollideSegmentAndCapsule(const s2Segment* segmentA, s2Transform xfA, const s2Capsule* capsuleB, s2Transform xfB,
-									  float maxDistance, s2DistanceCache* cache);
+									  s2DistanceCache* cache);
 
 /// Compute the collision manifold between a polygon and capsule
 s2Manifold s2CollidePolygonAndCapsule(const s2Polygon* polygonA, s2Transform xfA, const s2Capsule* capsuleB, s2Transform xfB,
-									  float maxDistance, s2DistanceCache* cache);
+									  s2DistanceCache* cache);
 
 /// Compute the collision manifold between two polygons.
-s2Manifold s2CollidePolygons(const s2Polygon* polyA, s2Transform xfA, const s2Polygon* polyB, s2Transform xfB, float maxDistance,
+s2Manifold s2CollidePolygons(const s2Polygon* polyA, s2Transform xfA, const s2Polygon* polyB, s2Transform xfB,
 							 s2DistanceCache* cache);
 
 /// Compute the collision manifold between an segment and a polygon.
 s2Manifold s2CollideSegmentAndPolygon(const s2Segment* segmentA, s2Transform xfA, const s2Polygon* polygonB, s2Transform xfB,
-									  float maxDistance, s2DistanceCache* cache);
+									  s2DistanceCache* cache);
 
 #ifdef __cplusplus
 }

@@ -136,19 +136,18 @@ void Sample::Step(Settings& settings, s2Color bodyColor)
 	bodyColor.a = 0.6f;
 	g_draw.m_debugDraw.dynamicBodyColor = bodyColor;
 
-	for (int i = 0; i < settings.multiSteps; ++i)
+	if (settings.timeStep > 0.0f)
 	{
-		s2World_Step(m_worldId, settings.timeStep, settings.velocityIterations, settings.positionIterations, settings.enableWarmStarting);
+		for (int i = 0; i < settings.multiSteps; ++i)
+		{
+			s2World_Step(m_worldId, settings.timeStep, settings.velocityIterations, settings.positionIterations, settings.enableWarmStarting);
+		}
+		++m_stepCount;
 	}
 
 	if (settings.enablesSolvers[m_solverType])
 	{
 		s2World_Draw(m_worldId, &g_draw.m_debugDraw);
-	}
-
-	if (settings.timeStep > 0.0f)
-	{
-		++m_stepCount;
 	}
 
 	if (settings.drawStats)
