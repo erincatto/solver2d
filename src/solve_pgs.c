@@ -12,7 +12,8 @@
 
 #include <stdbool.h>
 
-// This uses fixed anchors
+// Baumgarte, J.: Stabilization of constraints and integrals of motion in dynamical systems. Comp. Meth. in Appl.
+// Mech. and Eng. 1 (1972), 1–16.
 static void s2SolveContacts_PGS_Baumgarte(s2World* world, s2ContactConstraint* constraints, int constraintCount, float inv_h)
 {
 	s2Body* bodies = world->bodies;
@@ -53,7 +54,7 @@ static void s2SolveContacts_PGS_Baumgarte(s2World* world, s2ContactConstraint* c
 			{
 				bias = s2_baumgarte * inv_h * S2_MIN(0.0f, cp->separation + s2_linearSlop);
 			}
-			
+
 			// static anchors
 			s2Vec2 rA = cp->rAs;
 			s2Vec2 rB = cp->rBs;
@@ -158,7 +159,7 @@ void s2Solve_PGS(s2World* world, s2StepContext* context)
 	s2IntegrateVelocities(world, h);
 
 	s2PrepareContacts_PGS(world, constraints, constraintCount);
-	
+
 	if (context->warmStart)
 	{
 		s2WarmStartContacts(world, constraints, constraintCount);
