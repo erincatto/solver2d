@@ -158,7 +158,7 @@ void s2Solve_PGS(s2World* world, s2StepContext* context)
 
 	s2IntegrateVelocities(world, h);
 
-	s2PrepareContacts_PGS(world, constraints, constraintCount);
+	s2PrepareContacts_PGS(world, constraints, constraintCount, context->warmStart);
 
 	if (context->warmStart)
 	{

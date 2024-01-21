@@ -67,7 +67,7 @@ void s2IntegratePositions(s2World* world, float h)
 	}
 }
 
-void s2PrepareContacts_PGS(s2World* world, s2ContactConstraint* constraints, int constraintCount)
+void s2PrepareContacts_PGS(s2World* world, s2ContactConstraint* constraints, int constraintCount, bool warmStart)
 {
 	s2Body* bodies = world->bodies;
 
@@ -109,8 +109,16 @@ void s2PrepareContacts_PGS(s2World* world, s2ContactConstraint* constraints, int
 			const s2ManifoldPoint* mp = manifold->points + j;
 			s2ContactConstraintPoint* cp = constraint->points + j;
 
-			cp->normalImpulse = mp->normalImpulse;
-			cp->tangentImpulse = mp->tangentImpulse;
+			if (warmStart)
+			{
+				cp->normalImpulse = mp->normalImpulse;
+				cp->tangentImpulse = mp->tangentImpulse;
+			}
+			else
+			{
+				cp->normalImpulse = 0.0f;
+				cp->tangentImpulse = 0.0f;
+			}
 
 			s2Vec2 rA = s2Sub(mp->point, cA);
 			s2Vec2 rB = s2Sub(mp->point, cB);
