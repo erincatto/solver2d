@@ -358,7 +358,7 @@ static void UpdateUI(s2Color* solverColors)
 		{
 			ImGui::SliderInt("Vel Iters", &s_settings.velocityIterations, 0, 50);
 			ImGui::SliderInt("Pos Iters", &s_settings.positionIterations, 0, 50);
-			ImGui::SliderInt("Multi-Steps", &s_settings.multiSteps, 1, 50);
+			ImGui::SliderInt("Multi-Steps", &s_settings.multiSteps, 1, 500);
 			ImGui::SliderFloat("Hertz", &s_settings.hertz, 5.0f, 480.0f, "%.0f hz");
 			ImGui::Checkbox("Warm Starting", &s_settings.enableWarmStarting);
 
@@ -722,11 +722,13 @@ int main(int, char**)
 		g_draw.m_debugDraw.drawContactImpulses = s_settings.drawContactImpulse;
 		g_draw.m_debugDraw.drawFrictionImpulses = s_settings.drawFrictionImpulse;
 
+		int stepCount = 0;
 		for (int i = 0; i < s2_solverTypeCount; ++i)
 		{
 			if (s_samples[i] != nullptr)
 			{
 				s_samples[i]->Step(s_settings, solverColors[i]);
+				stepCount = s_samples[i]->m_stepCount;
 			}
 		}
 
@@ -738,8 +740,7 @@ int main(int, char**)
 
 		// if (g_draw.m_showUI)
 		{
-			snprintf(buffer, 128, "%.1f ms", 1000.0f * frameTime);
-
+			snprintf(buffer, 128, "%.1f ms - step %d", 1000.0f * frameTime, stepCount);
 			ImGui::Begin("Overlay", nullptr,
 						 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize |
 							 ImGuiWindowFlags_NoScrollbar);
