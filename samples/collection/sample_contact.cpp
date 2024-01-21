@@ -552,7 +552,7 @@ public:
 		for (int i = 0; i < e_count; ++i)
 		{
 			bodyDef.position = {distance * cosf(angle), distance * sinf(angle)};
-			//bodyDef.linearVelocity = {2.0f * distance * sinf(angle), -1.5f * distance * cosf(angle)};
+			// bodyDef.linearVelocity = {2.0f * distance * sinf(angle), -1.5f * distance * cosf(angle)};
 			m_bodyIds[i] = s2CreateBody(m_worldId, &bodyDef);
 			s2CreateCircleShape(m_bodyIds[i], &shapeDef, &circle);
 
@@ -609,3 +609,91 @@ public:
 };
 
 static int sampleRush = RegisterSample("Contact", "Rush", Rush::Create);
+
+class Arch : public Sample
+{
+public:
+	Arch(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		if (settings.restart == false)
+		{
+			g_camera.m_center = {0.0f, 22.0f};
+			g_camera.m_zoom = 1.0f;
+		}
+
+		s2Vec2 ps1[9] = {{16.0f, 0.0f},
+						{14.93803712795643f, 5.133601056842984f},
+						{13.79871746027416f, 10.24928069555078f},
+						{12.56252963284711f, 15.34107019122473f},
+						{11.20040987372525f, 20.39856541571217f},
+						{9.66521217819836f, 25.40369899225096f},
+						{7.87179930638133f, 30.3179337000085f},
+						{5.635199558196225f, 35.03820717801641f},
+						{2.405937953536585f, 39.09554102558315f}};
+
+		s2Vec2 ps2[9] = {{24.0f, 0.0f},
+						{22.33619528222415f, 6.02299846205841f},
+						{20.54936888969905f, 12.00964361211476f},
+						{18.60854610798073f, 17.9470321677465f},
+						{16.46769273811807f, 23.81367936585418f},
+						{14.05325025774858f, 29.57079353071012f},
+						{11.23551045834022f, 35.13775818285372f},
+						{7.752568160730571f, 40.30450679009583f},
+						{3.016931552701656f, 44.28891593799322f}};
+
+		float scale = 0.25f;
+		for (int i = 0; i < 9; ++i)
+		{
+			ps1[i] = s2MulSV(scale, ps1[i]);
+			ps2[i] = s2MulSV(scale, ps2[i]);
+		}
+
+		s2ShapeDef shapeDef = s2_defaultShapeDef;
+		shapeDef.friction = 0.6f;
+
+		{
+			s2BodyDef bodyDef = s2_defaultBodyDef;
+			s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
+			s2Segment segment = {{-100.0f, 0.0f}, {100.0f, 0.0f}};
+			s2CreateSegmentShape(groundId, &shapeDef, &segment);
+		}
+
+		s2BodyDef bodyDef = s2_defaultBodyDef;
+		bodyDef.type = s2_dynamicBody;
+		
+		for (int i = 0; i < 8; ++i)
+		{
+			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+			s2Vec2 ps[4] = {ps1[i], ps2[i], ps2[i + 1], ps1[i + 1]};
+			s2Hull hull = s2ComputeHull(ps, 4);
+			s2Polygon polygon = s2MakePolygon(&hull);
+			s2CreatePolygonShape(bodyId, &shapeDef, &polygon);
+		}
+
+		for (int i = 0; i < 8; ++i)
+		{
+			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+			s2Vec2 ps[4] = {
+				{-ps2[i].x, ps2[i].y}, {-ps1[i].x, ps1[i].y}, {-ps1[i + 1].x, ps1[i + 1].y}, {-ps2[i + 1].x, ps2[i + 1].y}};
+			s2Hull hull = s2ComputeHull(ps, 4);
+			s2Polygon polygon = s2MakePolygon(&hull);
+			s2CreatePolygonShape(bodyId, &shapeDef, &polygon);
+		}
+
+		{
+			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+			s2Vec2 ps[4] = {ps1[8], ps2[8], {-ps2[8].x, ps2[8].y}, {-ps1[8].x, ps1[8].y}};
+			s2Hull hull = s2ComputeHull(ps, 4);
+			s2Polygon polygon = s2MakePolygon(&hull);
+			s2CreatePolygonShape(bodyId, &shapeDef, &polygon);
+		}
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new Arch(settings, solverType);
+	}
+};
+
+static int sampleArch = RegisterSample("Contact", "Arch", Arch::Create);
