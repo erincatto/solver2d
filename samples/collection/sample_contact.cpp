@@ -512,6 +512,69 @@ public:
 
 static int samplePyramid = RegisterSample("Contact", "Pyramid", Pyramid::Create);
 
+// A pyramid far from the origin
+class FarPyramid : public Sample
+{
+public:
+	FarPyramid(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		// -10k, 5k
+		s2Vec2 origin = {-10000.0f, 5000.0f};
+
+		if (settings.restart == false)
+		{
+			g_camera.m_center = s2Add({0.0f, 50.0f}, origin);
+			g_camera.m_zoom = 2.25f;
+		}
+
+		{
+			s2BodyDef bodyDef = s2_defaultBodyDef;
+			bodyDef.position = s2Add({0.0f, -1.0f}, origin);
+			s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
+
+			s2Polygon box = s2MakeBox(100.0f, 1.0f);
+			s2ShapeDef shapeDef = s2_defaultShapeDef;
+			s2CreatePolygonShape(groundId, &shapeDef, &box);
+		}
+
+		s2BodyDef bodyDef = s2_defaultBodyDef;
+		bodyDef.type = s2_dynamicBody;
+
+		s2ShapeDef shapeDef = s2_defaultShapeDef;
+		shapeDef.density = 1.0f;
+
+		int baseCount = 40;
+
+		float h = 0.5f;
+		s2Polygon box = s2MakeSquare(h);
+
+		float shift = 1.0f * h;
+
+		for (int i = 0; i < baseCount; ++i)
+		{
+			float y = (2.0f * i + 1.0f) * shift;
+
+			for (int j = i; j < baseCount; ++j)
+			{
+				float x = (i + 1.0f) * shift + 2.0f * (j - i) * shift - h * baseCount;
+
+				bodyDef.position = s2Add({x, y}, origin);
+
+				s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+				s2CreatePolygonShape(bodyId, &shapeDef, &box);
+			}
+		}
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new FarPyramid(settings, solverType);
+	}
+};
+
+static int sampleFarPyramid = RegisterSample("Contact", "Far Pyramid", FarPyramid::Create);
+
 // This sample shows an artifact of sub-stepping. The velocity impulse is resolved
 // in the first sub-step and then normal impulse drops to zero and so does friction.
 // A better result would be had using a force that is applied each substep.
@@ -623,24 +686,24 @@ public:
 		}
 
 		s2Vec2 ps1[9] = {{16.0f, 0.0f},
-						{14.93803712795643f, 5.133601056842984f},
-						{13.79871746027416f, 10.24928069555078f},
-						{12.56252963284711f, 15.34107019122473f},
-						{11.20040987372525f, 20.39856541571217f},
-						{9.66521217819836f, 25.40369899225096f},
-						{7.87179930638133f, 30.3179337000085f},
-						{5.635199558196225f, 35.03820717801641f},
-						{2.405937953536585f, 39.09554102558315f}};
+						 {14.93803712795643f, 5.133601056842984f},
+						 {13.79871746027416f, 10.24928069555078f},
+						 {12.56252963284711f, 15.34107019122473f},
+						 {11.20040987372525f, 20.39856541571217f},
+						 {9.66521217819836f, 25.40369899225096f},
+						 {7.87179930638133f, 30.3179337000085f},
+						 {5.635199558196225f, 35.03820717801641f},
+						 {2.405937953536585f, 39.09554102558315f}};
 
 		s2Vec2 ps2[9] = {{24.0f, 0.0f},
-						{22.33619528222415f, 6.02299846205841f},
-						{20.54936888969905f, 12.00964361211476f},
-						{18.60854610798073f, 17.9470321677465f},
-						{16.46769273811807f, 23.81367936585418f},
-						{14.05325025774858f, 29.57079353071012f},
-						{11.23551045834022f, 35.13775818285372f},
-						{7.752568160730571f, 40.30450679009583f},
-						{3.016931552701656f, 44.28891593799322f}};
+						 {22.33619528222415f, 6.02299846205841f},
+						 {20.54936888969905f, 12.00964361211476f},
+						 {18.60854610798073f, 17.9470321677465f},
+						 {16.46769273811807f, 23.81367936585418f},
+						 {14.05325025774858f, 29.57079353071012f},
+						 {11.23551045834022f, 35.13775818285372f},
+						 {7.752568160730571f, 40.30450679009583f},
+						 {3.016931552701656f, 44.28891593799322f}};
 
 		float scale = 1.0f;
 		for (int i = 0; i < 9; ++i)
@@ -661,7 +724,7 @@ public:
 
 		s2BodyDef bodyDef = s2_defaultBodyDef;
 		bodyDef.type = s2_dynamicBody;
-		
+
 		for (int i = 0; i < 8; ++i)
 		{
 			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
