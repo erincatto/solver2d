@@ -89,6 +89,7 @@ public:
 
 static int sampleBridgeIndex = RegisterSample("Joints", "Bridge", Bridge::Create);
 
+#if 1
 class BallAndChain : public Sample
 {
 public:
@@ -138,14 +139,11 @@ public:
 				jointDef.bodyIdB = bodyId;
 				jointDef.localAnchorA = s2Body_GetLocalPoint(jointDef.bodyIdA, pivot);
 				jointDef.localAnchorB = s2Body_GetLocalPoint(jointDef.bodyIdB, pivot);
-				// jointDef.enableMotor = true;
-				// jointDef.maxMotorTorque = 100.0f;
 				s2CreateRevoluteJoint(m_worldId, &jointDef);
 
 				prevBodyId = bodyId;
 			}
 
-#if 1
 			s2Circle circle = {{0.0f, 0.0f}, 4.0f};
 
 			s2BodyDef bodyDef = s2_defaultBodyDef;
@@ -162,10 +160,7 @@ public:
 			jointDef.bodyIdB = bodyId;
 			jointDef.localAnchorA = s2Body_GetLocalPoint(jointDef.bodyIdA, pivot);
 			jointDef.localAnchorB = s2Body_GetLocalPoint(jointDef.bodyIdB, pivot);
-			// jointDef.enableMotor = true;
-			// jointDef.maxMotorTorque = m_frictionTorque;
 			s2CreateRevoluteJoint(m_worldId, &jointDef);
-#endif
 		}
 	}
 
@@ -174,6 +169,85 @@ public:
 		return new BallAndChain(settings, solverType);
 	}
 };
+
+#else
+
+// temp vertical configuration for stability analysis
+class BallAndChain : public Sample
+{
+public:
+	enum
+	{
+		e_count = 1
+	};
+
+	BallAndChain(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		if (settings.restart == false)
+		{
+			g_camera.m_center = {0.0f, -5.0f};
+		}
+
+		s2BodyId groundId = s2_nullBodyId;
+		{
+			s2BodyDef bodyDef = s2_defaultBodyDef;
+			groundId = s2CreateBody(m_worldId, &bodyDef);
+		}
+
+		{
+			float hy = 0.5f;
+			s2Capsule capsule = {{0.0f, -hy}, {0.0f, hy}, 0.125f};
+
+			s2ShapeDef shapeDef = s2_defaultShapeDef;
+			shapeDef.density = 20.0f;
+
+			s2RevoluteJointDef jointDef = s2DefaultRevoluteJointDef();
+			jointDef.drawSize = 0.1f;
+
+			s2BodyDef bodyDef = s2_defaultBodyDef;
+			bodyDef.type = s2_dynamicBody;
+
+			s2BodyId prevBodyId = groundId;
+			for (int i = 0; i < e_count; ++i)
+			{
+				bodyDef.position = {0.0f, -hy - 2.0f * i * hy};
+				s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+				s2CreateCapsuleShape(bodyId, &shapeDef, &capsule);
+
+				s2Vec2 pivot = {0.0f, -2.0f * i * hy};
+				jointDef.bodyIdA = prevBodyId;
+				jointDef.bodyIdB = bodyId;
+				jointDef.localAnchorA = s2Body_GetLocalPoint(jointDef.bodyIdA, pivot);
+				jointDef.localAnchorB = s2Body_GetLocalPoint(jointDef.bodyIdB, pivot);
+				s2CreateRevoluteJoint(m_worldId, &jointDef);
+
+				prevBodyId = bodyId;
+			}
+
+			#if 1
+			s2Circle circle = {{0.0f, 0.0f}, 4.0f};
+			bodyDef.position = {0.0f, (1.0f - 2.0f * e_count) * hy - circle.radius - hy};
+			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+
+			s2CreateCircleShape(bodyId, &shapeDef, &circle);
+
+			s2Vec2 pivot = {0.0f, -2.0f * e_count * hy};
+			jointDef.bodyIdA = prevBodyId;
+			jointDef.bodyIdB = bodyId;
+			jointDef.localAnchorA = s2Body_GetLocalPoint(jointDef.bodyIdA, pivot);
+			jointDef.localAnchorB = s2Body_GetLocalPoint(jointDef.bodyIdB, pivot);
+			s2CreateRevoluteJoint(m_worldId, &jointDef);
+			#endif
+		}
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new BallAndChain(settings, solverType);
+	}
+};
+#endif
 
 static int sampleBallAndChainIndex = RegisterSample("Joints", "Ball & Chain", BallAndChain::Create);
 

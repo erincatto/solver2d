@@ -681,8 +681,8 @@ public:
 	{
 		if (settings.restart == false)
 		{
-			g_camera.m_center = {0.0f, 22.0f};
-			g_camera.m_zoom = 1.0f;
+			g_camera.m_center = {0.0f, 8.0f};
+			g_camera.m_zoom = 0.35f;
 		}
 
 		s2Vec2 ps1[9] = {{16.0f, 0.0f},
@@ -705,7 +705,7 @@ public:
 						 {7.752568160730571f, 40.30450679009583f},
 						 {3.016931552701656f, 44.28891593799322f}};
 
-		float scale = 1.0f;
+		float scale = 0.25f;
 		for (int i = 0; i < 9; ++i)
 		{
 			ps1[i] = s2MulSV(scale, ps1[i]);
@@ -751,6 +751,14 @@ public:
 			s2Polygon polygon = s2MakePolygon(&hull);
 			s2CreatePolygonShape(bodyId, &shapeDef, &polygon);
 		}
+
+		for (int i = 0; i < 4; ++i)
+		{
+			s2Polygon box = s2MakeBox(2.0f, 0.5f);
+			bodyDef.position = {0.0f, 0.5f + ps2[8].y + 1.0f * i};
+			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+			s2CreatePolygonShape(bodyId, &shapeDef, &box);
+		}
 	}
 
 	static Sample* Create(const Settings& settings, s2SolverType solverType)
@@ -760,3 +768,141 @@ public:
 };
 
 static int sampleArch = RegisterSample("Contact", "Arch", Arch::Create);
+
+class DoubleDomino : public Sample
+{
+public:
+
+	DoubleDomino(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		if (settings.restart == false)
+		{
+			g_camera.m_center = {0.0f, 4.0f};
+			g_camera.m_zoom = 0.25f;
+		}
+
+		{
+			s2BodyDef bodyDef = s2_defaultBodyDef;
+			bodyDef.position = {0.0f, -1.0f};
+			s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
+
+			s2Polygon box = s2MakeBox(100.0f, 1.0f);
+			s2ShapeDef shapeDef = s2_defaultShapeDef;
+			s2CreatePolygonShape(groundId, &shapeDef, &box);
+		}
+
+
+		s2Polygon box = s2MakeBox(0.125f, 0.5f);
+
+		s2ShapeDef shapeDef = s2_defaultShapeDef;
+		shapeDef.friction = 0.6f;
+		s2BodyDef bodyDef = s2_defaultBodyDef;
+		bodyDef.type = s2_dynamicBody;
+
+		int count = 15;
+		float x = -0.5f * count;
+		for (int i = 0; i < count; ++i)
+		{
+			bodyDef.position = {x, 0.5f};
+			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+			s2CreatePolygonShape(bodyId, &shapeDef, &box);
+			if (i == 0)
+			{
+				s2Body_ApplyLinearImpulse(bodyId, s2Vec2{0.2f, 0.0f}, s2Vec2{x, 1.0f});
+			}
+
+			x += 1.0f;
+		}
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new DoubleDomino(settings, solverType);
+	}
+};
+
+static int sampleDoubleDomino = RegisterSample("Contact", "Double Domino", DoubleDomino::Create);
+
+class Confined : public Sample
+{
+public:
+	enum
+	{
+		e_gridCount = 25,
+		e_maxCount = e_gridCount * e_gridCount
+	};
+
+	Confined(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		if (settings.restart == false)
+		{
+			g_camera.m_center = {0.0f, 10.0f};
+			g_camera.m_zoom = 0.5f;
+		}
+
+		{
+			s2BodyDef bodyDef = s2_defaultBodyDef;
+			s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
+
+			s2Segment segment;
+			segment = {{-10.0f, 0.0f}, {10.0f, 0.0f}};
+			s2CreateSegmentShape(groundId, &s2_defaultShapeDef, &segment);
+			segment = {{-10.0f, 0.0f}, {-10.0f, 20.0f}};
+			s2CreateSegmentShape(groundId, &s2_defaultShapeDef, &segment);
+			segment = {{10.0f, 0.0f}, {10.0f, 20.0f}};
+			s2CreateSegmentShape(groundId, &s2_defaultShapeDef, &segment);
+			segment = {{-10.0f, 20.0f}, {10.0f, 20.0f}};
+			s2CreateSegmentShape(groundId, &s2_defaultShapeDef, &segment);
+		}
+
+		m_row = 0;
+		m_column = 0;
+		m_count = 0;
+	}
+
+	void CreateCircle()
+	{
+		float x = -9.0f + m_column * 18.0f / e_gridCount;
+		float y = 1.0f + m_row * 18.0f / e_gridCount;
+
+		s2BodyDef bodyDef = s2_defaultBodyDef;
+		bodyDef.type = s2_dynamicBody;
+		bodyDef.position = {x, y};
+		bodyDef.gravityScale = 0.0f;
+
+		s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+
+		s2Circle circle = {{0.0f, 0.0f}, 0.5f};
+		s2CreateCircleShape(bodyId, &s2_defaultShapeDef, &circle);
+	}
+
+	void Step(Settings& settings, s2Color bodyColor) override
+	{
+		if (m_count < e_maxCount && m_stepCount % 1 == 0)
+		{
+			CreateCircle();
+			m_count += 1;
+			m_row += 1;
+			if (m_row == e_gridCount)
+			{
+				m_row = 0;
+				m_column += 1;
+			}
+		}
+
+		Sample::Step(settings, bodyColor);
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new Confined(settings, solverType);
+	}
+
+	int m_row;
+	int m_column;
+	int m_count;
+};
+
+static int sampleConfined = RegisterSample("Contact", "Confined", Confined::Create);

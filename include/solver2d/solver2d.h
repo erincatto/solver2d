@@ -39,6 +39,7 @@ void s2Body_SetTransform(s2BodyId bodyId, s2Vec2 position, float angle);
 void s2Body_SetLinearVelocity(s2BodyId bodyId, s2Vec2 linearVelocity);
 void s2Body_SetAngularVelocity(s2BodyId bodyId, float angularVelocity);
 void s2Body_ApplyForceToCenter(s2BodyId bodyId, s2Vec2 force);
+void s2Body_ApplyLinearImpulse(s2BodyId bodyId, s2Vec2 impulse, s2Vec2 point);
 
 s2BodyType s2Body_GetType(s2BodyId bodyId);
 float s2Body_GetMass(s2BodyId bodyId);

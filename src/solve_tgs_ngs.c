@@ -149,7 +149,6 @@ static void s2SolveContacts_TGS(s2World* world, s2ContactConstraint* constraints
 
 			// Clamp the accumulated impulse
 			float newImpulse = S2_MAX(cp->normalImpulse + impulse, 0.0f);
-
 			impulse = newImpulse - cp->normalImpulse;
 			cp->normalImpulse = newImpulse;
 
@@ -160,7 +159,6 @@ static void s2SolveContacts_TGS(s2World* world, s2ContactConstraint* constraints
 
 			vB = s2MulAdd(vB, mB, P);
 			wB += iB * s2Cross(rB, P);
-
 		}
 
 		for (int j = 0; j < pointCount; ++j)

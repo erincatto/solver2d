@@ -610,7 +610,7 @@ int main(int, char**)
 		s2MakeColor(s2_colorBlueViolet, colorAlpha), s2MakeColor(s2_colorDodgerBlue, colorAlpha),
 		s2MakeColor(s2_colorCoral, colorAlpha),		 s2MakeColor(s2_colorSpringGreen, colorAlpha),
 		s2MakeColor(s2_colorYellow2, colorAlpha),	 s2MakeColor(s2_colorLavenderBlush, colorAlpha),
-		s2MakeColor(s2_colorOrchid, colorAlpha),	 s2MakeColor(s2_colorThistle, colorAlpha),
+		s2MakeColor(s2_colorOrchid, colorAlpha),	 s2MakeColor(s2_colorCyan, colorAlpha),
 	};
 
 	static_assert(S2_ARRAY_COUNT(solverColors) == s2_solverTypeCount);

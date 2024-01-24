@@ -15,8 +15,8 @@ struct Settings
 	int windowHeight = 1080;
 	float hertz = 60.0f;
 	float timeStep = 1.0f / 60.0f;
-	int velocityIterations = 8;
-	int positionIterations = 3;
+	int velocityIterations = 4;
+	int positionIterations = 2;
 	int multiSteps = 1;
 	int textLine = 0;
 	int textIncrement = 18;

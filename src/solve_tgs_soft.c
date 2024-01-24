@@ -252,7 +252,5 @@ void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
 	// Store results
 	s2StoreContactImpulses(constraints, constraintCount);
 
-	// no separate relax stage!
-
 	s2FreeStackItem(world->stackAllocator, constraints);
 }

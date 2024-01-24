@@ -355,6 +355,19 @@ void s2Body_ApplyForceToCenter(s2BodyId bodyId, s2Vec2 force)
 	body->force = s2Add(body->force, force);
 }
 
+void s2Body_ApplyLinearImpulse(s2BodyId bodyId, s2Vec2 impulse, s2Vec2 point)
+{
+	s2World* world = s2GetWorldFromIndex(bodyId.world);
+	s2Body* body = s2GetBody(world, bodyId);
+	if (body->type != s2_dynamicBody)
+	{
+		return;
+	}
+
+	body->linearVelocity = s2MulAdd(body->linearVelocity, body->invMass, impulse);
+	body->angularVelocity += body->invI * s2Cross(s2Sub(point, body->position), impulse);
+}
+
 s2BodyType s2Body_GetType(s2BodyId bodyId)
 {
 	s2World* world = s2GetWorldFromIndex(bodyId.world);
