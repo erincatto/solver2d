@@ -41,7 +41,6 @@ public:
 		s2Polygon box = s2MakeBox(extent, extent);
 		bodyDef.position = {0.0f, 4.0f};
 		s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
-
 		s2CreatePolygonShape(bodyId, &shapeDef, &box);
 	}
 

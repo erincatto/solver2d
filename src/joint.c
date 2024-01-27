@@ -291,9 +291,9 @@ void s2DestroyJoint(s2JointId jointId)
 }
 
 extern void s2PrepareMouse(s2Joint* base, s2StepContext* context);
-extern void s2PrepareRevolute(s2Joint* base, s2StepContext* context);
+extern void s2PrepareRevolute(s2Joint* base, s2StepContext* context, bool warmStart);
 
-void s2PrepareJoint(s2Joint* joint, s2StepContext* context)
+void s2PrepareJoint(s2Joint* joint, s2StepContext* context, bool warmStart)
 {
 	switch (joint->type)
 	{
@@ -302,7 +302,7 @@ void s2PrepareJoint(s2Joint* joint, s2StepContext* context)
 			break;
 
 		case s2_revoluteJoint:
-			s2PrepareRevolute(joint, context);
+			s2PrepareRevolute(joint, context, warmStart);
 			break;
 
 		default:

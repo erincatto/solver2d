@@ -74,14 +74,14 @@ typedef struct s2RayCastOutput
 
 typedef enum s2SolverType
 {
-	s2_solverPGS_NGS_Block = 0,
-	s2_solverPGS_NGS,
-	s2_solverPGS_Soft,
-	s2_solverXPBD,
-	s2_solverTGS_Soft,
-	s2_solverTGS_Sticky,
-	s2_solverTGS_NGS,
 	s2_solverPGS,
+	s2_solverPGS_NGS,
+	s2_solverPGS_NGS_Block,
+	s2_solverPGS_Soft,
+	s2_solverTGS_Sticky,
+	s2_solverTGS_Soft,
+	s2_solverTGS_NGS,
+	s2_solverXPBD,
 	s2_solverTypeCount,
 } s2SolverType;
 

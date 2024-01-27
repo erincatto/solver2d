@@ -173,7 +173,7 @@ void s2Solve_PGS(s2World* world, s2StepContext* context)
 			continue;
 		}
 
-		s2PrepareJoint(joint, context);
+		s2PrepareJoint(joint, context, context->warmStart);
 
 		if (context->warmStart)
 		{

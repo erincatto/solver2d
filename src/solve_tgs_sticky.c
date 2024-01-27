@@ -6,6 +6,7 @@
 #include "body.h"
 #include "contact.h"
 #include "core.h"
+#include "joint.h"
 #include "shape.h"
 #include "solvers.h"
 #include "stack_allocator.h"
@@ -253,7 +254,7 @@ static void s2SolveContacts_TGS_Sticky(s2World* world, s2ContactConstraint* cons
 			// Compute change in separation
 			s2Vec2 d = s2Sub(s2Add(cB, rBf), s2Add(cA, rAf));
 			float s = s2Dot(d, tangent) + cp->tangentSeparation;
-			float bias = 0.5f * s * inv_h;
+			float bias = useBias ? 0.5f * s * inv_h : 0.0f;
 
 			// Relative velocity at contact
 			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rBf));
@@ -306,6 +307,9 @@ void s2Solve_TGS_Sticky(s2World* world, s2StepContext* context)
 	s2Contact* contacts = world->contacts;
 	int contactCapacity = world->contactPool.capacity;
 
+	s2Joint* joints = world->joints;
+	int jointCapacity = world->jointPool.capacity;
+
 	s2ContactConstraint* constraints =
 		s2AllocateStackItem(world->stackAllocator, contactCapacity * sizeof(s2ContactConstraint), "constraint");
 
@@ -328,6 +332,18 @@ void s2Solve_TGS_Sticky(s2World* world, s2StepContext* context)
 		constraintCount += 1;
 	}
 
+	for (int i = 0; i < jointCapacity; ++i)
+	{
+		s2Joint* joint = joints + i;
+		if (s2IsFree(&joint->object))
+		{
+			continue;
+		}
+
+		bool warmStart = false;
+		s2PrepareJoint(joint, context, warmStart);
+	}
+
 	s2PrepareContacts_Sticky(world, constraints, constraintCount);
 
 	int substepCount = context->iterations;
@@ -339,16 +355,40 @@ void s2Solve_TGS_Sticky(s2World* world, s2StepContext* context)
 	for (int substep = 0; substep < substepCount; ++substep)
 	{
 		s2IntegrateVelocities(world, h);
+
+		for (int i = 0; i < jointCapacity; ++i)
+		{
+			s2Joint* joint = joints + i;
+			if (s2IsFree(&joint->object))
+			{
+				continue;
+			}
+
+			s2SolveJoint_Baumgarte(joint, context, inv_h);
+		}
+
 		s2SolveContacts_TGS_Sticky(world, constraints, constraintCount, inv_h, useBias);
+		
 		s2IntegratePositions(world, h);
 	}
 
-	// Relax
+	// Relax (todo inside sub-step?)
 	useBias = false;
 	int positionIterations = context->extraIterations;
 	for (int iter = 0; iter < positionIterations; ++iter)
 	{
-		// relax constraints
+		for (int i = 0; i < jointCapacity; ++i)
+		{
+			s2Joint* joint = joints + i;
+			if (s2IsFree(&joint->object))
+			{
+				continue;
+			}
+
+			// inv_h disables bias
+			s2SolveJoint_Baumgarte(joint, context, 0.0f);
+		}
+
 		s2SolveContacts_TGS_Sticky(world, constraints, constraintCount, inv_h, useBias);
 	}
 

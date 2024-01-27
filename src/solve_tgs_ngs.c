@@ -244,7 +244,7 @@ void s2Solve_TGS_NGS(s2World* world, s2StepContext* context)
 			continue;
 		}
 
-		s2PrepareJoint(joint, context);
+		s2PrepareJoint(joint, context, context->warmStart);
 	}
 
 	int substepCount = context->iterations;

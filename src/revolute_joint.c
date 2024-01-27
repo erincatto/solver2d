@@ -24,7 +24,7 @@
 // J = [0 0 -1 0 0 1]
 // K = invI1 + invI2
 
-void s2PrepareRevolute(s2Joint* base, s2StepContext* context)
+void s2PrepareRevolute(s2Joint* base, s2StepContext* context, bool warmStart)
 {
 	S2_ASSERT(base->type == s2_revoluteJoint);
 
@@ -85,18 +85,18 @@ void s2PrepareRevolute(s2Joint* base, s2StepContext* context)
 		fixedRotation = true;
 	}
 
-	if (joint->enableLimit == false || fixedRotation || context->warmStart == false)
+	if (joint->enableLimit == false || fixedRotation || warmStart == false)
 	{
 		joint->lowerImpulse = 0.0f;
 		joint->upperImpulse = 0.0f;
 	}
 
-	if (joint->enableMotor == false || fixedRotation || context->warmStart == false)
+	if (joint->enableMotor == false || fixedRotation || warmStart == false)
 	{
 		joint->motorImpulse = 0.0f;
 	}
 
-	if (context->warmStart == false)
+	if (warmStart == false)
 	{
 		joint->impulse = s2Vec2_zero;
 	}
@@ -651,7 +651,8 @@ void s2SolveRevolute_XPBD(s2Joint* base, s2StepContext* context, float inv_h)
 	S2_ASSERT(base->type == s2_revoluteJoint);
 
 	// joint grid sample blows up (more quickly) without compliance
-	float compliance = 0.00001f * inv_h * inv_h;
+	//float compliance = 0.00001f * inv_h * inv_h;
+	float compliance = 0.0f;
 
 	s2RevoluteJoint* joint = &base->revoluteJoint;
 

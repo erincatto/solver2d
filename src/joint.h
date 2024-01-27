@@ -99,7 +99,7 @@ typedef struct s2Joint
 void s2WarmStartJoint(s2Joint* joint, s2StepContext* context);
 void s2SolveJointPosition(s2Joint* joint, s2StepContext* context);
 
-void s2PrepareJoint(s2Joint* joint, s2StepContext* context);
+void s2PrepareJoint(s2Joint* joint, s2StepContext* context, bool warmStart);
 void s2SolveJoint(s2Joint* joint, s2StepContext* context, float h);
 
 void s2PrepareJoint_Soft(s2Joint* joint, s2StepContext* context, float h, float hertz, bool warmStart);

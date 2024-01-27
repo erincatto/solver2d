@@ -438,7 +438,7 @@ void s2Solve_XPBD(s2World* world, s2StepContext* context)
 			// integrate positions
 			// this is unique to XPBD, no other solvers update position immediately
 			body->position = s2MulAdd(c, h, v);
-			body->rot = s2IntegrateRot(body->rot, h * w);
+			body->rot = s2IntegrateRot(q, h * w);
 		}
 
 		for (int i = 0; i < jointCapacity; ++i)
@@ -472,7 +472,7 @@ void s2Solve_XPBD(s2World* world, s2StepContext* context)
 			body->angularVelocity0 = body->angularVelocity;
 
 			body->linearVelocity = s2MulSV(inv_h, s2Sub(body->position, body->position0));
-			body->angularVelocity = s2ComputeAngularVelocity(body->rot, body->rot0, inv_h);
+			body->angularVelocity = s2ComputeAngularVelocity(body->rot0, body->rot, inv_h);
 		}
 
 		// Relax contact velocities

@@ -20,7 +20,7 @@ struct Settings
 	int multiSteps = 1;
 	int textLine = 0;
 	int textIncrement = 18;
-	bool enablesSolvers[s2_solverTypeCount] = {};
+	bool enabledSolvers[s2_solverTypeCount] = {};
 	bool enableWarmStarting = true;
 	bool drawShapes = true;
 	bool drawJoints = true;
