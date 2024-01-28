@@ -457,11 +457,6 @@ void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float 
 			joint->lowerImpulse = S2_MAX(joint->lowerImpulse + impulse, 0.0f);
 			impulse = joint->lowerImpulse - oldImpulse;
 
-			if (C > 0.0f && useBias == false && impulse != 0.0f)
-			{
-				impulse += 0.0f;
-			}
-
 			wA -= iA * impulse;
 			wB += iB * impulse;
 		}
@@ -492,11 +487,6 @@ void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float 
 			float oldImpulse = joint->upperImpulse;
 			joint->upperImpulse = S2_MAX(joint->upperImpulse + impulse, 0.0f);
 			impulse = joint->upperImpulse - oldImpulse;
-
-			if (C > 0.0f && useBias == false && impulse != 0.0f)
-			{
-				impulse += 0.0f;
-			}
 
 			wA += iA * impulse;
 			wB -= iB * impulse;
@@ -557,7 +547,7 @@ void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float 
 }
 
 // similar to box2d_lite
-void s2SolveRevolute_Baumgarte(s2Joint* base, s2StepContext* context, float inv_h)
+void s2SolveRevolute_Baumgarte(s2Joint* base, s2StepContext* context, float h, float inv_h, bool useBias)
 {
 	S2_ASSERT(base->type == s2_revoluteJoint);
 
@@ -573,6 +563,78 @@ void s2SolveRevolute_Baumgarte(s2Joint* base, s2StepContext* context, float inv_
 
 	float mA = joint->invMassA, mB = joint->invMassB;
 	float iA = joint->invIA, iB = joint->invIB;
+
+	bool fixedRotation = (iA + iB == 0.0f);
+
+	// Solve motor constraint.
+	if (joint->enableMotor && fixedRotation == false)
+	{
+		float Cdot = wB - wA - joint->motorSpeed;
+		float impulse = -joint->axialMass * Cdot;
+		float oldImpulse = joint->motorImpulse;
+		float maxImpulse = h * joint->maxMotorTorque;
+		joint->motorImpulse = S2_CLAMP(joint->motorImpulse + impulse, -maxImpulse, maxImpulse);
+		impulse = joint->motorImpulse - oldImpulse;
+
+		wA -= iA * impulse;
+		wB += iB * impulse;
+	}
+
+	if (joint->enableLimit && fixedRotation == false)
+	{
+		float jointAngle = s2RelativeAngle(bodyB->rot, bodyA->rot) - joint->referenceAngle;
+
+		// Lower limit
+		{
+			float C = jointAngle - joint->lowerAngle;
+			float bias = 0.0f;
+			if (C > 0.0f)
+			{
+				// speculation
+				bias = C * inv_h;
+			}
+			else if (useBias)
+			{
+				bias = s2_baumgarte * inv_h * C;
+			}
+			
+			float Cdot = wB - wA;
+			float impulse = -joint->axialMass * (Cdot + bias);
+			float oldImpulse = joint->lowerImpulse;
+			joint->lowerImpulse = S2_MAX(joint->lowerImpulse + impulse, 0.0f);
+			impulse = joint->lowerImpulse - oldImpulse;
+
+			wA -= iA * impulse;
+			wB += iB * impulse;
+		}
+
+		// Upper limit
+		// Note: signs are flipped to keep C positive when the constraint is satisfied.
+		// This also keeps the impulse positive when the limit is active.
+		{
+			float C = joint->upperAngle - jointAngle;
+
+			float bias = 0.0f;
+			if (C > 0.0f)
+			{
+				// speculation
+				bias = C * inv_h;
+			}
+			else if (useBias)
+			{
+				bias = s2_baumgarte * inv_h * C;
+			}
+
+			float Cdot = wA - wB;
+			float impulse = -joint->axialMass * (Cdot + bias);
+			float oldImpulse = joint->upperImpulse;
+			joint->upperImpulse = S2_MAX(joint->upperImpulse + impulse, 0.0f);
+			impulse = joint->upperImpulse - oldImpulse;
+
+			wA += iA * impulse;
+			wB -= iB * impulse;
+		}
+	}
 
 	// Solve point-to-point constraint
 	{

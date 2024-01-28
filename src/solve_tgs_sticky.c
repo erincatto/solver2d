@@ -70,8 +70,6 @@ static void s2PrepareContacts_Sticky(s2World* world, s2ContactConstraint* constr
 			cp->localAnchorB = s2InvRotateVector(qB, rB);
 			cp->separation = mp->separation;
 
-			cp->baumgarte = 0.8f;
-
 			float rtA = s2Cross(rA, tangent);
 			float rtB = s2Cross(rB, tangent);
 			float kTangent = mA + mB + iA * rtA * rtA + iB * rtB * rtB;
@@ -165,6 +163,10 @@ static void s2SolveContacts_TGS_Sticky(s2World* world, s2ContactConstraint* cons
 {
 	s2Body* bodies = world->bodies;
 
+	// higher baumgarte for TGS_Sticky
+	float contactBaumgarte = 0.8f;
+	float frictionBaumgarte = 0.5f;
+
 	for (int i = 0; i < constraintCount; ++i)
 	{
 		s2ContactConstraint* constraint = constraints + i;
@@ -190,7 +192,7 @@ static void s2SolveContacts_TGS_Sticky(s2World* world, s2ContactConstraint* cons
 
 		s2Vec2 normal = constraint->normal;
 		s2Vec2 tangent = s2RightPerp(normal);
-		float friction = 0.3f; // constraint->friction;
+		float friction = constraint->friction;
 
 		float totalNormalImpulse = 0.0f;
 
@@ -215,7 +217,7 @@ static void s2SolveContacts_TGS_Sticky(s2World* world, s2ContactConstraint* cons
 			}
 			else if (useBias)
 			{
-				bias = S2_MAX(-s2_maxBaumgarteVelocity, cp->baumgarte * separation * inv_h);
+				bias = S2_MAX(-s2_maxBaumgarteVelocity, contactBaumgarte * separation * inv_h);
 			}
 
 			// Relative velocity at contact
@@ -253,8 +255,8 @@ static void s2SolveContacts_TGS_Sticky(s2World* world, s2ContactConstraint* cons
 
 			// Compute change in separation
 			s2Vec2 d = s2Sub(s2Add(cB, rBf), s2Add(cA, rAf));
-			float s = s2Dot(d, tangent) + cp->tangentSeparation;
-			float bias = useBias ? 0.5f * s * inv_h : 0.0f;
+			float separation = s2Dot(d, tangent) + cp->tangentSeparation;
+			float bias = useBias ? frictionBaumgarte * separation * inv_h : 0.0f;
 
 			// Relative velocity at contact
 			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rBf));
@@ -364,7 +366,7 @@ void s2Solve_TGS_Sticky(s2World* world, s2StepContext* context)
 				continue;
 			}
 
-			s2SolveJoint_Baumgarte(joint, context, inv_h);
+			s2SolveJoint_Baumgarte(joint, context, h, inv_h, useBias);
 		}
 
 		s2SolveContacts_TGS_Sticky(world, constraints, constraintCount, inv_h, useBias);
@@ -372,10 +374,10 @@ void s2Solve_TGS_Sticky(s2World* world, s2StepContext* context)
 		s2IntegratePositions(world, h);
 	}
 
-	// Relax (todo inside sub-step?)
+	// Relax
 	useBias = false;
-	int positionIterations = context->extraIterations;
-	for (int iter = 0; iter < positionIterations; ++iter)
+	int relaxCount = context->extraIterations;
+	for (int iter = 0; iter < relaxCount; ++iter)
 	{
 		for (int i = 0; i < jointCapacity; ++i)
 		{
@@ -385,8 +387,7 @@ void s2Solve_TGS_Sticky(s2World* world, s2StepContext* context)
 				continue;
 			}
 
-			// inv_h disables bias
-			s2SolveJoint_Baumgarte(joint, context, 0.0f);
+			s2SolveJoint_Baumgarte(joint, context, h, inv_h, useBias);
 		}
 
 		s2SolveContacts_TGS_Sticky(world, constraints, constraintCount, inv_h, useBias);

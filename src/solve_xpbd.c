@@ -68,7 +68,6 @@ static void s2PrepareContacts_XPBD(s2World* world, s2ContactConstraint* constrai
 			cp->localAnchorB = s2InvRotateVector(qB, rB);
 			cp->separation = mp->separation;
 
-			cp->baumgarte = 0.0f;
 			cp->biasCoefficient = 0.0f;
 
 			// todo perhaps re-use effective mass across substeps
@@ -92,9 +91,9 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 	float inv_h = h > 0.0f ? 1.0f / h : 0.0f;
 
 	// compliance because contacts are too energetic otherwise
-	float baseCompliance = 0.00001f * inv_h* inv_h;
+	//float baseCompliance = 0.00001f * inv_h* inv_h;
 	// but the rush sample has too much overlap ...
-	//float baseCompliance = 0.0f;
+	float baseCompliance = 0.0f;
 
 	for (int i = 0; i < constraintCount; ++i)
 	{

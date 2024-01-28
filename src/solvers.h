@@ -36,7 +36,6 @@ typedef struct s2ContactConstraintPoint
 	float massCoefficient;
 	float biasCoefficient;
 	float impulseCoefficient;
-	float baumgarte;
 	bool frictionValid;
 } s2ContactConstraintPoint;
 

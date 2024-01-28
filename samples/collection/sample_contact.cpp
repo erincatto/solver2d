@@ -845,15 +845,15 @@ public:
 			s2BodyDef bodyDef = s2_defaultBodyDef;
 			s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
 
-			s2Segment segment;
-			segment = {{-10.0f, 0.0f}, {10.0f, 0.0f}};
-			s2CreateSegmentShape(groundId, &s2_defaultShapeDef, &segment);
-			segment = {{-10.0f, 0.0f}, {-10.0f, 20.0f}};
-			s2CreateSegmentShape(groundId, &s2_defaultShapeDef, &segment);
-			segment = {{10.0f, 0.0f}, {10.0f, 20.0f}};
-			s2CreateSegmentShape(groundId, &s2_defaultShapeDef, &segment);
-			segment = {{-10.0f, 20.0f}, {10.0f, 20.0f}};
-			s2CreateSegmentShape(groundId, &s2_defaultShapeDef, &segment);
+			s2Capsule capsule;
+			capsule = {{-10.5f, 0.0f}, {10.5f, 0.0f}, 0.5f};
+			s2CreateCapsuleShape(groundId, &s2_defaultShapeDef, &capsule);
+			capsule = {{-10.5f, 0.0f}, {-10.5f, 20.5f}, 0.5f};
+			s2CreateCapsuleShape(groundId, &s2_defaultShapeDef, &capsule);
+			capsule = {{10.5f, 0.0f}, {10.5f, 20.5f}, 0.5f};
+			s2CreateCapsuleShape(groundId, &s2_defaultShapeDef, &capsule);
+			capsule = {{-10.5f, 20.5f}, {10.5f, 20.5f}, 0.5f};
+			s2CreateCapsuleShape(groundId, &s2_defaultShapeDef, &capsule);
 		}
 
 		m_row = 0;
@@ -879,7 +879,7 @@ public:
 
 	void Step(Settings& settings, s2Color bodyColor) override
 	{
-		if (m_count < e_maxCount && m_stepCount % 1 == 0)
+		if (settings.timeStep > 0.0f && m_count < e_maxCount && m_stepCount % 1 == 0)
 		{
 			CreateCircle();
 			m_count += 1;

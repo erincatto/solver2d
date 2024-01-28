@@ -128,7 +128,6 @@ void s2PrepareContacts_PGS(s2World* world, s2ContactConstraint* constraints, int
 			cp->localAnchorB = s2InvRotateVector(qB, rB);
 			cp->separation = mp->separation;
 
-			cp->baumgarte = 0.0f;
 			cp->biasCoefficient = mp->separation > 0.0f ? 1.0f : 0.0f;
 
 			float rtA = s2Cross(rA, tangent);

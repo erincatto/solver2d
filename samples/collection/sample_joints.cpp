@@ -95,7 +95,7 @@ class BallAndChain : public Sample
 public:
 	enum
 	{
-		e_count = 30
+		e_count = 40
 	};
 
 	BallAndChain(const Settings& settings, s2SolverType solverType)
@@ -103,7 +103,8 @@ public:
 	{
 		if (settings.restart == false)
 		{
-			g_camera.m_center = {0.0f, -5.0f};
+			g_camera.m_center = {0.0f, -20.0f};
+			g_camera.m_zoom = 2.0f;
 		}
 
 		s2BodyId groundId = s2_nullBodyId;
@@ -144,7 +145,7 @@ public:
 				prevBodyId = bodyId;
 			}
 
-			s2Circle circle = {{0.0f, 0.0f}, 4.0f};
+			s2Circle circle = {{0.0f, 0.0f}, 8.0f};
 
 			s2BodyDef bodyDef = s2_defaultBodyDef;
 			bodyDef.type = s2_dynamicBody;
@@ -303,8 +304,6 @@ public:
 
 		{
 			s2BodyId groundId = s2CreateBody(m_worldId, &s2_defaultBodyDef);
-			// s2Segment segment = {{-20.0f, -30.0f}, {20.0f, -30.0f}};
-			// s2CreateSegmentShape(groundId, &s2_defaultShapeDef, &segment);
 
 			s2Vec2 points[] = {
 				{-16.8672504, 31.088623},	 {16.8672485, 31.088623},	 {16.8672485, 17.1978741}, {8.26824951, 11.906374},
@@ -325,13 +324,6 @@ public:
 				s2Capsule capsule = {points[i1], points[i2], 0.5f};
 				s2CreateCapsuleShape(groundId, &shapeDef, &capsule);
 			}
-
-			// s2ChainDef chainDef = s2_defaultChainDef;
-			// chainDef.points = points;
-			// chainDef.count = count;
-			// chainDef.loop = true;
-			// chainDef.friction = 0.2f;
-			// s2CreateChain(groundId, &chainDef);
 
 			float sign = 1.0f;
 			float y = 14.0f;
@@ -359,6 +351,7 @@ public:
 				revoluteDef.maxMotorTorque = 200.0f;
 				revoluteDef.motorSpeed = 5.0f * sign;
 				revoluteDef.enableMotor = true;
+				revoluteDef.drawSize = 0.2f;
 
 				s2CreateRevoluteJoint(m_worldId, &revoluteDef);
 
@@ -484,6 +477,7 @@ public:
 		circle.radius = rad;
 
 		s2RevoluteJointDef jointDef = s2DefaultRevoluteJointDef();
+		jointDef.drawSize = 0.2f;
 
 		for (int k = 0; k < numk; ++k)
 		{

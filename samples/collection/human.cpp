@@ -42,7 +42,7 @@ void Human::Spawn(s2WorldId worldId, s2Vec2 position, float scale, int groupInde
 	float maxTorque = 0.05f * s;
 	bool enableMotor = false;
 	bool enableLimit = true;
-	float drawSize = 0.05f;
+	float drawSize = 0.025f;
 
 	// hip
 	{

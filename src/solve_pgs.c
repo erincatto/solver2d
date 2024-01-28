@@ -52,7 +52,7 @@ static void s2SolveContacts_PGS_Baumgarte(s2World* world, s2ContactConstraint* c
 			}
 			else
 			{
-				bias = s2_baumgarte * inv_h * S2_MIN(0.0f, cp->separation + s2_linearSlop);
+				bias = S2_MAX(s2_baumgarte * inv_h * S2_MIN(0.0f, cp->separation + s2_linearSlop), -s2_maxBaumgarteVelocity);
 			}
 
 			// static anchors
@@ -191,7 +191,7 @@ void s2Solve_PGS(s2World* world, s2StepContext* context)
 				continue;
 			}
 
-			s2SolveJoint_Baumgarte(joint, context, inv_h);
+			s2SolveJoint_Baumgarte(joint, context, h, inv_h, true);
 		}
 
 		s2SolveContacts_PGS_Baumgarte(world, constraints, constraintCount, inv_h);

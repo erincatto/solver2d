@@ -751,8 +751,8 @@ int main(int, char**)
 				s_settings.timeStep = 0.0f;
 			}
 
-			g_draw.DrawString(5, s_settings.textLine, "****PAUSED****");
-			s_settings.textLine += s_settings.textIncrement;
+			//g_draw.DrawString(5, s_settings.textLine, "****PAUSED****");
+			//s_settings.textLine += s_settings.textIncrement;
 		}
 
 		g_draw.m_debugDraw.drawShapes = s_settings.drawShapes;
