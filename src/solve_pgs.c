@@ -56,8 +56,8 @@ static void s2SolveContacts_PGS_Baumgarte(s2World* world, s2ContactConstraint* c
 			}
 
 			// static anchors
-			s2Vec2 rA = cp->rAs;
-			s2Vec2 rB = cp->rBs;
+			s2Vec2 rA = cp->rA0;
+			s2Vec2 rB = cp->rB0;
 
 			// Relative velocity at contact
 			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rB));
@@ -86,8 +86,8 @@ static void s2SolveContacts_PGS_Baumgarte(s2World* world, s2ContactConstraint* c
 			s2ContactConstraintPoint* cp = constraint->points + j;
 
 			// static anchors
-			s2Vec2 rA = cp->rAs;
-			s2Vec2 rB = cp->rBs;
+			s2Vec2 rA = cp->rA0;
+			s2Vec2 rB = cp->rB0;
 
 			// Relative velocity at contact
 			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rB));

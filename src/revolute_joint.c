@@ -706,6 +706,10 @@ void s2PrepareRevolute_XPBD(s2Joint* base, s2StepContext* context)
 	joint->lowerImpulse = 0.0f;
 	joint->upperImpulse = 0.0f;
 	joint->motorImpulse = 0.0f;
+
+	base->rA0 = s2RotateVector(bodyA->rot, s2Sub(base->localAnchorA, joint->localCenterA));
+	base->rB0 = s2RotateVector(bodyB->rot, s2Sub(base->localAnchorB, joint->localCenterB));
+	joint->separation0 = s2Add(s2Sub(bodyB->position, bodyA->position), s2Sub(base->rB0, base->rA0));
 }
 
 void s2SolveRevolute_XPBD(s2Joint* base, s2StepContext* context, float inv_h)
@@ -721,17 +725,19 @@ void s2SolveRevolute_XPBD(s2Joint* base, s2StepContext* context, float inv_h)
 	s2Body* bodyA = context->bodies + base->edges[0].bodyIndex;
 	s2Body* bodyB = context->bodies + base->edges[1].bodyIndex;
 
-	s2Vec2 cA = bodyA->position;
+	s2Vec2 dcA = bodyA->deltaPosition;
 	s2Rot qA = bodyA->rot;
-	s2Vec2 cB = bodyB->position;
+	s2Vec2 dcB = bodyB->deltaPosition;
 	s2Rot qB = bodyB->rot;
 
 	// Solve point-to-point constraint.
 	{
 		s2Vec2 rA = s2RotateVector(qA, s2Sub(base->localAnchorA, joint->localCenterA));
 		s2Vec2 rB = s2RotateVector(qB, s2Sub(base->localAnchorB, joint->localCenterB));
+		s2Vec2 drA = s2Sub(rA, base->rA0);
+		s2Vec2 drB = s2Sub(rB, base->rB0);
 
-		s2Vec2 deltaX = s2Sub(s2Add(cB, rB), s2Add(cA, rA));
+		s2Vec2 deltaX = s2Add(s2Add(s2Sub(dcB, dcA), s2Sub(drB, drA)), joint->separation0);
 
 		float c = s2Length(deltaX);
 		s2Vec2 n = s2Normalize(deltaX);
@@ -760,16 +766,16 @@ void s2SolveRevolute_XPBD(s2Joint* base, s2StepContext* context, float inv_h)
 
 		s2Vec2 p = s2MulSV(lambda, n);
 
-		cA = s2MulSub(cA, mA, p);
+		dcA = s2MulSub(dcA, mA, p);
 		qA = s2IntegrateRot(qA, -iA * s2Cross(rA, p));
 
-		cB = s2MulAdd(cB, mB, p);
+		dcB = s2MulAdd(dcB, mB, p);
 		qB = s2IntegrateRot(qB, iB * s2Cross(rB, p));
 	}
 
-	bodyA->position = cA;
+	bodyA->deltaPosition = dcA;
 	bodyA->rot = qA;
-	bodyB->position = cB;
+	bodyB->deltaPosition = dcB;
 	bodyB->rot = qB;
 }
 

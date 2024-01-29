@@ -64,6 +64,7 @@ typedef struct s2RevoluteJoint
 	// Solver temp
 	s2Vec2 localCenterA;
 	s2Vec2 localCenterB;
+	s2Vec2 separation0;
 	float invMassA;
 	float invMassB;
 	float invIA;
@@ -84,6 +85,8 @@ typedef struct s2Joint
 	s2JointEdge edges[2];
 	s2Vec2 localAnchorA;
 	s2Vec2 localAnchorB;
+	s2Vec2 rA0;
+	s2Vec2 rB0;
 	float drawSize;
 
 	union

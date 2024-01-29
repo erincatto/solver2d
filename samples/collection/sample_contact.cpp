@@ -518,13 +518,13 @@ public:
 	FarPyramid(const Settings& settings, s2SolverType solverType)
 		: Sample(settings, solverType)
 	{
-		// -10k, 5k
-		s2Vec2 origin = {-10000.0f, 5000.0f};
+		s2Vec2 origin = {-90000.0f, 80000.0f};
+		//s2Vec2 origin = {0.0f, 0.0f};
 
 		if (settings.restart == false)
 		{
-			g_camera.m_center = s2Add({0.0f, 50.0f}, origin);
-			g_camera.m_zoom = 2.25f;
+			g_camera.m_center = s2Add({0.0f, 6.0f}, origin);
+			g_camera.m_zoom = 0.3f;
 		}
 
 		{
@@ -543,16 +543,16 @@ public:
 		s2ShapeDef shapeDef = s2_defaultShapeDef;
 		shapeDef.density = 1.0f;
 
-		int baseCount = 40;
+		int baseCount = 10;
 
 		float h = 0.5f;
 		s2Polygon box = s2MakeSquare(h);
 
-		float shift = 1.0f * h;
+		float shift = 1.25f * h;
 
 		for (int i = 0; i < baseCount; ++i)
 		{
-			float y = (2.0f * i + 1.0f) * shift;
+			float y = (2.0f * i + 1.0f) * shift + 0.5f;
 
 			for (int j = i; j < baseCount; ++j)
 			{
@@ -905,3 +905,80 @@ public:
 };
 
 static int sampleConfined = RegisterSample("Contact", "Confined", Confined::Create);
+
+class FarStack : public Sample
+{
+public:
+	FarStack(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		// -10k, 5k
+		//s2Vec2 origin = {-20000.0f, 7500.0f};
+		s2Vec2 origin = {-90000.0f, 80000.0f};
+		//s2Vec2 origin = {0.0f, 0.0f};
+
+		if (settings.restart == false)
+		{
+			g_camera.m_center = s2Add({0.0f, 1.0f}, origin);
+			g_camera.m_zoom = 0.08f;
+		}
+
+		{
+			s2BodyDef bodyDef = s2_defaultBodyDef;
+			bodyDef.position = s2Add({0.0f, -1.0f}, origin);
+			s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
+
+			s2Polygon box = s2MakeBox(10.0f, 1.0f);
+			s2ShapeDef shapeDef = s2_defaultShapeDef;
+			s2CreatePolygonShape(groundId, &shapeDef, &box);
+		}
+
+		s2BodyDef bodyDef = s2_defaultBodyDef;
+		bodyDef.type = s2_dynamicBody;
+
+		s2ShapeDef shapeDef = s2_defaultShapeDef;
+		shapeDef.density = 1.0f;
+
+		{
+			bodyDef.position = s2Add({1.875f, 0.125f}, origin);
+			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+			s2Circle circle = {{0.0f, 0.0f}, 0.1f};
+			s2CreateCircleShape(bodyId, &shapeDef, &circle);
+		}
+
+		{
+			bodyDef.position = s2Add({-1.875f, 0.15f}, origin);
+			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+			s2Polygon box = s2MakeBox(0.1f, 0.125f);
+			s2CreatePolygonShape(bodyId, &shapeDef, &box);
+		}
+
+		{
+			bodyDef.position = s2Add({0.0f, 0.325f}, origin);
+			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+			s2Polygon box = s2MakeBox(2.0f, 0.05f);
+			s2CreatePolygonShape(bodyId, &shapeDef, &box);
+		}
+
+		{
+			bodyDef.position = s2Add({-0.5f, 0.9f}, origin);
+			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+			s2Polygon box = s2MakeSquare(0.25f);
+			s2CreatePolygonShape(bodyId, &shapeDef, &box);
+		}
+
+		{
+			bodyDef.position = s2Add({-0.55f, 1.7f}, origin);
+			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+			s2Polygon box = s2MakeSquare(0.5f);
+			s2CreatePolygonShape(bodyId, &shapeDef, &box);
+		}
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new FarStack(settings, solverType);
+	}
+};
+
+static int sampleFarStack = RegisterSample("Contact", "Far Stack", FarStack::Create);

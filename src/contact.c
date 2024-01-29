@@ -339,10 +339,10 @@ void s2UpdateContact(s2World* world, s2Contact* contact, s2Shape* shapeA, s2Body
 
 			if (mp1->id == id2)
 			{
-				mp2->localNormalA = mp1->localNormalA;
-				mp2->localNormalB = mp1->localNormalB;
-				mp2->localAnchorA = mp1->localAnchorA;
-				mp2->localAnchorB = mp1->localAnchorB;
+				mp2->frictionNormalA = mp1->frictionNormalA;
+				mp2->frictionNormalB = mp1->frictionNormalB;
+				mp2->frictionAnchorA = mp1->frictionAnchorA;
+				mp2->frictionAnchorB = mp1->frictionAnchorB;
 
 				mp2->normalImpulse = mp1->normalImpulse;
 				mp2->tangentImpulse = mp1->tangentImpulse;

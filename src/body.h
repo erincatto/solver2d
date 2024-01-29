@@ -3,11 +3,11 @@
 
 #pragma once
 
+#include "pool.h"
+
 #include "solver2d/distance.h"
 #include "solver2d/id.h"
 #include "solver2d/math.h"
-
-#include "pool.h"
 
 typedef struct s2Polygon s2Polygon;
 typedef struct s2World s2World;
@@ -21,10 +21,15 @@ typedef struct s2Body
 
 	// the body origin (not center of mass)
 	s2Vec2 origin;
-	
+
 	// center of mass position in world
-	s2Vec2 position0;
 	s2Vec2 position;
+
+	// delta position for the whole time step
+	s2Vec2 deltaPosition;
+
+	// delta position at the beginning of each sub-step
+	s2Vec2 deltaPosition0;
 
 	// rotation in radians
 	s2Rot rot0;
@@ -71,7 +76,7 @@ bool s2ShouldBodiesCollide(s2World* world, s2Body* bodyA, s2Body* bodyB);
 s2ShapeId s2CreatePolygonShape(s2BodyId bodyId, const s2ShapeDef* def, const s2Polygon* polygon);
 void s2Body_DestroyShape(s2ShapeId shapeId);
 
-#define S2_TRANSFORM(body)                                                                                                     \
+#define S2_TRANSFORM(body)                                                                                                       \
 	(s2Transform)                                                                                                                \
 	{                                                                                                                            \
 		body->origin, body->rot                                                                                                  \

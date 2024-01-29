@@ -179,7 +179,7 @@ class BallAndChain : public Sample
 public:
 	enum
 	{
-		e_count = 1
+		e_count = 2
 	};
 
 	BallAndChain(const Settings& settings, s2SolverType solverType)
@@ -226,7 +226,7 @@ public:
 				prevBodyId = bodyId;
 			}
 
-			#if 1
+			#if 0
 			s2Circle circle = {{0.0f, 0.0f}, 4.0f};
 			bodyDef.position = {0.0f, (1.0f - 2.0f * e_count) * hy - circle.radius - hy};
 			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
@@ -531,3 +531,108 @@ public:
 };
 
 static int sampleJointGrid = RegisterSample("Joints", "Joint Grid", JointGrid::Create);
+
+class FarRagdoll : public Sample
+{
+public:
+	FarRagdoll(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		s2Vec2 origin = {-10000.0f, 5000.0f};
+
+		if (settings.restart == false)
+		{
+			g_camera.m_center = s2Add({0.0f, 1.0f}, origin);
+			g_camera.m_zoom = 0.05f;
+		}
+
+		{
+			s2BodyDef bodyDef = s2_defaultBodyDef;
+			bodyDef.position = s2Add({0.0f, -1.0f}, origin);
+			s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
+			s2Polygon box = s2MakeBox(20.0f, 1.0f);
+			s2CreatePolygonShape(groundId, &s2_defaultShapeDef, &box);
+		}
+
+		m_human.Spawn(m_worldId, s2Add({0.0f, 1.0f}, origin), 1.0f, 1, nullptr);
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new FarRagdoll(settings, solverType);
+	}
+
+	Human m_human;
+};
+
+static int sampleFarRagdoll = RegisterSample("Joints", "Far Ragdoll", FarRagdoll::Create);
+
+class FarChain : public Sample
+{
+public:
+	enum
+	{
+		e_count = 40
+	};
+
+	FarChain(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		s2Vec2 origin = {-80000.0f, 60000.0f};
+
+		if (settings.restart == false)
+		{
+			g_camera.m_center = s2Add({0.0f, 0.0f}, origin);
+			g_camera.m_zoom = 1.0f;
+		}
+
+		s2BodyId groundId = s2_nullBodyId;
+		{
+			s2BodyDef bodyDef = s2_defaultBodyDef;
+			bodyDef.position = origin;
+			groundId = s2CreateBody(m_worldId, &bodyDef);
+		}
+
+		{
+			float hx = 0.5f;
+			s2Capsule capsule = {{-hx, 0.0f}, {hx, 0.0f}, 0.125f};
+
+			s2ShapeDef shapeDef = s2_defaultShapeDef;
+			shapeDef.density = 20.0f;
+
+			s2RevoluteJointDef jointDef = s2DefaultRevoluteJointDef();
+			jointDef.drawSize = 0.1f;
+
+			s2Vec2 prevLocalPivot = {0.0f, e_count * hx};
+			s2BodyId prevBodyId = groundId;
+			for (int i = 0; i < e_count; ++i)
+			{
+				s2BodyDef bodyDef = s2_defaultBodyDef;
+				bodyDef.type = s2_dynamicBody;
+				bodyDef.position = s2Add({(1.0f + 2.0f * i) * hx, e_count * hx}, origin);
+				bodyDef.linearDamping = 0.1f;
+				bodyDef.angularDamping = 0.1f;
+
+				s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+				s2CreateCapsuleShape(bodyId, &shapeDef, &capsule);
+
+				s2Vec2 pivot = {(2.0f * i) * hx, e_count * hx};
+				jointDef.bodyIdA = prevBodyId;
+				jointDef.bodyIdB = bodyId;
+				jointDef.localAnchorA = prevLocalPivot;
+				jointDef.localAnchorB = {-hx, 0.0f};
+				s2CreateRevoluteJoint(m_worldId, &jointDef);
+
+				prevLocalPivot = {hx, 0.0f};
+				prevBodyId = bodyId;
+			}
+		}
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new FarChain(settings, solverType);
+	}
+};
+
+static int sampleFarChain = RegisterSample("Joints", "Far Chain", FarChain::Create);

@@ -62,12 +62,13 @@ static void s2PrepareContacts_Sticky(s2World* world, s2ContactConstraint* constr
 			cp->normalImpulse = 0.0f;
 			cp->tangentImpulse = 0.0f;
 
-			s2Vec2 rA = s2Sub(mp->point, cA);
-			s2Vec2 rB = s2Sub(mp->point, cB);
-			cp->rAs = rA;
-			cp->rBs = rB;
-			cp->localAnchorA = s2InvRotateVector(qA, rA);
-			cp->localAnchorB = s2InvRotateVector(qB, rB);
+			cp->localAnchorA = s2Sub(mp->localAnchorA, bodyA->localCenter);
+			cp->localAnchorB = s2Sub(mp->localAnchorB, bodyB->localCenter);
+			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
+			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
+
+			cp->rA0 = rA;
+			cp->rB0 = rB;
 			cp->separation = mp->separation;
 
 			float rtA = s2Cross(rA, tangent);
@@ -90,8 +91,8 @@ static void s2PrepareContacts_Sticky(s2World* world, s2ContactConstraint* constr
 				const s2ManifoldPoint* mp = manifold->points + j;
 				s2ContactConstraintPoint* cp = constraint->points + j;
 
-				s2Vec2 normalA = s2RotateVector(qA, mp->localNormalA);
-				s2Vec2 normalB = s2RotateVector(qB, mp->localNormalB);
+				s2Vec2 normalA = s2RotateVector(qA, mp->frictionNormalA);
+				s2Vec2 normalB = s2RotateVector(qB, mp->frictionNormalB);
 
 				float nn = s2Dot(normalA, normalB);
 				if (nn < 0.98f)
@@ -100,8 +101,8 @@ static void s2PrepareContacts_Sticky(s2World* world, s2ContactConstraint* constr
 					break;
 				}
 
-				s2Vec2 anchorA = s2RotateVector(qA, mp->localAnchorA);
-				s2Vec2 anchorB = s2RotateVector(qB, mp->localAnchorB);
+				s2Vec2 anchorA = s2RotateVector(qA, mp->frictionAnchorA);
+				s2Vec2 anchorB = s2RotateVector(qB, mp->frictionAnchorB);
 				s2Vec2 offset = s2Add(s2Sub(cB, cA), s2Sub(anchorB, anchorA));
 				float normalSeparation = s2Dot(offset, normalA);
 				if (S2_ABS(normalSeparation) > 2.0f * s2_linearSlop)
@@ -110,8 +111,8 @@ static void s2PrepareContacts_Sticky(s2World* world, s2ContactConstraint* constr
 					break;
 				}
 
-				cp->localFrictionAnchorA = mp->localAnchorA;
-				cp->localFrictionAnchorB = mp->localAnchorB;
+				cp->localFrictionAnchorA = mp->frictionAnchorA;
+				cp->localFrictionAnchorB = mp->frictionAnchorB;
 				cp->tangentSeparation = s2Dot(offset, tangent);
 
 				float rtA = s2Cross(anchorA, tangent);
@@ -135,16 +136,16 @@ static void s2PrepareContacts_Sticky(s2World* world, s2ContactConstraint* constr
 				s2ManifoldPoint* mp = manifold->points + j;
 				s2ContactConstraintPoint* cp = constraint->points + j;
 
-				s2Vec2 rA = cp->rAs;
-				s2Vec2 rB = cp->rBs;
+				s2Vec2 rA = cp->rA0;
+				s2Vec2 rB = cp->rB0;
 
-				mp->localNormalA = s2InvRotateVector(qA, normal);
-				mp->localNormalB = s2InvRotateVector(qB, normal);
-				mp->localAnchorA = s2InvRotateVector(qA, rA);
-				mp->localAnchorB = s2InvRotateVector(qB, rB);
+				mp->frictionNormalA = s2InvRotateVector(qA, normal);
+				mp->frictionNormalB = s2InvRotateVector(qB, normal);
+				mp->frictionAnchorA = s2InvRotateVector(qA, rA);
+				mp->frictionAnchorB = s2InvRotateVector(qB, rB);
 
-				cp->localFrictionAnchorA = mp->localAnchorA;
-				cp->localFrictionAnchorB = mp->localAnchorB;
+				cp->localFrictionAnchorA = mp->frictionAnchorA;
+				cp->localFrictionAnchorB = mp->frictionAnchorB;
 				cp->tangentSeparation = 0.0f;
 
 				float rtA = s2Cross(rA, tangent);

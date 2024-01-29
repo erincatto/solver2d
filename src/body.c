@@ -29,8 +29,9 @@ s2BodyId s2CreateBody(s2WorldId worldId, const s2BodyDef* def)
 
 	b->type = def->type;
 	b->origin = def->position;
-	b->position0 = def->position;
 	b->position = def->position;
+	b->deltaPosition = s2Vec2_zero;
+	b->deltaPosition0 = s2Vec2_zero;
 	b->rot0 = s2MakeRot(def->angle);
 	b->rot = b->rot0;
 	b->localCenter = s2Vec2_zero;

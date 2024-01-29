@@ -782,7 +782,7 @@ int main(int, char**)
 
 		// if (g_draw.m_showUI)
 		{
-			snprintf(buffer, 128, "%.1f ms - step %d", 1000.0f * frameTime, stepCount);
+			snprintf(buffer, 128, "%.1f ms - step %d - camera (%g, %g)", 1000.0f * frameTime, stepCount, g_camera.m_center.x, g_camera.m_center.y);
 			ImGui::Begin("Overlay", nullptr,
 						 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize |
 							 ImGuiWindowFlags_NoScrollbar);
