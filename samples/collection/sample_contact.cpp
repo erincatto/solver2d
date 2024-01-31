@@ -982,3 +982,58 @@ public:
 };
 
 static int sampleFarStack = RegisterSample("Contact", "Far Stack", FarStack::Create);
+
+class FarRecovery : public Sample
+{
+public:
+	FarRecovery(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		s2Vec2 origin = {-90000.0f, 80000.0f};
+
+		if (settings.restart == false)
+		{
+			g_camera.m_center = s2Add({0.0f, 5.0f}, origin);
+			g_camera.m_zoom = 0.25f;
+		}
+
+		int baseCount = 4;
+		float overlap = 0.25f;
+		float extent = 0.5f;
+
+		s2BodyDef bodyDef = s2_defaultBodyDef;
+		bodyDef.position = origin;
+		s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
+		s2Segment segment = {{-40.0f, 0.0f}, {40.0f, 0.0f}};
+		s2CreateSegmentShape(groundId, &s2_defaultShapeDef, &segment);
+
+		bodyDef.type = s2_dynamicBody;
+
+		s2Polygon box = s2MakeSquare(extent);
+
+		float fraction = 1.0f - overlap;
+		float y = extent;
+		for (int i = 0; i < baseCount; ++i)
+		{
+			float x = fraction * extent * (i - baseCount);
+			for (int j = i; j < baseCount; ++j)
+			{
+				bodyDef.position = s2Add({x, y}, origin);
+				s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+
+				s2CreatePolygonShape(bodyId, &s2_defaultShapeDef, &box);
+
+				x += 2.0f * fraction * extent;
+			}
+
+			y += 2.0f * fraction * extent;
+		}
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new FarRecovery(settings, solverType);
+	}
+};
+
+static int sampleFarRecovery = RegisterSample("Contact", "Far Recovery", FarRecovery::Create);

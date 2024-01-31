@@ -31,7 +31,7 @@ typedef struct s2Body
 	// delta position at the beginning of each sub-step
 	s2Vec2 deltaPosition0;
 
-	// rotation in radians
+	// rotation
 	s2Rot rot0;
 	s2Rot rot;
 

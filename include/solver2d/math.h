@@ -259,7 +259,7 @@ static inline float s2ComputeAngularVelocity(s2Rot q1, s2Rot q2, float inv_h)
 /// Get the angle in radians
 static inline float s2Rot_GetAngle(s2Rot q)
 {
-	return 2.0f * atan2f(q.s, q.c);
+	return atan2f(q.s, q.c);
 }
 
 /// Get the x-axis
@@ -280,6 +280,7 @@ static inline s2Vec2 s2Rot_GetYAxis(s2Rot q)
 /// equivalent to angle addition via trig identity:
 ///	sin(b + a) = sin(b) * cos(a) + cos(b) * sin(a)
 ///	cos(b + a) = cos(b) * cos(a) - sin(b) * sin(a)
+///	order independent!
 static inline s2Rot s2MulRot(s2Rot b, s2Rot a)
 {
 	// [bc -bs] * [ac -as] = [bc*ac-bs*as -bc*as-bs*ac]
