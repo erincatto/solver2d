@@ -152,6 +152,11 @@ void s2World_Step(s2WorldId worldId, float timeStep, int velIters, int posIters,
 		bool overlap = s2AABB_Overlaps(shapeA->fatAABB, shapeB->fatAABB);
 		if (overlap == true)
 		{
+			if (i == 7)
+			{
+				i += 0;
+			}
+
 			// Update contact respecting shape/body order (A,B)
 			s2Body* bodyA = bodies + shapeA->bodyIndex;
 			s2Body* bodyB = bodies + shapeB->bodyIndex;
@@ -428,7 +433,7 @@ void s2World_Draw(s2WorldId worldId, s2DebugDraw* draw)
 
 	if (draw->drawMass)
 	{
-		s2Vec2 offset = {0.1f, 0.1f};
+		s2Vec2 offset = {0.0f, 0.0f};
 		s2Body* bodies = world->bodies;
 		int32_t bodyCapacity = world->bodyPool.capacity;
 		for (int32_t i = 0; i < bodyCapacity; ++i)
@@ -445,7 +450,7 @@ void s2World_Draw(s2WorldId worldId, s2DebugDraw* draw)
 			s2Vec2 p = s2TransformPoint(transform, offset);
 
 			char buffer[32];
-			sprintf(buffer, "%.2f", body->mass);
+			sprintf(buffer, "%g", body->mass);
 			draw->DrawString(p, buffer, draw->context);
 		}
 	}
@@ -476,35 +481,39 @@ void s2World_Draw(s2WorldId worldId, s2DebugDraw* draw)
 			s2Vec2 normal = contact->manifold.normal;
 			char buffer[32];
 
+			s2Body* bodyA = world->bodies + contact->edges[0].bodyIndex;
+			s2Transform xfA = S2_TRANSFORM(bodyA);
+
 			for (int j = 0; j < pointCount; ++j)
 			{
 				s2ManifoldPoint* point = contact->manifold.points + j;
+				s2Vec2 worldPoint = s2TransformPoint(xfA, point->localAnchorA);
 
 				if (point->separation > s2_linearSlop)
 				{
 					// Speculative
-					draw->DrawPoint(point->point, 5.0f, speculativeColor, draw->context);
+					draw->DrawPoint(worldPoint, 5.0f, speculativeColor, draw->context);
 				}
 				else if (point->persisted == false)
 				{
 					// Add
-					draw->DrawPoint(point->point, 10.0f, addColor, draw->context);
+					draw->DrawPoint(worldPoint, 10.0f, addColor, draw->context);
 				}
 				else if (point->persisted == true)
 				{
 					// Persist
-					draw->DrawPoint(point->point, 5.0f, persistColor, draw->context);
+					draw->DrawPoint(worldPoint, 5.0f, persistColor, draw->context);
 				}
 
 				if (draw->drawContactNormals)
 				{
-					s2Vec2 p1 = point->point;
+					s2Vec2 p1 = worldPoint;
 					s2Vec2 p2 = s2MulAdd(p1, k_axisScale, normal);
 					draw->DrawSegment(p1, p2, normalColor, draw->context);
 				}
 				else if (draw->drawContactImpulses)
 				{
-					s2Vec2 p1 = point->point;
+					s2Vec2 p1 = worldPoint;
 					s2Vec2 p2 = s2MulAdd(p1, k_impulseScale * point->normalImpulse, normal);
 					draw->DrawSegment(p1, p2, impulseColor, draw->context);
 					snprintf(buffer, S2_ARRAY_COUNT(buffer), "%.2g", point->normalImpulse);
@@ -514,7 +523,7 @@ void s2World_Draw(s2WorldId worldId, s2DebugDraw* draw)
 				if (draw->drawFrictionImpulses)
 				{
 					s2Vec2 tangent = s2RightPerp(normal);
-					s2Vec2 p1 = point->point;
+					s2Vec2 p1 = worldPoint;
 					s2Vec2 p2 = s2MulAdd(p1, k_impulseScale * point->tangentImpulse, tangent);
 					draw->DrawSegment(p1, p2, frictionColor, draw->context);
 					snprintf(buffer, S2_ARRAY_COUNT(buffer), "%.2g", point->normalImpulse);

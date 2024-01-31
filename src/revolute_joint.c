@@ -24,7 +24,7 @@
 // J = [0 0 -1 0 0 1]
 // K = invI1 + invI2
 
-void s2PrepareRevolute(s2Joint* base, s2StepContext* context)
+void s2PrepareRevolute(s2Joint* base, s2StepContext* context, bool warmStart)
 {
 	S2_ASSERT(base->type == s2_revoluteJoint);
 
@@ -85,18 +85,18 @@ void s2PrepareRevolute(s2Joint* base, s2StepContext* context)
 		fixedRotation = true;
 	}
 
-	if (joint->enableLimit == false || fixedRotation || context->warmStart == false)
+	if (joint->enableLimit == false || fixedRotation || warmStart == false)
 	{
 		joint->lowerImpulse = 0.0f;
 		joint->upperImpulse = 0.0f;
 	}
 
-	if (joint->enableMotor == false || fixedRotation || context->warmStart == false)
+	if (joint->enableMotor == false || fixedRotation || warmStart == false)
 	{
 		joint->motorImpulse = 0.0f;
 	}
 
-	if (context->warmStart == false)
+	if (warmStart == false)
 	{
 		joint->impulse = s2Vec2_zero;
 	}
@@ -457,11 +457,6 @@ void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float 
 			joint->lowerImpulse = S2_MAX(joint->lowerImpulse + impulse, 0.0f);
 			impulse = joint->lowerImpulse - oldImpulse;
 
-			if (C > 0.0f && useBias == false && impulse != 0.0f)
-			{
-				impulse += 0.0f;
-			}
-
 			wA -= iA * impulse;
 			wB += iB * impulse;
 		}
@@ -492,11 +487,6 @@ void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float 
 			float oldImpulse = joint->upperImpulse;
 			joint->upperImpulse = S2_MAX(joint->upperImpulse + impulse, 0.0f);
 			impulse = joint->upperImpulse - oldImpulse;
-
-			if (C > 0.0f && useBias == false && impulse != 0.0f)
-			{
-				impulse += 0.0f;
-			}
 
 			wA += iA * impulse;
 			wB -= iB * impulse;
@@ -557,7 +547,7 @@ void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float 
 }
 
 // similar to box2d_lite
-void s2SolveRevolute_Baumgarte(s2Joint* base, s2StepContext* context, float inv_h)
+void s2SolveRevolute_Baumgarte(s2Joint* base, s2StepContext* context, float h, float inv_h, bool useBias)
 {
 	S2_ASSERT(base->type == s2_revoluteJoint);
 
@@ -573,6 +563,78 @@ void s2SolveRevolute_Baumgarte(s2Joint* base, s2StepContext* context, float inv_
 
 	float mA = joint->invMassA, mB = joint->invMassB;
 	float iA = joint->invIA, iB = joint->invIB;
+
+	bool fixedRotation = (iA + iB == 0.0f);
+
+	// Solve motor constraint.
+	if (joint->enableMotor && fixedRotation == false)
+	{
+		float Cdot = wB - wA - joint->motorSpeed;
+		float impulse = -joint->axialMass * Cdot;
+		float oldImpulse = joint->motorImpulse;
+		float maxImpulse = h * joint->maxMotorTorque;
+		joint->motorImpulse = S2_CLAMP(joint->motorImpulse + impulse, -maxImpulse, maxImpulse);
+		impulse = joint->motorImpulse - oldImpulse;
+
+		wA -= iA * impulse;
+		wB += iB * impulse;
+	}
+
+	if (joint->enableLimit && fixedRotation == false)
+	{
+		float jointAngle = s2RelativeAngle(bodyB->rot, bodyA->rot) - joint->referenceAngle;
+
+		// Lower limit
+		{
+			float C = jointAngle - joint->lowerAngle;
+			float bias = 0.0f;
+			if (C > 0.0f)
+			{
+				// speculation
+				bias = C * inv_h;
+			}
+			else if (useBias)
+			{
+				bias = s2_baumgarte * inv_h * C;
+			}
+			
+			float Cdot = wB - wA;
+			float impulse = -joint->axialMass * (Cdot + bias);
+			float oldImpulse = joint->lowerImpulse;
+			joint->lowerImpulse = S2_MAX(joint->lowerImpulse + impulse, 0.0f);
+			impulse = joint->lowerImpulse - oldImpulse;
+
+			wA -= iA * impulse;
+			wB += iB * impulse;
+		}
+
+		// Upper limit
+		// Note: signs are flipped to keep C positive when the constraint is satisfied.
+		// This also keeps the impulse positive when the limit is active.
+		{
+			float C = joint->upperAngle - jointAngle;
+
+			float bias = 0.0f;
+			if (C > 0.0f)
+			{
+				// speculation
+				bias = C * inv_h;
+			}
+			else if (useBias)
+			{
+				bias = s2_baumgarte * inv_h * C;
+			}
+
+			float Cdot = wA - wB;
+			float impulse = -joint->axialMass * (Cdot + bias);
+			float oldImpulse = joint->upperImpulse;
+			joint->upperImpulse = S2_MAX(joint->upperImpulse + impulse, 0.0f);
+			impulse = joint->upperImpulse - oldImpulse;
+
+			wA += iA * impulse;
+			wB -= iB * impulse;
+		}
+	}
 
 	// Solve point-to-point constraint
 	{
@@ -644,6 +706,10 @@ void s2PrepareRevolute_XPBD(s2Joint* base, s2StepContext* context)
 	joint->lowerImpulse = 0.0f;
 	joint->upperImpulse = 0.0f;
 	joint->motorImpulse = 0.0f;
+
+	base->rA0 = s2RotateVector(bodyA->rot, s2Sub(base->localAnchorA, joint->localCenterA));
+	base->rB0 = s2RotateVector(bodyB->rot, s2Sub(base->localAnchorB, joint->localCenterB));
+	joint->separation0 = s2Add(s2Sub(bodyB->position, bodyA->position), s2Sub(base->rB0, base->rA0));
 }
 
 void s2SolveRevolute_XPBD(s2Joint* base, s2StepContext* context, float inv_h)
@@ -651,24 +717,27 @@ void s2SolveRevolute_XPBD(s2Joint* base, s2StepContext* context, float inv_h)
 	S2_ASSERT(base->type == s2_revoluteJoint);
 
 	// joint grid sample blows up (more quickly) without compliance
-	float compliance = 0.00001f * inv_h * inv_h;
+	//float compliance = 0.00001f * inv_h * inv_h;
+	float compliance = 0.0f;
 
 	s2RevoluteJoint* joint = &base->revoluteJoint;
 
 	s2Body* bodyA = context->bodies + base->edges[0].bodyIndex;
 	s2Body* bodyB = context->bodies + base->edges[1].bodyIndex;
 
-	s2Vec2 cA = bodyA->position;
+	s2Vec2 dcA = bodyA->deltaPosition;
 	s2Rot qA = bodyA->rot;
-	s2Vec2 cB = bodyB->position;
+	s2Vec2 dcB = bodyB->deltaPosition;
 	s2Rot qB = bodyB->rot;
 
 	// Solve point-to-point constraint.
 	{
 		s2Vec2 rA = s2RotateVector(qA, s2Sub(base->localAnchorA, joint->localCenterA));
 		s2Vec2 rB = s2RotateVector(qB, s2Sub(base->localAnchorB, joint->localCenterB));
+		s2Vec2 drA = s2Sub(rA, base->rA0);
+		s2Vec2 drB = s2Sub(rB, base->rB0);
 
-		s2Vec2 deltaX = s2Sub(s2Add(cB, rB), s2Add(cA, rA));
+		s2Vec2 deltaX = s2Add(s2Add(s2Sub(dcB, dcA), s2Sub(drB, drA)), joint->separation0);
 
 		float c = s2Length(deltaX);
 		s2Vec2 n = s2Normalize(deltaX);
@@ -697,16 +766,16 @@ void s2SolveRevolute_XPBD(s2Joint* base, s2StepContext* context, float inv_h)
 
 		s2Vec2 p = s2MulSV(lambda, n);
 
-		cA = s2MulSub(cA, mA, p);
+		dcA = s2MulSub(dcA, mA, p);
 		qA = s2IntegrateRot(qA, -iA * s2Cross(rA, p));
 
-		cB = s2MulAdd(cB, mB, p);
+		dcB = s2MulAdd(dcB, mB, p);
 		qB = s2IntegrateRot(qB, iB * s2Cross(rB, p));
 	}
 
-	bodyA->position = cA;
+	bodyA->deltaPosition = dcA;
 	bodyA->rot = qA;
-	bodyB->position = cB;
+	bodyB->deltaPosition = dcB;
 	bodyB->rot = qB;
 }
 

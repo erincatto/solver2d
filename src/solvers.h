@@ -24,7 +24,9 @@ typedef struct s2StepContext
 typedef struct s2ContactConstraintPoint
 {
 	// static anchors, need to be careful to not use these in TGS solvers
-	s2Vec2 rAs, rBs;
+	s2Vec2 rA0, rB0;
+
+	// local anchor relative center of mass
 	s2Vec2 localAnchorA, localAnchorB;
 	s2Vec2 localFrictionAnchorA, localFrictionAnchorB;
 	float tangentSeparation;
@@ -36,7 +38,6 @@ typedef struct s2ContactConstraintPoint
 	float massCoefficient;
 	float biasCoefficient;
 	float impulseCoefficient;
-	float baumgarte;
 	bool frictionValid;
 } s2ContactConstraintPoint;
 

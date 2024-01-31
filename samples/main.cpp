@@ -80,7 +80,7 @@ static void RestartTest()
 
 	for (int i = 0; i < s2_solverTypeCount; ++i)
 	{
-		if (s_settings.enablesSolvers[i])
+		if (s_settings.enabledSolvers[i])
 		{
 			s_samples[i] = g_sampleEntries[s_settings.sampleIndex].createFcn(s_settings, s2SolverType(i));
 		}
@@ -208,6 +208,44 @@ static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, i
 				if (s_selection == g_sampleCount)
 				{
 					s_selection = 0;
+				}
+				break;
+
+			case GLFW_KEY_COMMA:
+				// Switch to previous solver
+				{
+					int index = -1;
+					for (int i = 0; i < s2_solverTypeCount; ++i)
+					{
+						if (s_settings.enabledSolvers[i] == true)
+						{
+							index = i;
+							s_settings.enabledSolvers[i] = false;
+						}
+					}
+
+					index = index > 0 ? index - 1 : s2_solverTypeCount - 1;
+					s_settings.enabledSolvers[index] = true;
+					RestartTest();
+				}
+				break;
+
+			case GLFW_KEY_PERIOD:
+				// Switch to next solver
+				{
+					int index = -1;
+					for (int i = 0; i < s2_solverTypeCount; ++i)
+					{
+						if (s_settings.enabledSolvers[i] == true)
+						{
+							index = i;
+							s_settings.enabledSolvers[i] = false;
+						}
+					}
+
+					index = index < s2_solverTypeCount - 1 ? index + 1 : 0;
+					s_settings.enabledSolvers[index] = true;
+					RestartTest();
 				}
 				break;
 
@@ -364,44 +402,44 @@ static void UpdateUI(s2Color* solverColors)
 
 			ImGui::Separator();
 
-			s2Color c = solverColors[s2_solverPGS_NGS_Block];
+			s2Color c = solverColors[s2_solverPGS];
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{c.r, c.g, c.b, c.a});
-			ImGui::Checkbox("PGS NGS Block", &s_settings.enablesSolvers[s2_solverPGS_NGS_Block]);
+			ImGui::Checkbox("PGS", &s_settings.enabledSolvers[s2_solverPGS]);
 			ImGui::PopStyleColor();
 
 			c = solverColors[s2_solverPGS_NGS];
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{c.r, c.g, c.b, c.a});
-			ImGui::Checkbox("PGS NGS", &s_settings.enablesSolvers[s2_solverPGS_NGS]);
+			ImGui::Checkbox("PGS NGS", &s_settings.enabledSolvers[s2_solverPGS_NGS]);
+			ImGui::PopStyleColor();
+
+			c = solverColors[s2_solverPGS_NGS_Block];
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{c.r, c.g, c.b, c.a});
+			ImGui::Checkbox("PGS NGS Block", &s_settings.enabledSolvers[s2_solverPGS_NGS_Block]);
 			ImGui::PopStyleColor();
 
 			c = solverColors[s2_solverPGS_Soft];
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{c.r, c.g, c.b, c.a});
-			ImGui::Checkbox("PGS Soft", &s_settings.enablesSolvers[s2_solverPGS_Soft]);
-			ImGui::PopStyleColor();
-
-			c = solverColors[s2_solverXPBD];
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{c.r, c.g, c.b, c.a});
-			ImGui::Checkbox("XPBD", &s_settings.enablesSolvers[s2_solverXPBD]);
-			ImGui::PopStyleColor();
-
-			c = solverColors[s2_solverTGS_Soft];
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{c.r, c.g, c.b, c.a});
-			ImGui::Checkbox("TGS Soft", &s_settings.enablesSolvers[s2_solverTGS_Soft]);
+			ImGui::Checkbox("PGS Soft", &s_settings.enabledSolvers[s2_solverPGS_Soft]);
 			ImGui::PopStyleColor();
 
 			c = solverColors[s2_solverTGS_Sticky];
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{c.r, c.g, c.b, c.a});
-			ImGui::Checkbox("TGS Sticky", &s_settings.enablesSolvers[s2_solverTGS_Sticky]);
+			ImGui::Checkbox("TGS Sticky", &s_settings.enabledSolvers[s2_solverTGS_Sticky]);
+			ImGui::PopStyleColor();
+
+			c = solverColors[s2_solverTGS_Soft];
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{c.r, c.g, c.b, c.a});
+			ImGui::Checkbox("TGS Soft", &s_settings.enabledSolvers[s2_solverTGS_Soft]);
 			ImGui::PopStyleColor();
 
 			c = solverColors[s2_solverTGS_NGS];
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{c.r, c.g, c.b, c.a});
-			ImGui::Checkbox("TGS NGS", &s_settings.enablesSolvers[s2_solverTGS_NGS]);
+			ImGui::Checkbox("TGS NGS", &s_settings.enabledSolvers[s2_solverTGS_NGS]);
 			ImGui::PopStyleColor();
 
-			c = solverColors[s2_solverPGS];
+			c = solverColors[s2_solverXPBD];
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{c.r, c.g, c.b, c.a});
-			ImGui::Checkbox("PGS", &s_settings.enablesSolvers[s2_solverPGS]);
+			ImGui::Checkbox("XPBD", &s_settings.enabledSolvers[s2_solverXPBD]);
 			ImGui::PopStyleColor();
 
 			ImGui::Separator();
@@ -607,17 +645,21 @@ int main(int, char**)
 
 	float colorAlpha = 1.0f;
 	s2Color solverColors[s2_solverTypeCount] = {
-		s2MakeColor(s2_colorBlueViolet, colorAlpha), s2MakeColor(s2_colorDodgerBlue, colorAlpha),
-		s2MakeColor(s2_colorCoral, colorAlpha),		 s2MakeColor(s2_colorSpringGreen, colorAlpha),
-		s2MakeColor(s2_colorYellow2, colorAlpha),	 s2MakeColor(s2_colorLavenderBlush, colorAlpha),
-		s2MakeColor(s2_colorOrchid, colorAlpha),	 s2MakeColor(s2_colorThistle, colorAlpha),
+		s2MakeColor(s2_colorCyan, colorAlpha),
+		s2MakeColor(s2_colorDodgerBlue, colorAlpha),
+		s2MakeColor(s2_colorBlueViolet, colorAlpha),
+		s2MakeColor(s2_colorCoral, colorAlpha),
+		s2MakeColor(s2_colorLavenderBlush, colorAlpha),
+		s2MakeColor(s2_colorYellow2, colorAlpha),
+		s2MakeColor(s2_colorOrchid, colorAlpha),
+		s2MakeColor(s2_colorSpringGreen, colorAlpha),
 	};
 
 	static_assert(S2_ARRAY_COUNT(solverColors) == s2_solverTypeCount);
 
 	for (int i = 0; i < s2_solverTypeCount; ++i)
 	{
-		if (s_settings.enablesSolvers[i])
+		if (s_settings.enabledSolvers[i])
 		{
 			s_samples[i] = g_sampleEntries[s_settings.sampleIndex].createFcn(s_settings, s2SolverType(i));
 		}
@@ -709,8 +751,8 @@ int main(int, char**)
 				s_settings.timeStep = 0.0f;
 			}
 
-			g_draw.DrawString(5, s_settings.textLine, "****PAUSED****");
-			s_settings.textLine += s_settings.textIncrement;
+			//g_draw.DrawString(5, s_settings.textLine, "****PAUSED****");
+			//s_settings.textLine += s_settings.textIncrement;
 		}
 
 		g_draw.m_debugDraw.drawShapes = s_settings.drawShapes;
@@ -740,7 +782,7 @@ int main(int, char**)
 
 		// if (g_draw.m_showUI)
 		{
-			snprintf(buffer, 128, "%.1f ms - step %d", 1000.0f * frameTime, stepCount);
+			snprintf(buffer, 128, "%.1f ms - step %d - camera (%g, %g)", 1000.0f * frameTime, stepCount, g_camera.m_center.x, g_camera.m_center.y);
 			ImGui::Begin("Overlay", nullptr,
 						 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize |
 							 ImGuiWindowFlags_NoScrollbar);
@@ -771,7 +813,7 @@ int main(int, char**)
 
 			for (int i = 0; i < s2_solverTypeCount; ++i)
 			{
-				if (s_settings.enablesSolvers[i])
+				if (s_settings.enabledSolvers[i])
 				{
 					s_samples[i] = g_sampleEntries[s_settings.sampleIndex].createFcn(s_settings, s2SolverType(i));
 				}

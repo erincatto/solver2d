@@ -47,8 +47,8 @@ static void s2SolveContacts_PGS(s2World* world, s2ContactConstraint* constraints
 			s2ContactConstraintPoint* cp = constraint->points + j;
 
 			// static anchors
-			s2Vec2 rA = cp->rAs;
-			s2Vec2 rB = cp->rBs;
+			s2Vec2 rA = cp->rA0;
+			s2Vec2 rB = cp->rB0;
 
 			// Relative velocity at contact
 			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rB));
@@ -77,8 +77,8 @@ static void s2SolveContacts_PGS(s2World* world, s2ContactConstraint* constraints
 			s2ContactConstraintPoint* cp = constraint->points + j;
 
 			// static anchors
-			s2Vec2 rA = cp->rAs;
-			s2Vec2 rB = cp->rBs;
+			s2Vec2 rA = cp->rA0;
+			s2Vec2 rB = cp->rB0;
 
 			// Relative velocity at contact
 			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rB));
@@ -98,10 +98,10 @@ static void s2SolveContacts_PGS(s2World* world, s2ContactConstraint* constraints
 			s2Vec2 P = s2MulSV(lambda, tangent);
 
 			vA = s2MulSub(vA, mA, P);
-			wA -= iA * s2Cross(cp->rAs, P);
+			wA -= iA * s2Cross(cp->rA0, P);
 
 			vB = s2MulAdd(vB, mB, P);
-			wB += iB * s2Cross(cp->rBs, P);
+			wB += iB * s2Cross(cp->rB0, P);
 		}
 
 		bodyA->linearVelocity = vA;
@@ -161,7 +161,7 @@ void s2Solve_PGS_NGS(s2World* world, s2StepContext* context)
 		{
 			continue;
 		}
-		s2PrepareJoint(joint, context);
+		s2PrepareJoint(joint, context, context->warmStart);
 
 		if (context->warmStart)
 		{

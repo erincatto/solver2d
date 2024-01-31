@@ -59,8 +59,8 @@ static void s2SolveContacts_PGS_Soft(s2World* world, s2ContactConstraint* constr
 			}
 			
 			// static anchors
-			s2Vec2 rA = cp->rAs;
-			s2Vec2 rB = cp->rBs;
+			s2Vec2 rA = cp->rA0;
+			s2Vec2 rB = cp->rB0;
 
 			// Relative velocity at contact
 			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rB));
@@ -89,8 +89,8 @@ static void s2SolveContacts_PGS_Soft(s2World* world, s2ContactConstraint* constr
 			s2ContactConstraintPoint* cp = constraint->points + j;
 
 			// static anchors
-			s2Vec2 rA = cp->rAs;
-			s2Vec2 rB = cp->rBs;
+			s2Vec2 rA = cp->rA0;
+			s2Vec2 rB = cp->rB0;
 
 			// Relative velocity at contact
 			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rB));
@@ -159,7 +159,7 @@ void s2Solve_PGS_Soft(s2World* world, s2StepContext* context)
 	float h = context->dt;
 	float inv_h = context->inv_dt;
 
-	float contactHertz = S2_MIN(s2_contactHertz, 0.5f * inv_h);
+	float contactHertz = S2_MIN(s2_contactHertz, 0.333f * inv_h);
 	float jointHertz = S2_MIN(s2_jointHertz, 0.5f * inv_h);
 
 	s2IntegrateVelocities(world, h);
@@ -211,8 +211,6 @@ void s2Solve_PGS_Soft(s2World* world, s2StepContext* context)
 	useBias = false;
 	for (int iter = 0; iter < positionIterations; ++iter)
 	{
-		// todo any need to relax joints?
-		#if 1
 		for (int i = 0; i < jointCapacity; ++i)
 		{
 			s2Joint* joint = joints + i;
@@ -223,7 +221,6 @@ void s2Solve_PGS_Soft(s2World* world, s2StepContext* context)
 
 			s2SolveJoint_Soft(joint, context, h, inv_h, useBias);
 		}
-		#endif
 
 		s2SolveContacts_PGS_Soft(world, constraints, constraintCount, inv_h, useBias);
 	}

@@ -69,10 +69,11 @@ static void s2PrepareContacts(s2World* world, s2ContactConstraint* constraints, 
 				cp->tangentImpulse = 0.0f;
 			}
 
-			s2Vec2 rA = s2Sub(mp->point, cA);
-			s2Vec2 rB = s2Sub(mp->point, cB);
-			cp->localAnchorA = s2InvRotateVector(qA, rA);
-			cp->localAnchorB = s2InvRotateVector(qB, rB);
+			cp->localAnchorA = s2Sub(mp->localAnchorA, bodyA->localCenter);
+			cp->localAnchorB = s2Sub(mp->localAnchorB, bodyB->localCenter);
+			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
+			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
+
 			cp->separation = mp->separation;
 
 			float rnA = s2Cross(rA, normal);
@@ -149,7 +150,6 @@ static void s2SolveContacts_TGS(s2World* world, s2ContactConstraint* constraints
 
 			// Clamp the accumulated impulse
 			float newImpulse = S2_MAX(cp->normalImpulse + impulse, 0.0f);
-
 			impulse = newImpulse - cp->normalImpulse;
 			cp->normalImpulse = newImpulse;
 
@@ -160,7 +160,6 @@ static void s2SolveContacts_TGS(s2World* world, s2ContactConstraint* constraints
 
 			vB = s2MulAdd(vB, mB, P);
 			wB += iB * s2Cross(rB, P);
-
 		}
 
 		for (int j = 0; j < pointCount; ++j)
@@ -246,7 +245,7 @@ void s2Solve_TGS_NGS(s2World* world, s2StepContext* context)
 			continue;
 		}
 
-		s2PrepareJoint(joint, context);
+		s2PrepareJoint(joint, context, context->warmStart);
 	}
 
 	int substepCount = context->iterations;

@@ -145,7 +145,7 @@ void Sample::Step(Settings& settings, s2Color bodyColor)
 		}
 	}
 
-	if (settings.enablesSolvers[m_solverType])
+	if (settings.enabledSolvers[m_solverType])
 	{
 		s2World_Draw(m_worldId, &g_draw.m_debugDraw);
 	}

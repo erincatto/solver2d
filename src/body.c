@@ -29,8 +29,9 @@ s2BodyId s2CreateBody(s2WorldId worldId, const s2BodyDef* def)
 
 	b->type = def->type;
 	b->origin = def->position;
-	b->position0 = def->position;
 	b->position = def->position;
+	b->deltaPosition = s2Vec2_zero;
+	b->deltaPosition0 = s2Vec2_zero;
 	b->rot0 = s2MakeRot(def->angle);
 	b->rot = b->rot0;
 	b->localCenter = s2Vec2_zero;
@@ -353,6 +354,19 @@ void s2Body_ApplyForceToCenter(s2BodyId bodyId, s2Vec2 force)
 	s2World* world = s2GetWorldFromIndex(bodyId.world);
 	s2Body* body = s2GetBody(world, bodyId);
 	body->force = s2Add(body->force, force);
+}
+
+void s2Body_ApplyLinearImpulse(s2BodyId bodyId, s2Vec2 impulse, s2Vec2 point)
+{
+	s2World* world = s2GetWorldFromIndex(bodyId.world);
+	s2Body* body = s2GetBody(world, bodyId);
+	if (body->type != s2_dynamicBody)
+	{
+		return;
+	}
+
+	body->linearVelocity = s2MulAdd(body->linearVelocity, body->invMass, impulse);
+	body->angularVelocity += body->invI * s2Cross(s2Sub(point, body->position), impulse);
 }
 
 s2BodyType s2Body_GetType(s2BodyId bodyId)

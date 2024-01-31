@@ -291,9 +291,9 @@ void s2DestroyJoint(s2JointId jointId)
 }
 
 extern void s2PrepareMouse(s2Joint* base, s2StepContext* context);
-extern void s2PrepareRevolute(s2Joint* base, s2StepContext* context);
+extern void s2PrepareRevolute(s2Joint* base, s2StepContext* context, bool warmStart);
 
-void s2PrepareJoint(s2Joint* joint, s2StepContext* context)
+void s2PrepareJoint(s2Joint* joint, s2StepContext* context, bool warmStart)
 {
 	switch (joint->type)
 	{
@@ -302,7 +302,7 @@ void s2PrepareJoint(s2Joint* joint, s2StepContext* context)
 			break;
 
 		case s2_revoluteJoint:
-			s2PrepareRevolute(joint, context);
+			s2PrepareRevolute(joint, context, warmStart);
 			break;
 
 		default:
@@ -405,9 +405,9 @@ void s2SolveJoint_Soft(s2Joint* joint, s2StepContext* context, float h, float in
 	}
 }
 
-extern void s2SolveRevolute_Baumgarte(s2Joint* base, s2StepContext* context, float inv_h);
+extern void s2SolveRevolute_Baumgarte(s2Joint* base, s2StepContext* context, float h, float inv_h, bool useBias);
 
-void s2SolveJoint_Baumgarte(s2Joint* joint, s2StepContext* context, float inv_h)
+void s2SolveJoint_Baumgarte(s2Joint* joint, s2StepContext* context, float h, float inv_h, bool useBias)
 {
 	switch (joint->type)
 	{
@@ -416,7 +416,7 @@ void s2SolveJoint_Baumgarte(s2Joint* joint, s2StepContext* context, float inv_h)
 			break;
 
 		case s2_revoluteJoint:
-			s2SolveRevolute_Baumgarte(joint, context, inv_h);
+			s2SolveRevolute_Baumgarte(joint, context, h, inv_h, useBias);
 			break;
 
 		default:

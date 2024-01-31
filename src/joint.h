@@ -64,6 +64,7 @@ typedef struct s2RevoluteJoint
 	// Solver temp
 	s2Vec2 localCenterA;
 	s2Vec2 localCenterB;
+	s2Vec2 separation0;
 	float invMassA;
 	float invMassB;
 	float invIA;
@@ -84,6 +85,8 @@ typedef struct s2Joint
 	s2JointEdge edges[2];
 	s2Vec2 localAnchorA;
 	s2Vec2 localAnchorB;
+	s2Vec2 rA0;
+	s2Vec2 rB0;
 	float drawSize;
 
 	union
@@ -99,13 +102,13 @@ typedef struct s2Joint
 void s2WarmStartJoint(s2Joint* joint, s2StepContext* context);
 void s2SolveJointPosition(s2Joint* joint, s2StepContext* context);
 
-void s2PrepareJoint(s2Joint* joint, s2StepContext* context);
+void s2PrepareJoint(s2Joint* joint, s2StepContext* context, bool warmStart);
 void s2SolveJoint(s2Joint* joint, s2StepContext* context, float h);
 
 void s2PrepareJoint_Soft(s2Joint* joint, s2StepContext* context, float h, float hertz, bool warmStart);
 void s2SolveJoint_Soft(s2Joint* joint, s2StepContext* context, float h, float inv_h, bool useBias);
 
-void s2SolveJoint_Baumgarte(s2Joint* joint, s2StepContext* context, float inv_h);
+void s2SolveJoint_Baumgarte(s2Joint* joint, s2StepContext* context, float h, float inv_h, bool useBias);
 
 void s2PrepareJoint_XPBD(s2Joint* joint, s2StepContext* context);
 void s2SolveJoint_XPBD(s2Joint* joint, s2StepContext* context, float inv_h);

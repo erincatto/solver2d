@@ -89,12 +89,13 @@ public:
 
 static int sampleBridgeIndex = RegisterSample("Joints", "Bridge", Bridge::Create);
 
+#if 1
 class BallAndChain : public Sample
 {
 public:
 	enum
 	{
-		e_count = 30
+		e_count = 40
 	};
 
 	BallAndChain(const Settings& settings, s2SolverType solverType)
@@ -102,7 +103,8 @@ public:
 	{
 		if (settings.restart == false)
 		{
-			g_camera.m_center = {0.0f, -5.0f};
+			g_camera.m_center = {0.0f, -20.0f};
+			g_camera.m_zoom = 2.0f;
 		}
 
 		s2BodyId groundId = s2_nullBodyId;
@@ -138,15 +140,12 @@ public:
 				jointDef.bodyIdB = bodyId;
 				jointDef.localAnchorA = s2Body_GetLocalPoint(jointDef.bodyIdA, pivot);
 				jointDef.localAnchorB = s2Body_GetLocalPoint(jointDef.bodyIdB, pivot);
-				// jointDef.enableMotor = true;
-				// jointDef.maxMotorTorque = 100.0f;
 				s2CreateRevoluteJoint(m_worldId, &jointDef);
 
 				prevBodyId = bodyId;
 			}
 
-#if 1
-			s2Circle circle = {{0.0f, 0.0f}, 4.0f};
+			s2Circle circle = {{0.0f, 0.0f}, 8.0f};
 
 			s2BodyDef bodyDef = s2_defaultBodyDef;
 			bodyDef.type = s2_dynamicBody;
@@ -162,10 +161,7 @@ public:
 			jointDef.bodyIdB = bodyId;
 			jointDef.localAnchorA = s2Body_GetLocalPoint(jointDef.bodyIdA, pivot);
 			jointDef.localAnchorB = s2Body_GetLocalPoint(jointDef.bodyIdB, pivot);
-			// jointDef.enableMotor = true;
-			// jointDef.maxMotorTorque = m_frictionTorque;
 			s2CreateRevoluteJoint(m_worldId, &jointDef);
-#endif
 		}
 	}
 
@@ -174,6 +170,85 @@ public:
 		return new BallAndChain(settings, solverType);
 	}
 };
+
+#else
+
+// temp vertical configuration for stability analysis
+class BallAndChain : public Sample
+{
+public:
+	enum
+	{
+		e_count = 2
+	};
+
+	BallAndChain(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		if (settings.restart == false)
+		{
+			g_camera.m_center = {0.0f, -5.0f};
+		}
+
+		s2BodyId groundId = s2_nullBodyId;
+		{
+			s2BodyDef bodyDef = s2_defaultBodyDef;
+			groundId = s2CreateBody(m_worldId, &bodyDef);
+		}
+
+		{
+			float hy = 0.5f;
+			s2Capsule capsule = {{0.0f, -hy}, {0.0f, hy}, 0.125f};
+
+			s2ShapeDef shapeDef = s2_defaultShapeDef;
+			shapeDef.density = 20.0f;
+
+			s2RevoluteJointDef jointDef = s2DefaultRevoluteJointDef();
+			jointDef.drawSize = 0.1f;
+
+			s2BodyDef bodyDef = s2_defaultBodyDef;
+			bodyDef.type = s2_dynamicBody;
+
+			s2BodyId prevBodyId = groundId;
+			for (int i = 0; i < e_count; ++i)
+			{
+				bodyDef.position = {0.0f, -hy - 2.0f * i * hy};
+				s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+				s2CreateCapsuleShape(bodyId, &shapeDef, &capsule);
+
+				s2Vec2 pivot = {0.0f, -2.0f * i * hy};
+				jointDef.bodyIdA = prevBodyId;
+				jointDef.bodyIdB = bodyId;
+				jointDef.localAnchorA = s2Body_GetLocalPoint(jointDef.bodyIdA, pivot);
+				jointDef.localAnchorB = s2Body_GetLocalPoint(jointDef.bodyIdB, pivot);
+				s2CreateRevoluteJoint(m_worldId, &jointDef);
+
+				prevBodyId = bodyId;
+			}
+
+			#if 0
+			s2Circle circle = {{0.0f, 0.0f}, 4.0f};
+			bodyDef.position = {0.0f, (1.0f - 2.0f * e_count) * hy - circle.radius - hy};
+			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+
+			s2CreateCircleShape(bodyId, &shapeDef, &circle);
+
+			s2Vec2 pivot = {0.0f, -2.0f * e_count * hy};
+			jointDef.bodyIdA = prevBodyId;
+			jointDef.bodyIdB = bodyId;
+			jointDef.localAnchorA = s2Body_GetLocalPoint(jointDef.bodyIdA, pivot);
+			jointDef.localAnchorB = s2Body_GetLocalPoint(jointDef.bodyIdB, pivot);
+			s2CreateRevoluteJoint(m_worldId, &jointDef);
+			#endif
+		}
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new BallAndChain(settings, solverType);
+	}
+};
+#endif
 
 static int sampleBallAndChainIndex = RegisterSample("Joints", "Ball & Chain", BallAndChain::Create);
 
@@ -229,8 +304,6 @@ public:
 
 		{
 			s2BodyId groundId = s2CreateBody(m_worldId, &s2_defaultBodyDef);
-			// s2Segment segment = {{-20.0f, -30.0f}, {20.0f, -30.0f}};
-			// s2CreateSegmentShape(groundId, &s2_defaultShapeDef, &segment);
 
 			s2Vec2 points[] = {
 				{-16.8672504, 31.088623},	 {16.8672485, 31.088623},	 {16.8672485, 17.1978741}, {8.26824951, 11.906374},
@@ -251,13 +324,6 @@ public:
 				s2Capsule capsule = {points[i1], points[i2], 0.5f};
 				s2CreateCapsuleShape(groundId, &shapeDef, &capsule);
 			}
-
-			// s2ChainDef chainDef = s2_defaultChainDef;
-			// chainDef.points = points;
-			// chainDef.count = count;
-			// chainDef.loop = true;
-			// chainDef.friction = 0.2f;
-			// s2CreateChain(groundId, &chainDef);
 
 			float sign = 1.0f;
 			float y = 14.0f;
@@ -285,6 +351,7 @@ public:
 				revoluteDef.maxMotorTorque = 200.0f;
 				revoluteDef.motorSpeed = 5.0f * sign;
 				revoluteDef.enableMotor = true;
+				revoluteDef.drawSize = 0.2f;
 
 				s2CreateRevoluteJoint(m_worldId, &revoluteDef);
 
@@ -410,6 +477,7 @@ public:
 		circle.radius = rad;
 
 		s2RevoluteJointDef jointDef = s2DefaultRevoluteJointDef();
+		jointDef.drawSize = 0.2f;
 
 		for (int k = 0; k < numk; ++k)
 		{
@@ -463,3 +531,108 @@ public:
 };
 
 static int sampleJointGrid = RegisterSample("Joints", "Joint Grid", JointGrid::Create);
+
+class FarRagdoll : public Sample
+{
+public:
+	FarRagdoll(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		s2Vec2 origin = {-10000.0f, 5000.0f};
+
+		if (settings.restart == false)
+		{
+			g_camera.m_center = s2Add({0.0f, 1.0f}, origin);
+			g_camera.m_zoom = 0.05f;
+		}
+
+		{
+			s2BodyDef bodyDef = s2_defaultBodyDef;
+			bodyDef.position = s2Add({0.0f, -1.0f}, origin);
+			s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
+			s2Polygon box = s2MakeBox(20.0f, 1.0f);
+			s2CreatePolygonShape(groundId, &s2_defaultShapeDef, &box);
+		}
+
+		m_human.Spawn(m_worldId, s2Add({0.0f, 1.0f}, origin), 1.0f, 1, nullptr);
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new FarRagdoll(settings, solverType);
+	}
+
+	Human m_human;
+};
+
+static int sampleFarRagdoll = RegisterSample("Joints", "Far Ragdoll", FarRagdoll::Create);
+
+class FarChain : public Sample
+{
+public:
+	enum
+	{
+		e_count = 40
+	};
+
+	FarChain(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		s2Vec2 origin = {-80000.0f, 60000.0f};
+
+		if (settings.restart == false)
+		{
+			g_camera.m_center = s2Add({0.0f, 0.0f}, origin);
+			g_camera.m_zoom = 1.0f;
+		}
+
+		s2BodyId groundId = s2_nullBodyId;
+		{
+			s2BodyDef bodyDef = s2_defaultBodyDef;
+			bodyDef.position = origin;
+			groundId = s2CreateBody(m_worldId, &bodyDef);
+		}
+
+		{
+			float hx = 0.5f;
+			s2Capsule capsule = {{-hx, 0.0f}, {hx, 0.0f}, 0.125f};
+
+			s2ShapeDef shapeDef = s2_defaultShapeDef;
+			shapeDef.density = 20.0f;
+
+			s2RevoluteJointDef jointDef = s2DefaultRevoluteJointDef();
+			jointDef.drawSize = 0.1f;
+
+			s2Vec2 prevLocalPivot = {0.0f, e_count * hx};
+			s2BodyId prevBodyId = groundId;
+			for (int i = 0; i < e_count; ++i)
+			{
+				s2BodyDef bodyDef = s2_defaultBodyDef;
+				bodyDef.type = s2_dynamicBody;
+				bodyDef.position = s2Add({(1.0f + 2.0f * i) * hx, e_count * hx}, origin);
+				bodyDef.linearDamping = 0.1f;
+				bodyDef.angularDamping = 0.1f;
+
+				s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+				s2CreateCapsuleShape(bodyId, &shapeDef, &capsule);
+
+				s2Vec2 pivot = {(2.0f * i) * hx, e_count * hx};
+				jointDef.bodyIdA = prevBodyId;
+				jointDef.bodyIdB = bodyId;
+				jointDef.localAnchorA = prevLocalPivot;
+				jointDef.localAnchorB = {-hx, 0.0f};
+				s2CreateRevoluteJoint(m_worldId, &jointDef);
+
+				prevLocalPivot = {hx, 0.0f};
+				prevBodyId = bodyId;
+			}
+		}
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new FarChain(settings, solverType);
+	}
+};
+
+static int sampleFarChain = RegisterSample("Joints", "Far Chain", FarChain::Create);

@@ -16,37 +16,30 @@ typedef struct s2SmoothSegment s2SmoothSegment;
 
 #define S2_MAKE_ID(A, B) ((uint8_t)(A) << 8 | (uint8_t)(B))
 
-/// A manifold point is a contact point belonging to a contact
-/// manifold. It holds details related to the geometry and dynamics
-/// of the contact points.
 typedef struct s2ManifoldPoint
 {
-	/// world coordinates of contact point
-	s2Vec2 point;
+	// world coordinates of contact point
+	// todo accuracy problem
+	//s2Vec2 point;
 
-	// Friction anchors
+	// todo more accurate
 	s2Vec2 localAnchorA;
 	s2Vec2 localAnchorB;
-	s2Vec2 localNormalA;
-	s2Vec2 localNormalB;
 
-	/// the separation of the contact point, negative if penetrating
+	// Friction anchors
+	s2Vec2 frictionAnchorA;
+	s2Vec2 frictionAnchorB;
+	s2Vec2 frictionNormalA;
+	s2Vec2 frictionNormalB;
+
 	float separation;
-
-	/// the non-penetration impulse
 	float normalImpulse;
-
-	/// the friction impulse
 	float tangentImpulse;
-
-	/// uniquely identifies a contact point between two shapes
 	uint16_t id;
 
-	/// did this contact point exist the previous step?
 	bool persisted;
 } s2ManifoldPoint;
 
-/// Contact manifold convex shapes.
 typedef struct s2Manifold
 {
 	s2ManifoldPoint points[2];

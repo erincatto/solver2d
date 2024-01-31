@@ -62,13 +62,19 @@ static void s2PrepareContacts_XPBD(s2World* world, s2ContactConstraint* constrai
 			cp->normalImpulse = 0.0f;
 			cp->tangentImpulse = 0.0f;
 
-			s2Vec2 rA = s2Sub(mp->point, cA);
-			s2Vec2 rB = s2Sub(mp->point, cB);
-			cp->localAnchorA = s2InvRotateVector(qA, rA);
-			cp->localAnchorB = s2InvRotateVector(qB, rB);
-			cp->separation = mp->separation;
+			cp->localAnchorA = s2Sub(mp->localAnchorA, bodyA->localCenter);
+			cp->localAnchorB = s2Sub(mp->localAnchorB, bodyB->localCenter);
+			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
+			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
 
-			cp->baumgarte = 0.0f;
+			cp->rA0 = rA;
+			cp->rB0 = rB;
+			cp->separation = mp->separation;
+			if (mp->separation < -0.5f)
+			{
+				cp->separation += 0.0f;
+			}
+
 			cp->biasCoefficient = 0.0f;
 
 			// todo perhaps re-use effective mass across substeps
@@ -92,9 +98,9 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 	float inv_h = h > 0.0f ? 1.0f / h : 0.0f;
 
 	// compliance because contacts are too energetic otherwise
-	float baseCompliance = 0.00001f * inv_h* inv_h;
+	//float baseCompliance = 0.00001f * inv_h* inv_h;
 	// but the rush sample has too much overlap ...
-	//float baseCompliance = 0.0f;
+	float baseCompliance = 0.0f;
 
 	for (int i = 0; i < constraintCount; ++i)
 	{
@@ -111,9 +117,9 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 
 		float compliance = (mA == 0.0f || mB == 0.0f) ? 0.25f * baseCompliance : baseCompliance;
 
-		s2Vec2 cA = bodyA->position;
+		s2Vec2 dcA = bodyA->deltaPosition;
 		s2Rot qA = bodyA->rot;
-		s2Vec2 cB = bodyB->position;
+		s2Vec2 dcB = bodyB->deltaPosition;
 		s2Rot qB = bodyB->rot;
 
 		s2Vec2 normal = constraint->normal;
@@ -126,9 +132,11 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 
 			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
 			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
+			s2Vec2 drA = s2Sub(rA, cp->rA0);
+			s2Vec2 drB = s2Sub(rB, cp->rB0);
 
 			// normal separation
-			s2Vec2 dp = s2Sub(s2Add(cB, rB), s2Add(cA, rA));
+			s2Vec2 dp = s2Add(s2Sub(dcB, dcA), s2Sub(drB, drA));
 			float C = s2Dot(dp, normal) + cp->separation;
 			if (C > 0)
 			{
@@ -152,10 +160,19 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 
 			s2Vec2 P = s2MulSV(lambda, normal);
 
-			cA = s2MulSub(cA, mA, P);
+			dcA = s2MulSub(dcA, mA, P);
 			qA = s2IntegrateRot(qA, -iA * s2Cross(rA, P));
+			if (s2Length(dcA) > 1.0f)
+			{
+				dcA.x += 0.0f;
+			}
 
-			cB = s2MulAdd(cB, mB, P);
+			dcB = s2MulAdd(dcB, mB, P);
+			if (s2Length(dcB) > 1.0f)
+			{
+				dcB.x += 0.0f;
+			}
+
 			qB = s2IntegrateRot(qB, iB * s2Cross(rB, P));
 		}
 
@@ -168,9 +185,11 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 
 			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
 			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
+			s2Vec2 drA = s2Sub(rA, cp->rA0);
+			s2Vec2 drB = s2Sub(rB, cp->rB0);
 
 			// tangent separation
-			s2Vec2 dp = s2Sub(s2Add(cB, rB), s2Add(cA, rA));
+			s2Vec2 dp = s2Add(s2Sub(dcB, dcA), s2Sub(drB, drA));
 			float C = s2Dot(dp, tangent);
 
 			float rtA = s2Cross(rA, tangent);
@@ -193,16 +212,16 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 
 			s2Vec2 P = s2MulSV(lambda, tangent);
 
-			cA = s2MulSub(cA, mA, P);
+			dcA = s2MulSub(dcA, mA, P);
 			qA = s2IntegrateRot(qA, -iA * s2Cross(rA, P));
 
-			cB = s2MulAdd(cB, mB, P);
+			dcB = s2MulAdd(dcB, mB, P);
 			qB = s2IntegrateRot(qB, iB * s2Cross(rB, P));
 		}
 
-		bodyA->position = cA;
+		bodyA->deltaPosition = dcA;
 		bodyA->rot = qA;
-		bodyB->position = cB;
+		bodyB->deltaPosition = dcB;
 		bodyB->rot = qB;
 	}
 }
@@ -226,9 +245,7 @@ static void s2SolveContactVelocities_XPBD(s2World* world, s2ContactConstraint* c
 		float iB = bodyB->invI;
 		int pointCount = constraint->pointCount;
 
-		s2Vec2 cA = bodyA->position;
 		s2Rot qA = bodyA->rot;
-		s2Vec2 cB = bodyB->position;
 		s2Rot qB = bodyB->rot;
 
 		s2Vec2 vA = bodyA->linearVelocity;
@@ -258,10 +275,6 @@ static void s2SolveContactVelocities_XPBD(s2World* world, s2ContactConstraint* c
 			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
 
 			// Relative velocity at contact
-			s2Vec2 vrB0 = s2Add(vB0, s2CrossSV(wB0, rB));
-			s2Vec2 vrA0 = s2Add(vA0, s2CrossSV(wA0, rA));
-			s2Vec2 dv0 = s2Sub(vrB0, vrA0);
-
 			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rB));
 			s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, rA));
 			s2Vec2 dv = s2Sub(vrB, vrA);
@@ -273,7 +286,6 @@ static void s2SolveContactVelocities_XPBD(s2World* world, s2ContactConstraint* c
 			float kA = mA + iA * rnA * rnA;
 			float kB = mB + iB * rnB * rnB;
 
-			float vn0 = s2Dot(dv0, normal);
 			float vn = s2Dot(dv, normal);
 
 			float Cdot = vn;
@@ -428,16 +440,13 @@ void s2Solve_XPBD(s2World* world, s2StepContext* context)
 			body->linearVelocity = v;
 			body->angularVelocity = w;
 
-			s2Vec2 c = body->position;
-			s2Rot q = body->rot;
-
-			// store previous position
-			body->position0 = c;
-			body->rot0 = q;
+			// store previous rotation
+			body->rot0 = body->rot;
 
 			// integrate positions
 			// this is unique to XPBD, no other solvers update position immediately
-			body->position = s2MulAdd(c, h, v);
+			body->deltaPosition0 = body->deltaPosition;
+			body->deltaPosition = s2MulAdd(body->deltaPosition, h, v);
 			body->rot = s2IntegrateRot(body->rot, h * w);
 		}
 
@@ -471,12 +480,36 @@ void s2Solve_XPBD(s2World* world, s2StepContext* context)
 			body->linearVelocity0 = body->linearVelocity;
 			body->angularVelocity0 = body->angularVelocity;
 
-			body->linearVelocity = s2MulSV(inv_h, s2Sub(body->position, body->position0));
-			body->angularVelocity = s2ComputeAngularVelocity(body->rot, body->rot0, inv_h);
+			body->linearVelocity = s2MulSV(inv_h, s2Sub(body->deltaPosition, body->deltaPosition0));
+
+			if (s2Length(body->linearVelocity) > 10.0f)
+			{
+				body->linearVelocity.x += 0.0f;
+			}
+
+			body->angularVelocity = s2ComputeAngularVelocity(body->rot0, body->rot, inv_h);
 		}
 
 		// Relax contact velocities
 		s2SolveContactVelocities_XPBD(world, constraints, constraintCount, h);
+	}
+
+	// Finallize body position
+	for (int i = 0; i < bodyCapacity; ++i)
+	{
+		s2Body* body = bodies + i;
+		if (s2IsFree(&body->object))
+		{
+			continue;
+		}
+
+		if (body->type != s2_dynamicBody)
+		{
+			continue;
+		}
+
+		body->position = s2Add(body->position, body->deltaPosition);
+		body->deltaPosition = s2Vec2_zero;
 	}
 
 	// warm starting is not used, this is just for reporting

@@ -120,15 +120,15 @@ void s2PrepareContacts_PGS(s2World* world, s2ContactConstraint* constraints, int
 				cp->tangentImpulse = 0.0f;
 			}
 
-			s2Vec2 rA = s2Sub(mp->point, cA);
-			s2Vec2 rB = s2Sub(mp->point, cB);
-			cp->rAs = rA;
-			cp->rBs = rB;
-			cp->localAnchorA = s2InvRotateVector(qA, rA);
-			cp->localAnchorB = s2InvRotateVector(qB, rB);
+			cp->localAnchorA = s2Sub(mp->localAnchorA, bodyA->localCenter);
+			cp->localAnchorB = s2Sub(mp->localAnchorB, bodyB->localCenter);
+			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
+			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
+
+			cp->rA0 = rA;
+			cp->rB0 = rB;
 			cp->separation = mp->separation;
 
-			cp->baumgarte = 0.0f;
 			cp->biasCoefficient = mp->separation > 0.0f ? 1.0f : 0.0f;
 
 			float rtA = s2Cross(rA, tangent);
@@ -219,15 +219,15 @@ void s2PrepareContacts_Soft(s2World* world, s2ContactConstraint* constraints, in
 				cp->tangentImpulse = 0.0f;
 			}
 
-			s2Vec2 rA = s2Sub(mp->point, cA);
-			s2Vec2 rB = s2Sub(mp->point, cB);
+			cp->localAnchorA = s2Sub(mp->localAnchorA, bodyA->localCenter);
+			cp->localAnchorB = s2Sub(mp->localAnchorB, bodyB->localCenter);
+			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
+			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
 
 			// static anchors
-			cp->rAs = rA;
-			cp->rBs = rB;
+			cp->rA0 = rA;
+			cp->rB0 = rB;
 
-			cp->localAnchorA = s2InvRotateVector(qA, rA);
-			cp->localAnchorB = s2InvRotateVector(qB, rB);
 			cp->separation = mp->separation;
 
 			float rnA = s2Cross(rA, normal);

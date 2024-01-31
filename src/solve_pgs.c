@@ -52,12 +52,12 @@ static void s2SolveContacts_PGS_Baumgarte(s2World* world, s2ContactConstraint* c
 			}
 			else
 			{
-				bias = s2_baumgarte * inv_h * S2_MIN(0.0f, cp->separation + s2_linearSlop);
+				bias = S2_MAX(s2_baumgarte * inv_h * S2_MIN(0.0f, cp->separation + s2_linearSlop), -s2_maxBaumgarteVelocity);
 			}
 
 			// static anchors
-			s2Vec2 rA = cp->rAs;
-			s2Vec2 rB = cp->rBs;
+			s2Vec2 rA = cp->rA0;
+			s2Vec2 rB = cp->rB0;
 
 			// Relative velocity at contact
 			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rB));
@@ -86,8 +86,8 @@ static void s2SolveContacts_PGS_Baumgarte(s2World* world, s2ContactConstraint* c
 			s2ContactConstraintPoint* cp = constraint->points + j;
 
 			// static anchors
-			s2Vec2 rA = cp->rAs;
-			s2Vec2 rB = cp->rBs;
+			s2Vec2 rA = cp->rA0;
+			s2Vec2 rB = cp->rB0;
 
 			// Relative velocity at contact
 			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rB));
@@ -173,7 +173,7 @@ void s2Solve_PGS(s2World* world, s2StepContext* context)
 			continue;
 		}
 
-		s2PrepareJoint(joint, context);
+		s2PrepareJoint(joint, context, context->warmStart);
 
 		if (context->warmStart)
 		{
@@ -191,7 +191,7 @@ void s2Solve_PGS(s2World* world, s2StepContext* context)
 				continue;
 			}
 
-			s2SolveJoint_Baumgarte(joint, context, inv_h);
+			s2SolveJoint_Baumgarte(joint, context, h, inv_h, true);
 		}
 
 		s2SolveContacts_PGS_Baumgarte(world, constraints, constraintCount, inv_h);

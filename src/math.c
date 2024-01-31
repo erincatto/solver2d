@@ -41,7 +41,7 @@ bool s2IsValidVec2(s2Vec2 v)
 s2Vec2 s2Normalize(s2Vec2 v)
 {
 	float length = s2Length(v);
-	if (length < FLT_EPSILON)
+	if (length < 0.001f * FLT_EPSILON)
 	{
 		return s2Vec2_zero;
 	}

@@ -236,13 +236,13 @@ static s2ContactSolver s2CreateContactSolver(s2World* world, s2StepContext* cont
 
 		for (int32_t j = 0; j < pointCount; ++j)
 		{
-			const s2ManifoldPoint* cp = manifold->points + j;
+			const s2ManifoldPoint* mp = manifold->points + j;
 			s2VelocityConstraintPoint* vcp = vc->points + j;
 
 			if (context->warmStart)
 			{
-				vcp->normalImpulse = cp->normalImpulse;
-				vcp->tangentImpulse = cp->tangentImpulse;
+				vcp->normalImpulse = mp->normalImpulse;
+				vcp->tangentImpulse = mp->tangentImpulse;
 			}
 			else
 			{
@@ -250,8 +250,13 @@ static s2ContactSolver s2CreateContactSolver(s2World* world, s2StepContext* cont
 				vcp->tangentImpulse = 0.0f;
 			}
 
-			vcp->rA = s2Sub(cp->point, cA);
-			vcp->rB = s2Sub(cp->point, cB);
+			s2Vec2 localAnchorA = s2Sub(mp->localAnchorA, bodyA->localCenter);
+			s2Vec2 localAnchorB = s2Sub(mp->localAnchorB, bodyB->localCenter);
+			s2Vec2 rA = s2RotateVector(qA, localAnchorA);
+			s2Vec2 rB = s2RotateVector(qB, localAnchorB);
+
+			vcp->rA = rA;
+			vcp->rB = rB;
 
 			float rnA = s2Cross(vcp->rA, vc->normal);
 			float rnB = s2Cross(vcp->rB, vc->normal);
@@ -270,16 +275,16 @@ static s2ContactSolver s2CreateContactSolver(s2World* world, s2StepContext* cont
 			vcp->tangentMass = kTangent > 0.0f ? 1.0f / kTangent : 0.0f;
 
 			// Velocity bias for speculative collision
-			vcp->velocityBias = -S2_MAX(0.0f, cp->separation * context->inv_dt);
+			vcp->velocityBias = -S2_MAX(0.0f, mp->separation * context->inv_dt);
 
 			// Relative velocity
 			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, vcp->rB));
 			s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, vcp->rA));
 			vcp->relativeVelocity = s2Dot(vc->normal, s2Sub(vrB, vrA));
 
-			pc->localAnchorsA[j] = s2InvRotateVector(qA, vcp->rA);
-			pc->localAnchorsB[j] = s2InvRotateVector(qB, vcp->rB);
-			pc->separations[j] = cp->separation;
+			pc->localAnchorsA[j] = localAnchorA;
+			pc->localAnchorsB[j] = localAnchorB;
+			pc->separations[j] = mp->separation;
 		}
 
 		// If we have two points, then prepare the block solver.
@@ -946,7 +951,7 @@ void s2Solve_PGS_NGS_Block(s2World* world, s2StepContext* context)
 		{
 			continue;
 		}
-		s2PrepareJoint(joint, context);
+		s2PrepareJoint(joint, context, context->warmStart);
 
 		if (context->warmStart)
 		{
