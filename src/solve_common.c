@@ -62,7 +62,8 @@ void s2IntegratePositions(s2World* world, float h)
 			continue;
 		}
 
-		body->position = s2MulAdd(body->position, h, body->linearVelocity);
+		body->deltaPosition = s2MulAdd(body->deltaPosition, h, body->linearVelocity);
+		//body->position = s2MulAdd(body->position, h, body->linearVelocity);
 		body->rot = s2IntegrateRot(body->rot, h * body->angularVelocity);
 	}
 }
@@ -122,11 +123,12 @@ void s2PrepareContacts_PGS(s2World* world, s2ContactConstraint* constraints, int
 
 			cp->localAnchorA = s2Sub(mp->localAnchorA, bodyA->localCenter);
 			cp->localAnchorB = s2Sub(mp->localAnchorB, bodyB->localCenter);
+			
 			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
 			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
-
 			cp->rA0 = rA;
 			cp->rB0 = rB;
+
 			cp->separation = mp->separation;
 
 			cp->biasCoefficient = mp->separation > 0.0f ? 1.0f : 0.0f;
@@ -221,10 +223,9 @@ void s2PrepareContacts_Soft(s2World* world, s2ContactConstraint* constraints, in
 
 			cp->localAnchorA = s2Sub(mp->localAnchorA, bodyA->localCenter);
 			cp->localAnchorB = s2Sub(mp->localAnchorB, bodyB->localCenter);
+			
 			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
 			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
-
-			// static anchors
 			cp->rA0 = rA;
 			cp->rB0 = rB;
 

@@ -23,7 +23,7 @@ typedef struct s2StepContext
 
 typedef struct s2ContactConstraintPoint
 {
-	// static anchors, need to be careful to not use these in TGS solvers
+	// initial anchor vectors in world space
 	s2Vec2 rA0, rB0;
 
 	// local anchor relative center of mass

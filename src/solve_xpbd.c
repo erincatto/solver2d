@@ -135,9 +135,9 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 			s2Vec2 drA = s2Sub(rA, cp->rA0);
 			s2Vec2 drB = s2Sub(rB, cp->rB0);
 
-			// normal separation
-			s2Vec2 dp = s2Add(s2Sub(dcB, dcA), s2Sub(drB, drA));
-			float C = s2Dot(dp, normal) + cp->separation;
+			// change in separation
+			s2Vec2 ds = s2Add(s2Sub(dcB, dcA), s2Sub(drB, drA));
+			float C = s2Dot(ds, normal) + cp->separation;
 			if (C > 0)
 			{
 				cp->normalImpulse = 0.0f;
@@ -494,7 +494,7 @@ void s2Solve_XPBD(s2World* world, s2StepContext* context)
 		s2SolveContactVelocities_XPBD(world, constraints, constraintCount, h);
 	}
 
-	// Finallize body position
+	// Finalize body position
 	for (int i = 0; i < bodyCapacity; ++i)
 	{
 		s2Body* body = bodies + i;

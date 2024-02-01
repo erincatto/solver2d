@@ -41,9 +41,9 @@ static void s2SolveContacts_TGS_Soft(s2World* world, s2ContactConstraint* constr
 		s2Vec2 vB = bodyB->linearVelocity;
 		float wB = bodyB->angularVelocity;
 
-		s2Vec2 cA = bodyA->position;
-		s2Vec2 cB = bodyB->position;
+		s2Vec2 dcA = bodyA->deltaPosition;
 		s2Rot qA = bodyA->rot;
+		s2Vec2 dcB = bodyB->deltaPosition;
 		s2Rot qB = bodyB->rot;
 
 		s2Vec2 normal = constraint->normal;
@@ -54,13 +54,15 @@ static void s2SolveContacts_TGS_Soft(s2World* world, s2ContactConstraint* constr
 		{
 			s2ContactConstraintPoint* cp = constraint->points + j;
 
-			// Current anchor points
+			// anchor points
 			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
 			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
+			s2Vec2 drA = s2Sub(rA, cp->rA0);
+			s2Vec2 drB = s2Sub(rB, cp->rB0);
 
-			// Compute change in separation
-			s2Vec2 d = s2Sub(s2Add(cB, rB), s2Add(cA, rA));
-			float s = s2Dot(d, normal) + cp->separation;
+			// change in separation
+			s2Vec2 ds = s2Add(s2Sub(dcB, dcA), s2Sub(drB, drA));
+			float s = s2Dot(ds, normal) + cp->separation;
 
 			float bias = 0.0f;
 			float massScale = 1.0f;
@@ -247,6 +249,26 @@ void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
 		}
 		
 		s2SolveContacts_TGS_Soft(world, constraints, constraintCount, inv_h, useBias);
+	}
+
+	// Finalize body position
+	s2Body* bodies = world->bodies;
+	int bodyCapacity = world->bodyPool.capacity;
+	for (int i = 0; i < bodyCapacity; ++i)
+	{
+		s2Body* body = bodies + i;
+		if (s2IsFree(&body->object))
+		{
+			continue;
+		}
+
+		if (body->type != s2_dynamicBody)
+		{
+			continue;
+		}
+
+		body->position = s2Add(body->position, body->deltaPosition);
+		body->deltaPosition = s2Vec2_zero;
 	}
 
 	// Store results
