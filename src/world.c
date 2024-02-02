@@ -184,6 +184,21 @@ void s2World_Step(s2WorldId worldId, float timeStep, int velIters, int posIters,
 		context.inv_dt = 0.0f;
 	}
 
+	s2SolverType type = world->solverType;
+	if (type == s2_solverXPBD ||
+		type == s2_solverTGS_Soft ||
+		type == s2_solverTGS_Sticky ||
+		type == s2_solverTGS_NGS)
+	{
+		context.h = context.dt / context.iterations;
+		context.inv_h = context.inv_dt * context.iterations;
+	}
+	else
+	{
+		context.h = context.dt;
+		context.inv_h = context.inv_dt;
+	}
+
 	context.bodies = world->bodies;
 	context.bodyCapacity = world->bodyPool.capacity;
 

@@ -12,6 +12,7 @@
 #include <GLFW/glfw3.h>
 #include <imgui.h>
 #include <math.h>
+#include <stdio.h>
 
 class SingleBox : public Sample
 {
@@ -511,69 +512,6 @@ public:
 
 static int samplePyramid = RegisterSample("Contact", "Pyramid", Pyramid::Create);
 
-// A pyramid far from the origin
-class FarPyramid : public Sample
-{
-public:
-	FarPyramid(const Settings& settings, s2SolverType solverType)
-		: Sample(settings, solverType)
-	{
-		s2Vec2 origin = {-90000.0f, 80000.0f};
-		//s2Vec2 origin = {0.0f, 0.0f};
-
-		if (settings.restart == false)
-		{
-			g_camera.m_center = s2Add({0.0f, 6.0f}, origin);
-			g_camera.m_zoom = 0.3f;
-		}
-
-		{
-			s2BodyDef bodyDef = s2_defaultBodyDef;
-			bodyDef.position = s2Add({0.0f, -1.0f}, origin);
-			s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
-
-			s2Polygon box = s2MakeBox(100.0f, 1.0f);
-			s2ShapeDef shapeDef = s2_defaultShapeDef;
-			s2CreatePolygonShape(groundId, &shapeDef, &box);
-		}
-
-		s2BodyDef bodyDef = s2_defaultBodyDef;
-		bodyDef.type = s2_dynamicBody;
-
-		s2ShapeDef shapeDef = s2_defaultShapeDef;
-		shapeDef.density = 1.0f;
-
-		int baseCount = 10;
-
-		float h = 0.5f;
-		s2Polygon box = s2MakeSquare(h);
-
-		float shift = 1.25f * h;
-
-		for (int i = 0; i < baseCount; ++i)
-		{
-			float y = (2.0f * i + 1.0f) * shift + 0.5f;
-
-			for (int j = i; j < baseCount; ++j)
-			{
-				float x = (i + 1.0f) * shift + 2.0f * (j - i) * shift - h * baseCount;
-
-				bodyDef.position = s2Add({x, y}, origin);
-
-				s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
-				s2CreatePolygonShape(bodyId, &shapeDef, &box);
-			}
-		}
-	}
-
-	static Sample* Create(const Settings& settings, s2SolverType solverType)
-	{
-		return new FarPyramid(settings, solverType);
-	}
-};
-
-static int sampleFarPyramid = RegisterSample("Contact", "Far Pyramid", FarPyramid::Create);
-
 // This sample shows an artifact of sub-stepping. The velocity impulse is resolved
 // in the first sub-step and then normal impulse drops to zero and so does friction.
 // A better result would be had using a force that is applied each substep.
@@ -906,16 +844,84 @@ public:
 
 static int sampleConfined = RegisterSample("Contact", "Confined", Confined::Create);
 
+// A pyramid far from the origin
+class FarPyramid : public Sample
+{
+public:
+	FarPyramid(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		// s2Vec2 origin = {0.0f, 0.0f};
+		s2Vec2 origin = {50000.0f, -45000.0f};
+		//s2Vec2 origin = {900000.0f, -800000.0f};
+
+		float originx = 65000.0f;
+		float nextfloat = nextafterf(originx, 2.0f * originx);
+		float ulp = nextfloat - originx;
+		printf("ulp = %g\n", ulp);
+
+		if (settings.restart == false)
+		{
+			g_camera.m_center = s2Add({0.0f, 6.0f}, origin);
+			g_camera.m_zoom = 0.3f;
+		}
+
+		{
+			s2BodyDef bodyDef = s2_defaultBodyDef;
+			bodyDef.position = s2Add({0.0f, -1.0f}, origin);
+			s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
+
+			s2Polygon box = s2MakeBox(100.0f, 1.0f);
+			s2ShapeDef shapeDef = s2_defaultShapeDef;
+			s2CreatePolygonShape(groundId, &shapeDef, &box);
+		}
+
+		s2BodyDef bodyDef = s2_defaultBodyDef;
+		bodyDef.type = s2_dynamicBody;
+
+		s2ShapeDef shapeDef = s2_defaultShapeDef;
+		shapeDef.density = 1.0f;
+
+		int baseCount = 10;
+
+		float h = 0.5f;
+		s2Polygon box = s2MakeSquare(h);
+
+		float shift = 1.25f * h;
+
+		for (int i = 0; i < baseCount; ++i)
+		{
+			float y = (2.0f * i + 1.0f) * shift + 0.5f;
+
+			for (int j = i; j < baseCount; ++j)
+			{
+				float x = (i + 1.0f) * shift + 2.0f * (j - i) * shift - h * baseCount;
+
+				bodyDef.position = s2Add({x, y}, origin);
+
+				s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+				s2CreatePolygonShape(bodyId, &shapeDef, &box);
+			}
+		}
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new FarPyramid(settings, solverType);
+	}
+};
+
+static int sampleFarPyramid = RegisterSample("Contact", "Far Pyramid", FarPyramid::Create);
+
 class FarStack : public Sample
 {
 public:
 	FarStack(const Settings& settings, s2SolverType solverType)
 		: Sample(settings, solverType)
 	{
-		// -10k, 5k
-		//s2Vec2 origin = {-20000.0f, 7500.0f};
-		s2Vec2 origin = {-90000.0f, 80000.0f};
 		//s2Vec2 origin = {0.0f, 0.0f};
+		s2Vec2 origin = {40000.0f, -25000.0f};
+		//s2Vec2 origin = {900000.0f, -800000.0f};
 
 		if (settings.restart == false)
 		{
@@ -989,7 +995,9 @@ public:
 	FarRecovery(const Settings& settings, s2SolverType solverType)
 		: Sample(settings, solverType)
 	{
-		s2Vec2 origin = {-90000.0f, 80000.0f};
+		// s2Vec2 origin = {0.0f, 0.0f};
+		s2Vec2 origin = {40000.0f, -35000.0f};
+		//s2Vec2 origin = {900000.0f, -800000.0f};
 
 		if (settings.restart == false)
 		{

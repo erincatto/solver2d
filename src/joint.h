@@ -27,23 +27,24 @@ typedef struct s2JointEdge
 
 typedef struct s2MouseJoint
 {
-	s2Vec2 targetA;
-	float stiffness;
-	float damping;
-	float beta;
+	float hertz;
+	float dampingRatio;
 
+	s2Vec2 targetA;
+	
 	// Solver shared
 	s2Vec2 impulse;
-	float maxForce;
-	float gamma;
+	float motorImpulse;
 
-	// Solver temp
-	s2Vec2 rB;
-	s2Vec2 localCenterB;
+	float biasCoefficient;
+	float massCoefficient;
+	float impulseCoefficient;
+
+	s2Vec2 localAnchorB;
 	float invMassB;
 	float invIB;
-	s2Mat22 mass;
-	s2Vec2 C;
+	s2Mat22 pivotMass;
+	s2Vec2 centerDiff0;
 } s2MouseJoint;
 
 typedef struct s2RevoluteJoint
@@ -62,9 +63,11 @@ typedef struct s2RevoluteJoint
 	float upperAngle;
 
 	// Solver temp
-	s2Vec2 localCenterA;
-	s2Vec2 localCenterB;
-	s2Vec2 separation0;
+
+	// Local anchors relative to center of mass
+	s2Vec2 localAnchorA;
+	s2Vec2 localAnchorB;
+	s2Vec2 centerDiff0;
 	float invMassA;
 	float invMassB;
 	float invIA;
@@ -83,10 +86,8 @@ typedef struct s2Joint
 	s2Object object;
 	s2JointType type;
 	s2JointEdge edges[2];
-	s2Vec2 localAnchorA;
-	s2Vec2 localAnchorB;
-	s2Vec2 rA0;
-	s2Vec2 rB0;
+	s2Vec2 localOriginAnchorA;
+	s2Vec2 localOriginAnchorB;
 	float drawSize;
 
 	union

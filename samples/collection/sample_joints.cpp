@@ -538,7 +538,10 @@ public:
 	FarRagdoll(const Settings& settings, s2SolverType solverType)
 		: Sample(settings, solverType)
 	{
-		s2Vec2 origin = {-10000.0f, 5000.0f};
+		//s2Vec2 origin = {0.0f, 0.0f};
+		//s2Vec2 origin = {20000.0f, -15000.0f};
+		s2Vec2 origin = {30000.0f, -25000.0f};
+		// s2Vec2 origin = {900000.0f, -800000.0f};
 
 		if (settings.restart == false)
 		{
@@ -578,12 +581,14 @@ public:
 	FarChain(const Settings& settings, s2SolverType solverType)
 		: Sample(settings, solverType)
 	{
-		s2Vec2 origin = {-80000.0f, 60000.0f};
+		// s2Vec2 origin = {0.0f, 0.0f};
+		s2Vec2 origin = {40000.0f, -35000.0f};
+		// s2Vec2 origin = {900000.0f, -800000.0f};
 
 		if (settings.restart == false)
 		{
-			g_camera.m_center = s2Add({0.0f, 0.0f}, origin);
-			g_camera.m_zoom = 1.0f;
+			g_camera.m_center = s2Add({0.0f, -0.5f}, origin);
+			g_camera.m_zoom = 0.2f;
 		}
 
 		s2BodyId groundId = s2_nullBodyId;
@@ -594,14 +599,14 @@ public:
 		}
 
 		{
-			float hx = 0.5f;
-			s2Capsule capsule = {{-hx, 0.0f}, {hx, 0.0f}, 0.125f};
+			float hx = 0.1f;
+			s2Capsule capsule = {{-hx, 0.0f}, {hx, 0.0f}, 0.025f};
 
 			s2ShapeDef shapeDef = s2_defaultShapeDef;
 			shapeDef.density = 20.0f;
 
 			s2RevoluteJointDef jointDef = s2DefaultRevoluteJointDef();
-			jointDef.drawSize = 0.1f;
+			jointDef.drawSize = 0.02f;
 
 			s2Vec2 prevLocalPivot = {0.0f, e_count * hx};
 			s2BodyId prevBodyId = groundId;

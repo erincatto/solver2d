@@ -57,12 +57,10 @@ static void s2SolveContacts_TGS_Soft(s2World* world, s2ContactConstraint* constr
 			// anchor points
 			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
 			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
-			s2Vec2 drA = s2Sub(rA, cp->rA0);
-			s2Vec2 drB = s2Sub(rB, cp->rB0);
 
-			// change in separation
-			s2Vec2 ds = s2Add(s2Sub(dcB, dcA), s2Sub(drB, drA));
-			float s = s2Dot(ds, normal) + cp->separation;
+			// compute current separation
+			s2Vec2 ds = s2Add(s2Sub(dcB, dcA), s2Sub(rB, rA));
+			float s = s2Dot(ds, normal) + cp->adjustedSeparation;
 
 			float bias = 0.0f;
 			float massScale = 1.0f;
@@ -172,8 +170,8 @@ void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
 	}
 
 	int substepCount = context->iterations;
-	float h = context->dt / substepCount;
-	float inv_h = 1.0f / h;
+	float h = context->h;
+	float inv_h = context->inv_h;
 
 	float contactHertz = S2_MIN(s2_contactHertz, 0.25f * inv_h);
 	float jointHertz = S2_MIN(s2_jointHertz, 0.125f * inv_h);
@@ -252,24 +250,7 @@ void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
 	}
 
 	// Finalize body position
-	s2Body* bodies = world->bodies;
-	int bodyCapacity = world->bodyPool.capacity;
-	for (int i = 0; i < bodyCapacity; ++i)
-	{
-		s2Body* body = bodies + i;
-		if (s2IsFree(&body->object))
-		{
-			continue;
-		}
-
-		if (body->type != s2_dynamicBody)
-		{
-			continue;
-		}
-
-		body->position = s2Add(body->position, body->deltaPosition);
-		body->deltaPosition = s2Vec2_zero;
-	}
+	s2FinalizePositions(world);
 
 	// Store results
 	s2StoreContactImpulses(constraints, constraintCount);

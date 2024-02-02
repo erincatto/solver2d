@@ -542,7 +542,25 @@ static void UpdateUI(s2Color* solverColors)
 	}
 }
 
-//
+// Draws a segment of one meter length for scale
+void DrawScale()
+{
+	s2Color c = {0.9f, 0.9f, 0.9f, 1.0f};
+	s2Vec2 s1 = {5.0f, g_camera.m_height - 5.0f};
+	s2Vec2 p1 = g_camera.ConvertScreenToWorld({5.0f, g_camera.m_height - 5.0f});
+	s2Vec2 p2 = {p1.x + 1.0f, p1.y};
+	g_draw.DrawSegment(p1, p2, c);
+
+	s2Vec2 t1 = {s1.x, s1.y + 3.0f};
+	s2Vec2 t2 = {s1.x, s1.y - 3.0f};
+	g_draw.DrawSegment(g_camera.ConvertScreenToWorld(t1), g_camera.ConvertScreenToWorld(t2), c);
+
+	s2Vec2 s2 = g_camera.ConvertWorldToScreen(p2);
+	t1 = {s2.x, s2.y + 3.0f};
+	t2 = {s2.x, s2.y - 3.0f};
+	g_draw.DrawSegment(g_camera.ConvertScreenToWorld(t1), g_camera.ConvertScreenToWorld(t2), c);
+}
+
 int main(int, char**)
 {
 #if defined(_WIN32)
@@ -786,10 +804,12 @@ int main(int, char**)
 			ImGui::Begin("Overlay", nullptr,
 						 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize |
 							 ImGuiWindowFlags_NoScrollbar);
-			ImGui::SetCursorPos(ImVec2(5.0f, g_camera.m_height - 20.0f));
+			ImGui::SetCursorPos(ImVec2(5.0f, g_camera.m_height - 25.0f));
 			ImGui::TextColored(ImColor(153, 230, 153, 255), "%s", buffer);
 			ImGui::End();
 		}
+
+		DrawScale();
 
 		ImGui::Render();
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
