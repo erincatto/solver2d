@@ -46,8 +46,6 @@ static void s2PrepareContacts_XPBD(s2World* world, s2ContactConstraint* constrai
 		float mB = bodyB->invMass;
 		float iB = bodyB->invI;
 
-		s2Vec2 cA = bodyA->position;
-		s2Vec2 cB = bodyB->position;
 		s2Rot qA = bodyA->rot;
 		s2Rot qB = bodyB->rot;
 

@@ -96,73 +96,39 @@ probably default to the slower Full NGS and let the user select the faster
 Baumgarte method in performance critical scenarios.
 */
 
-/*
-2D Rotation
-
-R = [cos(theta) -sin(theta)]
-	[sin(theta) cos(theta) ]
-
-thetaDot = omega
-
-Let q1 = cos(theta), q2 = sin(theta).
-R = [q1 -q2]
-	[q2  q1]
-
-q1Dot = -thetaDot * q2
-q2Dot = thetaDot * q1
-
-q1_new = q1_old - dt * w * q2
-q2_new = q2_old + dt * w * q1
-then normalize.
-
-This might be faster than computing sin+cos.
-However, we can compute sin+cos of the same angle fast.
-*/
-
-// Solver debugging is normally disabled because the block solver sometimes has to deal with a poorly conditioned
-// effective mass matrix.
 #define S2_DEBUG_SOLVER 0
 
-typedef struct s2VelocityConstraintPoint
+typedef struct s2BlockContactPoint
 {
 	s2Vec2 rA;
 	s2Vec2 rB;
+	s2Vec2 localAnchorA;
+	s2Vec2 localAnchorB;
+	float separation;
+	float adjustedSeparation;
 	float normalImpulse;
 	float tangentImpulse;
 	float normalMass;
 	float tangentMass;
 	float velocityBias;
-	float relativeVelocity;
-} s2VelocityConstraintPoint;
+} s2BlockContactPoint;
 
-typedef struct s2ContactVelocityConstraint
+typedef struct s2BlockContactConstraint
 {
 	s2Contact* contact;
-	s2VelocityConstraintPoint points[2];
+	s2BlockContactPoint points[2];
 	s2Vec2 normal;
 	s2Mat22 normalMass;
 	s2Mat22 K;
 	float friction;
-	float restitution;
-	int32_t pointCount;
-} s2ContactVelocityConstraint;
-
-typedef struct s2ContactPositionConstraint
-{
-	s2Contact* contact;
-	s2Vec2 localAnchorsA[2];
-	s2Vec2 localAnchorsB[2];
-	float separations[2];
-	s2Vec2 normal;
-	int32_t pointCount;
-} s2ContactPositionConstraint;
+	int pointCount;
+} s2BlockContactConstraint;
 
 typedef struct s2ContactSolver
 {
 	s2World* world;
 	s2StepContext* context;
-	struct s2ContactVelocityConstraint* velocityConstraints;
-	struct s2ContactPositionConstraint* positionConstraints;
+	struct s2BlockContactConstraint* constraints;
 	int constraintCount;
 } s2ContactSolver;
 
@@ -174,10 +140,8 @@ static s2ContactSolver s2CreateContactSolver(s2World* world, s2StepContext* cont
 	solver.context = context;
 
 	int contactCapacity = world->contactPool.capacity;
-	solver.positionConstraints =
-		s2AllocateStackItem(alloc, contactCapacity * sizeof(s2ContactPositionConstraint), "position constraints");
-	solver.velocityConstraints =
-		s2AllocateStackItem(alloc, contactCapacity * sizeof(s2ContactVelocityConstraint), "velocity constraints");
+	solver.constraints =
+		s2AllocateStackItem(alloc, contactCapacity * sizeof(s2BlockContactConstraint), "velocity constraints");
 
 	int constraintCount = 0;
 	s2Contact* contacts = world->contacts;
@@ -194,30 +158,24 @@ static s2ContactSolver s2CreateContactSolver(s2World* world, s2StepContext* cont
 		}
 
 		const s2Manifold* manifold = &contact->manifold;
-		int32_t pointCount = manifold->pointCount;
+		int pointCount = manifold->pointCount;
 		if (pointCount == 0)
 		{
 			continue;
 		}
 
-		int32_t indexA = contact->edges[0].bodyIndex;
-		int32_t indexB = contact->edges[1].bodyIndex;
+		int indexA = contact->edges[0].bodyIndex;
+		int indexB = contact->edges[1].bodyIndex;
 		s2Body* bodyA = bodies + indexA;
 		s2Body* bodyB = bodies + indexB;
 
-		s2ContactVelocityConstraint* vc = solver.velocityConstraints + constraintCount;
-		vc->contact = contact;
-		vc->normal = manifold->normal;
-		vc->friction = contact->friction;
-		vc->restitution = contact->restitution;
-		vc->pointCount = pointCount;
-		vc->K = s2Mat22_zero;
-		vc->normalMass = s2Mat22_zero;
-
-		s2ContactPositionConstraint* pc = solver.positionConstraints + constraintCount;
-		pc->contact = contact;
-		pc->normal = manifold->normal;
-		pc->pointCount = pointCount;
+		s2BlockContactConstraint* constraint = solver.constraints + constraintCount;
+		constraint->contact = contact;
+		constraint->normal = manifold->normal;
+		constraint->friction = contact->friction;
+		constraint->pointCount = pointCount;
+		constraint->K = s2Mat22_zero;
+		constraint->normalMass = s2Mat22_zero;
 
 		float mA = bodyA->invMass;
 		float iA = bodyA->invI;
@@ -225,29 +183,29 @@ static s2ContactSolver s2CreateContactSolver(s2World* world, s2StepContext* cont
 		float iB = bodyB->invI;
 
 		s2Rot qA = bodyA->rot;
-		s2Vec2 cA = bodyA->position;
 		s2Rot qB = bodyB->rot;
-		s2Vec2 cB = bodyB->position;
 
 		s2Vec2 vA = bodyA->linearVelocity;
 		float wA = bodyA->angularVelocity;
 		s2Vec2 vB = bodyB->linearVelocity;
 		float wB = bodyB->angularVelocity;
 
-		for (int32_t j = 0; j < pointCount; ++j)
+		s2Vec2 normal = constraint->normal;
+
+		for (int j = 0; j < pointCount; ++j)
 		{
 			const s2ManifoldPoint* mp = manifold->points + j;
-			s2VelocityConstraintPoint* vcp = vc->points + j;
+			s2BlockContactPoint* cp = constraint->points + j;
 
 			if (context->warmStart)
 			{
-				vcp->normalImpulse = mp->normalImpulse;
-				vcp->tangentImpulse = mp->tangentImpulse;
+				cp->normalImpulse = mp->normalImpulse;
+				cp->tangentImpulse = mp->tangentImpulse;
 			}
 			else
 			{
-				vcp->normalImpulse = 0.0f;
-				vcp->tangentImpulse = 0.0f;
+				cp->normalImpulse = 0.0f;
+				cp->tangentImpulse = 0.0f;
 			}
 
 			s2Vec2 localAnchorA = s2Sub(mp->localAnchorA, bodyA->localCenter);
@@ -255,48 +213,44 @@ static s2ContactSolver s2CreateContactSolver(s2World* world, s2StepContext* cont
 			s2Vec2 rA = s2RotateVector(qA, localAnchorA);
 			s2Vec2 rB = s2RotateVector(qB, localAnchorB);
 
-			vcp->rA = rA;
-			vcp->rB = rB;
+			cp->rA = rA;
+			cp->rB = rB;
 
-			float rnA = s2Cross(vcp->rA, vc->normal);
-			float rnB = s2Cross(vcp->rB, vc->normal);
+			float rnA = s2Cross(cp->rA, normal);
+			float rnB = s2Cross(cp->rB, normal);
 
 			float kNormal = mA + mB + iA * rnA * rnA + iB * rnB * rnB;
 
-			vcp->normalMass = kNormal > 0.0f ? 1.0f / kNormal : 0.0f;
+			cp->normalMass = kNormal > 0.0f ? 1.0f / kNormal : 0.0f;
 
-			s2Vec2 tangent = s2CrossVS(vc->normal, 1.0f);
+			s2Vec2 tangent = s2CrossVS(normal, 1.0f);
 
-			float rtA = s2Cross(vcp->rA, tangent);
-			float rtB = s2Cross(vcp->rB, tangent);
+			float rtA = s2Cross(cp->rA, tangent);
+			float rtB = s2Cross(cp->rB, tangent);
 
 			float kTangent = mA + mB + iA * rtA * rtA + iB * rtB * rtB;
 
-			vcp->tangentMass = kTangent > 0.0f ? 1.0f / kTangent : 0.0f;
+			cp->tangentMass = kTangent > 0.0f ? 1.0f / kTangent : 0.0f;
 
 			// Velocity bias for speculative collision
-			vcp->velocityBias = -S2_MAX(0.0f, mp->separation * context->inv_dt);
+			cp->velocityBias = -S2_MAX(0.0f, mp->separation * context->inv_dt);
 
-			// Relative velocity
-			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, vcp->rB));
-			s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, vcp->rA));
-			vcp->relativeVelocity = s2Dot(vc->normal, s2Sub(vrB, vrA));
-
-			pc->localAnchorsA[j] = localAnchorA;
-			pc->localAnchorsB[j] = localAnchorB;
-			pc->separations[j] = mp->separation;
+			cp->localAnchorA = localAnchorA;
+			cp->localAnchorB = localAnchorB;
+			cp->separation = mp->separation;
+			cp->adjustedSeparation = mp->separation - s2Dot(s2Sub(rB, rA), normal);
 		}
 
 		// If we have two points, then prepare the block solver.
-		if (vc->pointCount == 2)
+		if (constraint->pointCount == 2)
 		{
-			s2VelocityConstraintPoint* vcp1 = vc->points + 0;
-			s2VelocityConstraintPoint* vcp2 = vc->points + 1;
+			s2BlockContactPoint* cp1 = constraint->points + 0;
+			s2BlockContactPoint* cp2 = constraint->points + 1;
 
-			float rn1A = s2Cross(vcp1->rA, vc->normal);
-			float rn1B = s2Cross(vcp1->rB, vc->normal);
-			float rn2A = s2Cross(vcp2->rA, vc->normal);
-			float rn2B = s2Cross(vcp2->rB, vc->normal);
+			float rn1A = s2Cross(cp1->rA, normal);
+			float rn1B = s2Cross(cp1->rB, normal);
+			float rn2A = s2Cross(cp2->rA, normal);
+			float rn2B = s2Cross(cp2->rB, normal);
 
 			float k11 = mA + mB + iA * rn1A * rn1A + iB * rn1B * rn1B;
 			float k22 = mA + mB + iA * rn2A * rn2A + iB * rn2B * rn2B;
@@ -307,15 +261,15 @@ static s2ContactSolver s2CreateContactSolver(s2World* world, s2StepContext* cont
 			if (k11 * k11 < k_maxConditionNumber * (k11 * k22 - k12 * k12))
 			{
 				// K is safe to invert.
-				vc->K.cx = (s2Vec2){k11, k12};
-				vc->K.cy = (s2Vec2){k12, k22};
-				vc->normalMass = s2GetInverse22(vc->K);
+				constraint->K.cx = (s2Vec2){k11, k12};
+				constraint->K.cy = (s2Vec2){k12, k22};
+				constraint->normalMass = s2GetInverse22(constraint->K);
 			}
 			else
 			{
 				// The constraints are redundant, just use one.
-				// TODO_ERIN use deepest?
-				vc->pointCount = 1;
+				// todo use deepest?
+				constraint->pointCount = 1;
 			}
 		}
 
@@ -324,37 +278,37 @@ static s2ContactSolver s2CreateContactSolver(s2World* world, s2StepContext* cont
 
 	solver.constraintCount = constraintCount;
 
-	for (int32_t i = 0; i < constraintCount; ++i)
+	for (int i = 0; i < constraintCount; ++i)
 	{
-		s2ContactVelocityConstraint* vc = solver.velocityConstraints + i;
+		s2BlockContactConstraint* constraint = solver.constraints + i;
 
-		const s2Contact* contact = vc->contact;
+		const s2Contact* contact = constraint->contact;
 
-		int32_t indexA = contact->edges[0].bodyIndex;
-		int32_t indexB = contact->edges[1].bodyIndex;
+		int indexA = contact->edges[0].bodyIndex;
+		int indexB = contact->edges[1].bodyIndex;
 		s2Body* bodyA = bodies + indexA;
 		s2Body* bodyB = bodies + indexB;
 		float mA = bodyA->invMass;
 		float iA = bodyA->invI;
 		float mB = bodyB->invMass;
 		float iB = bodyB->invI;
-		int32_t pointCount = vc->pointCount;
+		int pointCount = constraint->pointCount;
 
 		s2Vec2 vA = bodyA->linearVelocity;
 		float wA = bodyA->angularVelocity;
 		s2Vec2 vB = bodyB->linearVelocity;
 		float wB = bodyB->angularVelocity;
 
-		s2Vec2 normal = vc->normal;
+		s2Vec2 normal = constraint->normal;
 		s2Vec2 tangent = s2CrossVS(normal, 1.0f);
 
-		for (int32_t j = 0; j < pointCount; ++j)
+		for (int j = 0; j < pointCount; ++j)
 		{
-			s2VelocityConstraintPoint* vcp = vc->points + j;
-			s2Vec2 P = s2Add(s2MulSV(vcp->normalImpulse, normal), s2MulSV(vcp->tangentImpulse, tangent));
-			wA -= iA * s2Cross(vcp->rA, P);
+			s2BlockContactPoint* cp = constraint->points + j;
+			s2Vec2 P = s2Add(s2MulSV(cp->normalImpulse, normal), s2MulSV(cp->tangentImpulse, tangent));
+			wA -= iA * s2Cross(cp->rA, P);
 			vA = s2MulAdd(vA, -mA, P);
-			wB += iB * s2Cross(vcp->rB, P);
+			wB += iB * s2Cross(cp->rB, P);
 			vB = s2MulAdd(vB, mB, P);
 		}
 
@@ -369,25 +323,24 @@ static s2ContactSolver s2CreateContactSolver(s2World* world, s2StepContext* cont
 
 static void s2DestroyContactSolver(s2ContactSolver* solver, s2StackAllocator* alloc)
 {
-	s2FreeStackItem(alloc, solver->velocityConstraints);
-	s2FreeStackItem(alloc, solver->positionConstraints);
+	s2FreeStackItem(alloc, solver->constraints);
 }
 
-static void s2ContactSolver_SolveVelocityConstraints(s2ContactSolver* solver)
+static void s2BlockSolveVelocity(s2ContactSolver* solver)
 {
-	int32_t count = solver->constraintCount;
+	int count = solver->constraintCount;
 
 	s2World* world = solver->world;
 	s2Body* bodies = world->bodies;
 
-	for (int32_t i = 0; i < count; ++i)
+	for (int i = 0; i < count; ++i)
 	{
-		s2ContactVelocityConstraint* vc = solver->velocityConstraints + i;
+		s2BlockContactConstraint* constraint = solver->constraints + i;
 
-		const s2Contact* contact = vc->contact;
+		const s2Contact* contact = constraint->contact;
 
-		int32_t indexA = contact->edges[0].bodyIndex;
-		int32_t indexB = contact->edges[1].bodyIndex;
+		int indexA = contact->edges[0].bodyIndex;
+		int indexB = contact->edges[1].bodyIndex;
 		s2Body* bodyA = bodies + indexA;
 		s2Body* bodyB = bodies + indexB;
 
@@ -395,78 +348,77 @@ static void s2ContactSolver_SolveVelocityConstraints(s2ContactSolver* solver)
 		float iA = bodyA->invI;
 		float mB = bodyB->invMass;
 		float iB = bodyB->invI;
-		int32_t pointCount = vc->pointCount;
+		int pointCount = constraint->pointCount;
 
 		s2Vec2 vA = bodyA->linearVelocity;
 		float wA = bodyA->angularVelocity;
 		s2Vec2 vB = bodyB->linearVelocity;
 		float wB = bodyB->angularVelocity;
 
-		s2Vec2 normal = vc->normal;
+		s2Vec2 normal = constraint->normal;
 		s2Vec2 tangent = s2CrossVS(normal, 1.0f);
-		float friction = vc->friction;
+		float friction = constraint->friction;
 
 		S2_ASSERT(pointCount == 1 || pointCount == 2);
 
-		// Solve tangent constraints first because non-penetration is more important
-		// than friction.
-		for (int32_t j = 0; j < pointCount; ++j)
+		// Solve friction
+		for (int j = 0; j < pointCount; ++j)
 		{
-			s2VelocityConstraintPoint* vcp = vc->points + j;
+			s2BlockContactPoint* cp = constraint->points + j;
 
 			// Relative velocity at contact
-			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, vcp->rB));
-			s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, vcp->rA));
+			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, cp->rB));
+			s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, cp->rA));
 			s2Vec2 dv = s2Sub(vrB, vrA);
 
 			// Compute tangent force
 			float vt = s2Dot(dv, tangent);
-			float lambda = vcp->tangentMass * (-vt);
+			float lambda = cp->tangentMass * (-vt);
 
 			// Clamp the accumulated force
-			float maxFriction = friction * vcp->normalImpulse;
-			float newImpulse = S2_CLAMP(vcp->tangentImpulse + lambda, -maxFriction, maxFriction);
-			lambda = newImpulse - vcp->tangentImpulse;
-			vcp->tangentImpulse = newImpulse;
+			float maxFriction = friction * cp->normalImpulse;
+			float newImpulse = S2_CLAMP(cp->tangentImpulse + lambda, -maxFriction, maxFriction);
+			lambda = newImpulse - cp->tangentImpulse;
+			cp->tangentImpulse = newImpulse;
 
 			// Apply contact impulse
 			s2Vec2 P = s2MulSV(lambda, tangent);
 
 			vA = s2MulSub(vA, mA, P);
-			wA -= iA * s2Cross(vcp->rA, P);
+			wA -= iA * s2Cross(cp->rA, P);
 
 			vB = s2MulAdd(vB, mB, P);
-			wB += iB * s2Cross(vcp->rB, P);
+			wB += iB * s2Cross(cp->rB, P);
 		}
 
 		// Solve normal constraints
 		if (pointCount == 1)
 		{
-			for (int32_t j = 0; j < pointCount; ++j)
+			for (int j = 0; j < pointCount; ++j)
 			{
-				s2VelocityConstraintPoint* vcp = vc->points + j;
+				s2BlockContactPoint* cp = constraint->points + j;
 
 				// Relative velocity at contact
-				s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, vcp->rB));
-				s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, vcp->rA));
+				s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, cp->rB));
+				s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, cp->rA));
 				s2Vec2 dv = s2Sub(vrB, vrA);
 
 				// Compute normal impulse
 				float vn = s2Dot(dv, normal);
-				float lambda = -vcp->normalMass * (vn - vcp->velocityBias);
+				float lambda = -cp->normalMass * (vn - cp->velocityBias);
 
 				// Clamp the accumulated impulse
-				float newImpulse = S2_MAX(vcp->normalImpulse + lambda, 0.0f);
-				lambda = newImpulse - vcp->normalImpulse;
-				vcp->normalImpulse = newImpulse;
+				float newImpulse = S2_MAX(cp->normalImpulse + lambda, 0.0f);
+				lambda = newImpulse - cp->normalImpulse;
+				cp->normalImpulse = newImpulse;
 
 				// Apply contact impulse
 				s2Vec2 P = s2MulSV(lambda, normal);
 				vA = s2MulSub(vA, mA, P);
-				wA -= iA * s2Cross(vcp->rA, P);
+				wA -= iA * s2Cross(cp->rA, P);
 
 				vB = s2MulAdd(vB, mB, P);
-				wB += iB * s2Cross(vcp->rB, P);
+				wB += iB * s2Cross(cp->rB, P);
 			}
 		}
 		else
@@ -505,8 +457,8 @@ static void s2ContactSolver_SolveVelocityConstraints(s2ContactSolver* solver)
 			//    = A * x + b'
 			// b' = b - A * a;
 
-			s2VelocityConstraintPoint* cp1 = vc->points + 0;
-			s2VelocityConstraintPoint* cp2 = vc->points + 1;
+			s2BlockContactPoint* cp1 = constraint->points + 0;
+			s2BlockContactPoint* cp2 = constraint->points + 1;
 
 			s2Vec2 a = {cp1->normalImpulse, cp2->normalImpulse};
 			S2_ASSERT(a.x >= 0.0f && a.y >= 0.0f);
@@ -527,7 +479,7 @@ static void s2ContactSolver_SolveVelocityConstraints(s2ContactSolver* solver)
 			s2Vec2 b = {vn1 - cp1->velocityBias, vn2 - cp2->velocityBias};
 
 			// Compute b'
-			b = s2Sub(b, s2MulMV(vc->K, a));
+			b = s2Sub(b, s2MulMV(constraint->K, a));
 
 			const float k_errorTol = 1e-3f;
 			S2_MAYBE_UNUSED(k_errorTol);
@@ -543,7 +495,7 @@ static void s2ContactSolver_SolveVelocityConstraints(s2ContactSolver* solver)
 				//
 				// x = - inv(A) * b'
 				//
-				s2Vec2 x = s2Neg(s2MulMV(vc->normalMass, b));
+				s2Vec2 x = s2Neg(s2MulMV(constraint->normalMass, b));
 
 				if (x.x >= 0.0f && x.y >= 0.0f)
 				{
@@ -587,7 +539,7 @@ static void s2ContactSolver_SolveVelocityConstraints(s2ContactSolver* solver)
 				x.x = -cp1->normalMass * b.x;
 				x.y = 0.0f;
 				vn1 = 0.0f;
-				vn2 = vc->K.cx.y * x.x + b.y;
+				vn2 = constraint->K.cx.y * x.x + b.y;
 				if (x.x >= 0.0f && vn2 >= 0.0f)
 				{
 					// Get the incremental impulse
@@ -627,7 +579,7 @@ static void s2ContactSolver_SolveVelocityConstraints(s2ContactSolver* solver)
 				//
 				x.x = 0.0f;
 				x.y = -cp2->normalMass * b.y;
-				vn1 = vc->K.cy.x * x.y + b.x;
+				vn1 = constraint->K.cy.x * x.y + b.x;
 				vn2 = 0.0f;
 
 				if (x.y >= 0.0f && vn1 >= 0.0f)
@@ -707,38 +659,38 @@ static void s2ContactSolver_SolveVelocityConstraints(s2ContactSolver* solver)
 
 static void s2ContactSolver_StoreImpulses(s2ContactSolver* solver)
 {
-	int32_t count = solver->constraintCount;
+	int count = solver->constraintCount;
 
-	for (int32_t i = 0; i < count; ++i)
+	for (int i = 0; i < count; ++i)
 	{
-		s2ContactVelocityConstraint* vc = solver->velocityConstraints + i;
-		s2Contact* contact = vc->contact;
+		s2BlockContactConstraint* constraint = solver->constraints + i;
+		s2Contact* contact = constraint->contact;
 
 		s2Manifold* manifold = &contact->manifold;
 
-		for (int32_t j = 0; j < vc->pointCount; ++j)
+		for (int j = 0; j < constraint->pointCount; ++j)
 		{
-			manifold->points[j].normalImpulse = vc->points[j].normalImpulse;
-			manifold->points[j].tangentImpulse = vc->points[j].tangentImpulse;
+			manifold->points[j].normalImpulse = constraint->points[j].normalImpulse;
+			manifold->points[j].tangentImpulse = constraint->points[j].tangentImpulse;
 		}
 	}
 }
 
-static void s2ContactSolver_SolvePositionConstraintsBlock(s2ContactSolver* solver)
+static void s2BlockSolvePosition(s2ContactSolver* solver)
 {
-	int32_t count = solver->constraintCount;
+	int count = solver->constraintCount;
 	float slop = s2_linearSlop;
 
 	s2World* world = solver->world;
 	s2Body* bodies = world->bodies;
 
-	for (int32_t i = 0; i < count; ++i)
+	for (int i = 0; i < count; ++i)
 	{
-		s2ContactPositionConstraint* pc = solver->positionConstraints + i;
-		const s2Contact* contact = pc->contact;
+		s2BlockContactConstraint* constraint = solver->constraints + i;
+		const s2Contact* contact = constraint->contact;
 
-		int32_t indexA = contact->edges[0].bodyIndex;
-		int32_t indexB = contact->edges[1].bodyIndex;
+		int indexA = contact->edges[0].bodyIndex;
+		int indexB = contact->edges[1].bodyIndex;
 		s2Body* bodyA = bodies + indexA;
 		s2Body* bodyB = bodies + indexB;
 
@@ -747,28 +699,33 @@ static void s2ContactSolver_SolvePositionConstraintsBlock(s2ContactSolver* solve
 		float mB = bodyB->invMass;
 		float iB = bodyB->invI;
 
-		int32_t pointCount = pc->pointCount;
+		int pointCount = constraint->pointCount;
 
-		s2Vec2 cA = bodyA->position;
+		s2Vec2 dcA = bodyA->deltaPosition;
 		s2Rot qA = bodyA->rot;
-		s2Vec2 cB = bodyB->position;
+		s2Vec2 dcB = bodyB->deltaPosition;
 		s2Rot qB = bodyB->rot;
 
-		s2Vec2 normal = pc->normal;
+		s2Vec2 normal = constraint->normal;
 
 		if (pointCount == 2)
 		{
-			s2Vec2 rA1 = s2RotateVector(qA, pc->localAnchorsA[0]);
-			s2Vec2 rB1 = s2RotateVector(qB, pc->localAnchorsB[0]);
-			s2Vec2 rA2 = s2RotateVector(qA, pc->localAnchorsA[1]);
-			s2Vec2 rB2 = s2RotateVector(qB, pc->localAnchorsB[1]);
+			s2BlockContactPoint* cp1 = constraint->points + 0;
+			s2BlockContactPoint* cp2 = constraint->points + 1;
+
+			s2Vec2 rA1 = s2RotateVector(qA, cp1->localAnchorA);
+			s2Vec2 rB1 = s2RotateVector(qB, cp1->localAnchorB);
+			s2Vec2 rA2 = s2RotateVector(qA, cp2->localAnchorA);
+			s2Vec2 rB2 = s2RotateVector(qB, cp2->localAnchorB);
 
 			// Current separation
-			s2Vec2 d1 = s2Sub(s2Add(cB, rB1), s2Add(cA, rA1));
-			float separation1 = s2Dot(d1, normal) + pc->separations[0];
+			s2Vec2 dc = s2Sub(dcB, dcA);
 
-			s2Vec2 d2 = s2Sub(s2Add(cB, rB2), s2Add(cA, rA2));
-			float separation2 = s2Dot(d2, normal) + pc->separations[1];
+			s2Vec2 d1 = s2Add(dc, s2Sub(rB1, rA1));
+			float separation1 = s2Dot(d1, normal) + cp1->adjustedSeparation;
+
+			s2Vec2 d2 = s2Add(dc, s2Sub(rB2, rA2));
+			float separation2 = s2Dot(d2, normal) + cp2->adjustedSeparation;
 
 			float C1 = S2_CLAMP(s2_baumgarte * (separation1 + slop), -s2_maxLinearCorrection, 0.0f);
 			float C2 = S2_CLAMP(s2_baumgarte * (separation2 + slop), -s2_maxLinearCorrection, 0.0f);
@@ -827,10 +784,10 @@ static void s2ContactSolver_SolvePositionConstraintsBlock(s2ContactSolver* solve
 					s2Vec2 P1 = s2MulSV(d.x, normal);
 					s2Vec2 P2 = s2MulSV(d.y, normal);
 
-					cA = s2MulSub(cA, mA, s2Add(P1, P2));
+					dcA = s2MulSub(dcA, mA, s2Add(P1, P2));
 					qA = s2IntegrateRot(qA, -iA * (s2Cross(rA1, P1) + s2Cross(rA2, P2)));
 
-					cB = s2MulAdd(cB, mB, s2Add(P1, P2));
+					dcB = s2MulAdd(dcB, mB, s2Add(P1, P2));
 					qB = s2IntegrateRot(qB, iB * (s2Cross(rB1, P1) + s2Cross(rB2, P2)));
 					break;
 				}
@@ -853,10 +810,10 @@ static void s2ContactSolver_SolvePositionConstraintsBlock(s2ContactSolver* solve
 					s2Vec2 P1 = s2MulSV(d.x, normal);
 					s2Vec2 P2 = s2MulSV(d.y, normal);
 
-					cA = s2MulSub(cA, mA, s2Add(P1, P2));
+					dcA = s2MulSub(dcA, mA, s2Add(P1, P2));
 					qA = s2IntegrateRot(qA, -iA * (s2Cross(rA1, P1) + s2Cross(rA2, P2)));
 
-					cB = s2MulAdd(cB, mB, s2Add(P1, P2));
+					dcB = s2MulAdd(dcB, mB, s2Add(P1, P2));
 					qB = s2IntegrateRot(qB, iB * (s2Cross(rB1, P1) + s2Cross(rB2, P2)));
 					break;
 				}
@@ -879,10 +836,10 @@ static void s2ContactSolver_SolvePositionConstraintsBlock(s2ContactSolver* solve
 					s2Vec2 P1 = s2MulSV(d.x, normal);
 					s2Vec2 P2 = s2MulSV(d.y, normal);
 
-					cA = s2MulSub(cA, mA, s2Add(P1, P2));
+					dcA = s2MulSub(dcA, mA, s2Add(P1, P2));
 					qA = s2IntegrateRot(qA, -iA * (s2Cross(rA1, P1) + s2Cross(rA2, P2)));
 
-					cB = s2MulAdd(cB, mB, s2Add(P1, P2));
+					dcB = s2MulAdd(dcB, mB, s2Add(P1, P2));
 					qB = s2IntegrateRot(qB, iB * (s2Cross(rB1, P1) + s2Cross(rB2, P2)));
 					break;
 				}
@@ -892,14 +849,16 @@ static void s2ContactSolver_SolvePositionConstraintsBlock(s2ContactSolver* solve
 		else
 		{
 		manifold_degenerate:
-			for (int32_t j = 0; j < pointCount; ++j)
+			for (int j = 0; j < pointCount; ++j)
 			{
-				s2Vec2 rA = s2RotateVector(qA, pc->localAnchorsA[j]);
-				s2Vec2 rB = s2RotateVector(qB, pc->localAnchorsB[j]);
+				s2BlockContactPoint* cp = constraint->points + j;
+
+				s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
+				s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
 
 				// Current separation
-				s2Vec2 d = s2Sub(s2Add(cB, rB), s2Add(cA, rA));
-				float separation = s2Dot(d, normal) + pc->separations[j];
+				s2Vec2 d = s2Add(s2Sub(dcB, dcA), s2Sub(rB, rA));
+				float separation = s2Dot(d, normal) + cp->adjustedSeparation;
 
 				// Prevent large corrections. Need to maintain a small overlap to avoid overshoot.
 				// This improves stacking stability significantly.
@@ -915,17 +874,17 @@ static void s2ContactSolver_SolvePositionConstraintsBlock(s2ContactSolver* solve
 
 				s2Vec2 P = s2MulSV(impulse, normal);
 
-				cA = s2MulSub(cA, mA, P);
+				dcA = s2MulSub(dcA, mA, P);
 				qA = s2IntegrateRot(qA, -iA * s2Cross(rA, P));
 
-				cB = s2MulAdd(cB, mB, P);
+				dcB = s2MulAdd(dcB, mB, P);
 				qB = s2IntegrateRot(qB, iB * s2Cross(rB, P));
 			}
 		}
 
-		bodyA->position = cA;
+		bodyA->deltaPosition = dcA;
 		bodyA->rot = qA;
-		bodyB->position = cB;
+		bodyB->deltaPosition = dcB;
 		bodyB->rot = qB;
 	}
 }
@@ -973,7 +932,7 @@ void s2Solve_PGS_NGS_Block(s2World* world, s2StepContext* context)
 			s2SolveJoint(joint, context, h);
 		}
 
-		s2ContactSolver_SolveVelocityConstraints(&contactSolver);
+		s2BlockSolveVelocity(&contactSolver);
 	}
 
 	// Store impulses for warm starting
@@ -984,7 +943,7 @@ void s2Solve_PGS_NGS_Block(s2World* world, s2StepContext* context)
 	// Solve position constraints
 	for (int i = 0; i < context->extraIterations; ++i)
 	{
-		s2ContactSolver_SolvePositionConstraintsBlock(&contactSolver);
+		s2BlockSolvePosition(&contactSolver);
 
 		for (int i = 0; i < jointCapacity; ++i)
 		{
@@ -997,6 +956,8 @@ void s2Solve_PGS_NGS_Block(s2World* world, s2StepContext* context)
 			s2SolveJointPosition(joint, context);
 		}
 	}
+
+	s2FinalizePositions(world);
 
 	s2DestroyContactSolver(&contactSolver, world->stackAllocator);
 }

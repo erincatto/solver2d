@@ -45,8 +45,6 @@ static void s2PrepareContacts(s2World* world, s2ContactConstraint* constraints, 
 		float mB = bodyB->invMass;
 		float iB = bodyB->invI;
 
-		s2Vec2 cA = bodyA->position;
-		s2Vec2 cB = bodyB->position;
 		s2Rot qA = bodyA->rot;
 		s2Rot qB = bodyB->rot;
 
@@ -75,6 +73,7 @@ static void s2PrepareContacts(s2World* world, s2ContactConstraint* constraints, 
 			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
 
 			cp->separation = mp->separation;
+			cp->adjustedSeparation = mp->separation - s2Dot(s2Sub(rB, rA), normal);
 
 			float rnA = s2Cross(rA, normal);
 			float rnB = s2Cross(rB, normal);
@@ -111,8 +110,8 @@ static void s2SolveContacts_TGS(s2World* world, s2ContactConstraint* constraints
 		s2Vec2 vB = bodyB->linearVelocity;
 		float wB = bodyB->angularVelocity;
 
-		s2Vec2 cA = bodyA->position;
-		s2Vec2 cB = bodyB->position;
+		s2Vec2 dcA = bodyA->deltaPosition;
+		s2Vec2 dcB = bodyB->deltaPosition;
 		s2Rot qA = bodyA->rot;
 		s2Rot qB = bodyB->rot;
 
@@ -129,8 +128,8 @@ static void s2SolveContacts_TGS(s2World* world, s2ContactConstraint* constraints
 			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
 
 			// Compute separation
-			s2Vec2 d = s2Add(s2Sub(cB, cA), s2Sub(rB, rA));
-			float separation = s2Dot(d, normal) + cp->separation;
+			s2Vec2 d = s2Add(s2Sub(dcB, dcA), s2Sub(rB, rA));
+			float separation = s2Dot(d, normal) + cp->adjustedSeparation;
 
 			// Speculative
 			float bias = separation > 0.0f ? separation * inv_h : 0.0f;
@@ -249,8 +248,8 @@ void s2Solve_TGS_NGS(s2World* world, s2StepContext* context)
 	}
 
 	int substepCount = context->iterations;
-	float h = context->dt / substepCount;
-	float inv_h = 1.0f / h;
+	float h = context->h;
+	float inv_h = context->inv_h;
 
 	for (int substep = 0; substep < substepCount; ++substep)
 	{
@@ -272,40 +271,36 @@ void s2Solve_TGS_NGS(s2World* world, s2StepContext* context)
 			s2WarmStartContacts(world, constraints, constraintCount);
 		}
 
-		for (int iter = 0; iter < 1; ++iter)
+		for (int i = 0; i < jointCapacity; ++i)
 		{
-			for (int i = 0; i < jointCapacity; ++i)
+			s2Joint* joint = joints + i;
+			if (s2IsFree(&joint->object))
 			{
-				s2Joint* joint = joints + i;
-				if (s2IsFree(&joint->object))
-				{
-					continue;
-				}
-
-				s2SolveJoint(joint, context, h);
+				continue;
 			}
 
-			s2SolveContacts_TGS(world, constraints, constraintCount, inv_h);
+			s2SolveJoint(joint, context, h);
 		}
+
+		s2SolveContacts_TGS(world, constraints, constraintCount, inv_h);
 		
 		s2IntegratePositions(world, h);
 
-		for (int iter = 0; iter < 1; ++iter)
+		for (int i = 0; i < jointCapacity; ++i)
 		{
-			for (int i = 0; i < jointCapacity; ++i)
+			s2Joint* joint = joints + i;
+			if (s2IsFree(&joint->object))
 			{
-				s2Joint* joint = joints + i;
-				if (s2IsFree(&joint->object))
-				{
-					continue;
-				}
-
-				s2SolveJointPosition(joint, context);
+				continue;
 			}
 
-			s2SolveContact_NGS(world, constraints, constraintCount);
+			s2SolveJointPosition(joint, context);
 		}
+
+		s2SolveContact_NGS(world, constraints, constraintCount);
 	}
+
+	s2FinalizePositions(world);
 
 	s2StoreContactImpulses(constraints, constraintCount);
 

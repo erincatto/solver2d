@@ -205,5 +205,7 @@ void s2Solve_PGS_NGS(s2World* world, s2StepContext* context)
 		s2SolveContact_NGS(world, constraints, constraintCount);
 	}
 
+	s2FinalizePositions(world);
+
 	s2FreeStackItem(world->stackAllocator, constraints);
 }
