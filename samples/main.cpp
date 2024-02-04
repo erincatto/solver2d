@@ -545,9 +545,9 @@ static void UpdateUI(s2Color* solverColors)
 // Draws a segment of one meter length for scale
 void DrawScale()
 {
-	s2Color c = {0.9f, 0.9f, 0.9f, 1.0f};
-	s2Vec2 s1 = {5.0f, g_camera.m_height - 5.0f};
-	s2Vec2 p1 = g_camera.ConvertScreenToWorld({5.0f, g_camera.m_height - 5.0f});
+	s2Color c = s2MakeColor(s2_colorRed2, 1.0f);
+	s2Vec2 s1 = {5.0f, g_camera.m_height - 10.0f};
+	s2Vec2 p1 = g_camera.ConvertScreenToWorld(s1);
 	s2Vec2 p2 = {p1.x + 1.0f, p1.y};
 	g_draw.DrawSegment(p1, p2, c);
 
@@ -804,7 +804,7 @@ int main(int, char**)
 			ImGui::Begin("Overlay", nullptr,
 						 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize |
 							 ImGuiWindowFlags_NoScrollbar);
-			ImGui::SetCursorPos(ImVec2(5.0f, g_camera.m_height - 25.0f));
+			ImGui::SetCursorPos(ImVec2(5.0f, g_camera.m_height - 30.0f));
 			ImGui::TextColored(ImColor(153, 230, 153, 255), "%s", buffer);
 			ImGui::End();
 		}
