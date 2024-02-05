@@ -200,7 +200,7 @@ public:
 	{
 		if (settings.restart == false)
 		{
-			g_camera.m_center = {0.0f, 3.0f};
+			g_camera.m_center = {0.0f, 12.0f};
 			g_camera.m_zoom = 1.0f;
 		}
 
@@ -251,16 +251,16 @@ public:
 
 static int sampleHighMassRatio2 = RegisterSample("Contact", "HighMassRatio2", HighMassRatio2::Create);
 
-class Friction : public Sample
+class FrictionRamp : public Sample
 {
 public:
-	Friction(const Settings& settings, s2SolverType solverType)
+	FrictionRamp(const Settings& settings, s2SolverType solverType)
 		: Sample(settings, solverType)
 	{
 		if (settings.restart == false)
 		{
-			g_camera.m_center = {0.0f, 14.0f};
-			g_camera.m_zoom = 0.6f;
+			g_camera.m_center = {0.0f, 17.0f};
+			g_camera.m_zoom = 0.75f;
 		}
 
 		{
@@ -312,11 +312,11 @@ public:
 
 	static Sample* Create(const Settings& settings, s2SolverType solverType)
 	{
-		return new Friction(settings, solverType);
+		return new FrictionRamp(settings, solverType);
 	}
 };
 
-static int sampleFriction = RegisterSample("Contact", "Friction", Friction::Create);
+static int sampleFriction = RegisterSample("Contact", "Friction Ramp", FrictionRamp::Create);
 
 class OverlapRecovery : public Sample
 {

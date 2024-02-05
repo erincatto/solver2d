@@ -6,12 +6,9 @@
 #include "settings.h"
 
 #include "solver2d/geometry.h"
-#include "solver2d/hull.h"
 #include "solver2d/math.h"
 #include "solver2d/solver2d.h"
 
-#include <GLFW/glfw3.h>
-#include <imgui.h>
 #include <math.h>
 #include <stdio.h>
 
@@ -23,13 +20,14 @@ public:
 		: Sample(settings, solverType)
 	{
 		// s2Vec2 origin = {0.0f, 0.0f};
-		s2Vec2 origin = {50000.0f, -45000.0f};
+		//s2Vec2 origin = {50000.0f, -45000.0f};
+		s2Vec2 origin = {100000.0f, -80000.0f};
 		// s2Vec2 origin = {900000.0f, -800000.0f};
 
-		float originx = 65000.0f;
-		float nextfloat = nextafterf(originx, 2.0f * originx);
-		float ulp = nextfloat - originx;
-		printf("ulp = %g\n", ulp);
+		//float originx = 65000.0f;
+		//float nextfloat = nextafterf(originx, 2.0f * originx);
+		//float ulp = nextfloat - originx;
+		//printf("ulp = %g\n", ulp);
 
 		if (settings.restart == false)
 		{
@@ -167,8 +165,9 @@ public:
 		: Sample(settings, solverType)
 	{
 		// s2Vec2 origin = {0.0f, 0.0f};
-		s2Vec2 origin = {40000.0f, -35000.0f};
-		// s2Vec2 origin = {900000.0f, -800000.0f};
+		//s2Vec2 origin = {40000.0f, -35000.0f};
+		//s2Vec2 origin = {80000.0f, -70000.0f};
+		s2Vec2 origin = {900000.0f, -800000.0f};
 
 		if (settings.restart == false)
 		{
@@ -223,9 +222,9 @@ public:
 	FarRagdollPile(const Settings& settings, s2SolverType solverType)
 		: Sample(settings, solverType)
 	{
-		// s2Vec2 origin = {0.0f, 0.0f};
-		s2Vec2 origin = {30000.0f, -25000.0f};
-		// s2Vec2 origin = {900000.0f, -800000.0f};
+		//s2Vec2 origin = {0.0f, 0.0f};
+		//s2Vec2 origin = {20000.0f, -15000.0f};
+		s2Vec2 origin = {80000.0f, -60000.0f};
 
 		if (settings.restart == false)
 		{

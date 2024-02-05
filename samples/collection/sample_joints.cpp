@@ -260,8 +260,8 @@ public:
 	{
 		if (settings.restart == false)
 		{
-			g_camera.m_zoom = 0.25f;
-			g_camera.m_center = {0.0f, 5.0f};
+			g_camera.m_center = {0.0f, 2.5f};
+			g_camera.m_zoom = 0.125f;
 		}
 
 		{
@@ -272,7 +272,7 @@ public:
 			s2CreatePolygonShape(groundId, &s2_defaultShapeDef, &box);
 		}
 
-		m_human.Spawn(m_worldId, {0.0f, 10.0f}, 1.0f, 1, nullptr);
+		m_human.Spawn(m_worldId, {0.0f, 4.0f}, 1.0f, 1, nullptr);
 	}
 
 	static Sample* Create(const Settings& settings, s2SolverType solverType)
@@ -391,7 +391,7 @@ public:
 		s2Vec2 center = {m_side, 28.0f};
 
 		Human* human = m_humans + index;
-		human->Spawn(m_worldId, center, 1.5f, index + 1, human);
+		human->Spawn(m_worldId, center, 2.0f, index + 1, human);
 
 		m_isSpawned[index] = true;
 		m_side = -m_side;
@@ -459,8 +459,8 @@ public:
 		int numi = 100;
 		int numk = 100;
 #else
-		int numi = 20;
-		int numk = 20;
+		int numi = 6;
+		int numk = 6;
 #endif
 
 		float shift = 1.0f;

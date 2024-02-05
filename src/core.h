@@ -5,6 +5,10 @@
 
 #include <stdint.h>
 
+#if defined(_DEBUG)
+#include <stdio.h>
+#endif
+
 // Define platform
 #if defined(_WIN64)
 #define S2_PLATFORM_WINDOWS

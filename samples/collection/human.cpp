@@ -30,17 +30,15 @@ void Human::Spawn(s2WorldId worldId, s2Vec2 position, float scale, int groupInde
 	bodyDef.userData = userData;
 
 	s2ShapeDef shapeDef = s2_defaultShapeDef;
-	shapeDef.friction = 0.2f;
-	//shapeDef.friction = 0.0f;
+	shapeDef.friction = 0.4f;
 	shapeDef.filter.groupIndex = -groupIndex;
 
 	s2ShapeDef footShapeDef = shapeDef;
-	footShapeDef.friction = 0.05f;
-	//footShapeDef.friction = 0.0f;
+	footShapeDef.friction = 0.1f;
 
 	float s = scale;
-	float maxTorque = 0.05f * s;
-	bool enableMotor = false;
+	float maxTorque = 0.025f * s;
+	bool enableMotor = true;
 	bool enableLimit = true;
 	float drawSize = 0.025f;
 
@@ -52,7 +50,7 @@ void Human::Spawn(s2WorldId worldId, s2Vec2 position, float scale, int groupInde
 		bodyDef.position = s2Add({0.0f, 0.95f * s}, position);
 		bone->bodyId = s2CreateBody(worldId, &bodyDef);
 
-		s2Capsule capsule = {{0.0f, -0.02f * s}, {0.0f, 0.02f * s}, 0.095f * s};
+		s2Capsule capsule = {{0.0f, -0.02f * s}, {0.0f, 0.025f * s}, 0.095f * s};
 		s2CreateCapsuleShape(bone->bodyId, &shapeDef, &capsule);
 	}
 
@@ -69,7 +67,7 @@ void Human::Spawn(s2WorldId worldId, s2Vec2 position, float scale, int groupInde
 		s2Capsule capsule = {{0.0f, -0.135f * s}, {0.0f, 0.135f * s}, 0.09f * s};
 		s2CreateCapsuleShape(bone->bodyId, &shapeDef, &capsule);
 
-		s2Vec2 pivot = s2Add({0.0f, 1.0f * s}, position);
+		s2Vec2 pivot = s2Add({0.0f, 1.025f * s}, position);
 		s2RevoluteJointDef jointDef = s2DefaultRevoluteJointDef();
 		jointDef.bodyIdA = m_bones[bone->parentIndex].bodyId;
 		jointDef.bodyIdB = bone->bodyId;
@@ -125,7 +123,7 @@ void Human::Spawn(s2WorldId worldId, s2Vec2 position, float scale, int groupInde
 		bodyDef.position = s2Add({0.0f, 0.775f * s}, position);
 		bone->bodyId = s2CreateBody(worldId, &bodyDef);
 
-		s2Capsule capsule = {{0.0f, -0.125f * s}, {0.0f, 0.125f * s}, 0.06f * s};
+		s2Capsule capsule = {{0.0f, -0.125f * s}, {0.0f, 0.125f * s}, 0.055f * s};
 		s2CreateCapsuleShape(bone->bodyId, &shapeDef, &capsule);
 
 		s2Vec2 pivot = s2Add({0.0f, 0.9f * s}, position);
@@ -152,7 +150,7 @@ void Human::Spawn(s2WorldId worldId, s2Vec2 position, float scale, int groupInde
 		bodyDef.position = s2Add({0.0f, 0.475f * s}, position);
 		bone->bodyId = s2CreateBody(worldId, &bodyDef);
 
-		s2Capsule capsule = {{0.0f, -0.14f * s}, {0.0f, 0.125f * s}, 0.05f * s};
+		s2Capsule capsule = {{0.0f, -0.14f * s}, {0.0f, 0.125f * s}, 0.045f * s};
 		s2CreateCapsuleShape(bone->bodyId, &shapeDef, &capsule);
 
 		//s2Polygon box = s2MakeOffsetBox(0.1f * s, 0.03f * s, {0.05f * s, -0.175f * s}, 0.0f);
@@ -185,7 +183,7 @@ void Human::Spawn(s2WorldId worldId, s2Vec2 position, float scale, int groupInde
 		bodyDef.position = s2Add({0.0f, 0.775f * s}, position);
 		bone->bodyId = s2CreateBody(worldId, &bodyDef);
 
-		s2Capsule capsule = {{0.0f, -0.125f * s}, {0.0f, 0.125f * s}, 0.06f * s};
+		s2Capsule capsule = {{0.0f, -0.125f * s}, {0.0f, 0.125f * s}, 0.055f * s};
 		s2CreateCapsuleShape(bone->bodyId, &shapeDef, &capsule);
 
 		s2Vec2 pivot = s2Add({0.0f, 0.9f * s}, position);
@@ -212,7 +210,7 @@ void Human::Spawn(s2WorldId worldId, s2Vec2 position, float scale, int groupInde
 		bodyDef.position = s2Add({0.0f, 0.475f * s}, position);
 		bone->bodyId = s2CreateBody(worldId, &bodyDef);
 
-		s2Capsule capsule = {{0.0f, -0.14f * s}, {0.0f, 0.125f * s}, 0.05f * s};
+		s2Capsule capsule = {{0.0f, -0.14f * s}, {0.0f, 0.125f * s}, 0.045f * s};
 		s2CreateCapsuleShape(bone->bodyId, &shapeDef, &capsule);
 
 		//s2Polygon box = s2MakeOffsetBox(0.1f * s, 0.03f * s, {0.05f * s, -0.175f * s}, 0.0f);
