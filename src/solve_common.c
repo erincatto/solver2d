@@ -62,8 +62,31 @@ void s2IntegratePositions(s2World* world, float h)
 			continue;
 		}
 
-		body->position = s2MulAdd(body->position, h, body->linearVelocity);
+		body->deltaPosition = s2MulAdd(body->deltaPosition, h, body->linearVelocity);
 		body->rot = s2IntegrateRot(body->rot, h * body->angularVelocity);
+	}
+}
+
+void s2FinalizePositions(s2World* world)
+{
+	s2Body* bodies = world->bodies;
+	int bodyCapacity = world->bodyPool.capacity;
+
+	for (int i = 0; i < bodyCapacity; ++i)
+	{
+		s2Body* body = bodies + i;
+		if (s2ObjectValid(&body->object) == false)
+		{
+			continue;
+		}
+
+		if (body->type == s2_staticBody)
+		{
+			continue;
+		}
+
+		body->position = s2Add(body->position, body->deltaPosition);
+		body->deltaPosition = s2Vec2_zero;
 	}
 }
 
@@ -96,8 +119,6 @@ void s2PrepareContacts_PGS(s2World* world, s2ContactConstraint* constraints, int
 		float mB = bodyB->invMass;
 		float iB = bodyB->invI;
 
-		s2Vec2 cA = bodyA->position;
-		s2Vec2 cB = bodyB->position;
 		s2Rot qA = bodyA->rot;
 		s2Rot qB = bodyB->rot;
 
@@ -122,12 +143,14 @@ void s2PrepareContacts_PGS(s2World* world, s2ContactConstraint* constraints, int
 
 			cp->localAnchorA = s2Sub(mp->localAnchorA, bodyA->localCenter);
 			cp->localAnchorB = s2Sub(mp->localAnchorB, bodyB->localCenter);
+			
 			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
 			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
-
 			cp->rA0 = rA;
 			cp->rB0 = rB;
+
 			cp->separation = mp->separation;
+			cp->adjustedSeparation = mp->separation - s2Dot(s2Sub(rB, rA), normal);
 
 			cp->biasCoefficient = mp->separation > 0.0f ? 1.0f : 0.0f;
 
@@ -195,13 +218,11 @@ void s2PrepareContacts_Soft(s2World* world, s2ContactConstraint* constraints, in
 		// Stiffer for dynamic vs static
 		float contactHertz = (mA == 0.0f || mB == 0.0f) ? 2.0f * hertz : hertz;
 
-		s2Vec2 cA = bodyA->position;
-		s2Vec2 cB = bodyB->position;
 		s2Rot qA = bodyA->rot;
 		s2Rot qB = bodyB->rot;
 
 		s2Vec2 normal = constraint->normal;
-		s2Vec2 tangent = s2RightPerp(constraint->normal);
+		s2Vec2 tangent = s2RightPerp(normal);
 
 		for (int j = 0; j < pointCount; ++j)
 		{
@@ -221,14 +242,14 @@ void s2PrepareContacts_Soft(s2World* world, s2ContactConstraint* constraints, in
 
 			cp->localAnchorA = s2Sub(mp->localAnchorA, bodyA->localCenter);
 			cp->localAnchorB = s2Sub(mp->localAnchorB, bodyB->localCenter);
+			
 			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
 			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
-
-			// static anchors
 			cp->rA0 = rA;
 			cp->rB0 = rB;
 
 			cp->separation = mp->separation;
+			cp->adjustedSeparation = mp->separation - s2Dot(s2Sub(rB, rA), normal);
 
 			float rnA = s2Cross(rA, normal);
 			float rnB = s2Cross(rB, normal);
@@ -322,9 +343,9 @@ void s2SolveContact_NGS(s2World* world, s2ContactConstraint* constraints, int co
 		float iB = bodyB->invI;
 		int pointCount = constraint->pointCount;
 
-		s2Vec2 cA = bodyA->position;
+		s2Vec2 dcA = bodyA->deltaPosition;
 		s2Rot qA = bodyA->rot;
-		s2Vec2 cB = bodyB->position;
+		s2Vec2 dcB = bodyB->deltaPosition;
 		s2Rot qB = bodyB->rot;
 
 		s2Vec2 normal = constraint->normal;
@@ -337,8 +358,8 @@ void s2SolveContact_NGS(s2World* world, s2ContactConstraint* constraints, int co
 			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
 
 			// Current separation
-			s2Vec2 d = s2Add(s2Sub(cB, cA), s2Sub(rB, rA));
-			float separation = s2Dot(d, normal) + cp->separation;
+			s2Vec2 d = s2Add(s2Sub(dcB, dcA), s2Sub(rB, rA));
+			float separation = s2Dot(d, normal) + cp->adjustedSeparation;
 
 			// Prevent large corrections. Need to maintain a small overlap to avoid overshoot.
 			// This improves stacking stability significantly.
@@ -354,16 +375,16 @@ void s2SolveContact_NGS(s2World* world, s2ContactConstraint* constraints, int co
 
 			s2Vec2 P = s2MulSV(impulse, normal);
 
-			cA = s2MulSub(cA, mA, P);
+			dcA = s2MulSub(dcA, mA, P);
 			qA = s2IntegrateRot(qA, -iA * s2Cross(rA, P));
 
-			cB = s2MulAdd(cB, mB, P);
+			dcB = s2MulAdd(dcB, mB, P);
 			qB = s2IntegrateRot(qB, iB * s2Cross(rB, P));
 		}
 
-		bodyA->position = cA;
+		bodyA->deltaPosition = dcA;
 		bodyA->rot = qA;
-		bodyB->position = cB;
+		bodyB->deltaPosition = dcB;
 		bodyB->rot = qB;
 	}
 }

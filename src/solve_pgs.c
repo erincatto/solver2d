@@ -199,6 +199,7 @@ void s2Solve_PGS(s2World* world, s2StepContext* context)
 
 	// Update positions from velocity
 	s2IntegratePositions(world, h);
+	s2FinalizePositions(world);
 
 	s2StoreContactImpulses(constraints, constraintCount);
 

@@ -17,16 +17,11 @@ typedef struct s2MouseJointDef
 	/// The initial target point in world space
 	s2Vec2 target;
 
-	/// The maximum constraint force that can be exerted
-	/// to move the candidate body. Usually you will express
-	/// as some multiple of the weight (multiplier * mass * gravity).
-	float maxForce;
+	/// Stiffness in hertz
+	float hertz;
 
-	/// The linear stiffness in N/m
-	float stiffness;
-
-	/// The linear damping in N*s/m
-	float damping;
+	/// Damping ratio, non-dimensional
+	float dampingRatio;
 } s2MouseJointDef;
 
 static inline struct s2MouseJointDef s2DefaultMouseJointDef(void)
@@ -35,9 +30,8 @@ static inline struct s2MouseJointDef s2DefaultMouseJointDef(void)
 	def.bodyIdA = s2_nullBodyId;
 	def.bodyIdB = s2_nullBodyId;
 	def.target = S2_LITERAL(s2Vec2){0.0f, 0.0f};
-	def.maxForce = 0.0f;
-	def.stiffness = 0.0f;
-	def.damping = 0.0f;
+	def.hertz = 15.0f;
+	def.dampingRatio = 1.0f;
 	return def;
 }
 

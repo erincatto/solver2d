@@ -45,8 +45,6 @@ static void s2PrepareContacts_Sticky(s2World* world, s2ContactConstraint* constr
 		float mB = bodyB->invMass;
 		float iB = bodyB->invI;
 
-		s2Vec2 cA = bodyA->position;
-		s2Vec2 cB = bodyB->position;
 		s2Rot qA = bodyA->rot;
 		s2Rot qB = bodyB->rot;
 
@@ -70,6 +68,7 @@ static void s2PrepareContacts_Sticky(s2World* world, s2ContactConstraint* constr
 			cp->rA0 = rA;
 			cp->rB0 = rB;
 			cp->separation = mp->separation;
+			cp->adjustedSeparation = mp->separation - s2Dot(s2Sub(rB, rA), normal);
 
 			float rtA = s2Cross(rA, tangent);
 			float rtB = s2Cross(rB, tangent);
@@ -81,6 +80,9 @@ static void s2PrepareContacts_Sticky(s2World* world, s2ContactConstraint* constr
 			float kNormal = mA + mB + iA * rnA * rnA + iB * rnB * rnB;
 			cp->normalMass = kNormal > 0.0f ? 1.0f / kNormal : 0.0f;
 		}
+
+		s2Vec2 cA = bodyA->position;
+		s2Vec2 cB = bodyB->position;
 
 		bool frictionConfirmed = false;
 		if (manifold->frictionPersisted)
@@ -100,10 +102,15 @@ static void s2PrepareContacts_Sticky(s2World* world, s2ContactConstraint* constr
 					// Relative rotation has invalidated cached friction anchors
 					break;
 				}
+				
+				cp->localFrictionAnchorA = s2Sub(mp->frictionAnchorA, bodyA->localCenter);
+				cp->localFrictionAnchorB = s2Sub(mp->frictionAnchorB, bodyB->localCenter);
 
-				s2Vec2 anchorA = s2RotateVector(qA, mp->frictionAnchorA);
-				s2Vec2 anchorB = s2RotateVector(qB, mp->frictionAnchorB);
-				s2Vec2 offset = s2Add(s2Sub(cB, cA), s2Sub(anchorB, anchorA));
+				s2Vec2 rAf = s2RotateVector(qA, cp->localFrictionAnchorA);
+				s2Vec2 rBf = s2RotateVector(qB, cp->localFrictionAnchorB);
+
+				s2Vec2 offset = s2Add(s2Sub(cB, cA), s2Sub(rBf, rAf));
+				
 				float normalSeparation = s2Dot(offset, normalA);
 				if (S2_ABS(normalSeparation) > 2.0f * s2_linearSlop)
 				{
@@ -111,12 +118,10 @@ static void s2PrepareContacts_Sticky(s2World* world, s2ContactConstraint* constr
 					break;
 				}
 
-				cp->localFrictionAnchorA = mp->frictionAnchorA;
-				cp->localFrictionAnchorB = mp->frictionAnchorB;
-				cp->tangentSeparation = s2Dot(offset, tangent);
+				cp->tangentSeparation = s2Dot(s2Sub(cB, cA), tangent);
 
-				float rtA = s2Cross(anchorA, tangent);
-				float rtB = s2Cross(anchorB, tangent);
+				float rtA = s2Cross(rAf, tangent);
+				float rtB = s2Cross(rBf, tangent);
 				float kTangent = mA + mB + iA * rtA * rtA + iB * rtB * rtB;
 				cp->tangentMass = kTangent > 0.0f ? 1.0f / kTangent : 0.0f;
 
@@ -141,12 +146,12 @@ static void s2PrepareContacts_Sticky(s2World* world, s2ContactConstraint* constr
 
 				mp->frictionNormalA = s2InvRotateVector(qA, normal);
 				mp->frictionNormalB = s2InvRotateVector(qB, normal);
-				mp->frictionAnchorA = s2InvRotateVector(qA, rA);
-				mp->frictionAnchorB = s2InvRotateVector(qB, rB);
+				mp->frictionAnchorA = mp->localAnchorA;
+				mp->frictionAnchorB = mp->localAnchorB;
 
-				cp->localFrictionAnchorA = mp->frictionAnchorA;
-				cp->localFrictionAnchorB = mp->frictionAnchorB;
-				cp->tangentSeparation = 0.0f;
+				cp->localFrictionAnchorA = cp->localAnchorA;
+				cp->localFrictionAnchorB = cp->localAnchorB;
+				cp->tangentSeparation = s2Dot(s2Sub(cB, cA), tangent);
 
 				float rtA = s2Cross(rA, tangent);
 				float rtB = s2Cross(rB, tangent);
@@ -186,8 +191,8 @@ static void s2SolveContacts_TGS_Sticky(s2World* world, s2ContactConstraint* cons
 		s2Vec2 vB = bodyB->linearVelocity;
 		float wB = bodyB->angularVelocity;
 
-		s2Vec2 cA = bodyA->position;
-		s2Vec2 cB = bodyB->position;
+		s2Vec2 dcA = bodyA->deltaPosition;
+		s2Vec2 dcB = bodyB->deltaPosition;
 		s2Rot qA = bodyA->rot;
 		s2Rot qB = bodyB->rot;
 
@@ -206,9 +211,9 @@ static void s2SolveContacts_TGS_Sticky(s2World* world, s2ContactConstraint* cons
 			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
 			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
 
-			// Compute change in separation
-			s2Vec2 d = s2Sub(s2Add(cB, rB), s2Add(cA, rA));
-			float separation = s2Dot(d, normal) + cp->separation;
+			// Current separation
+			s2Vec2 d = s2Add(s2Sub(dcB, dcA), s2Sub(rB, rA));
+			float separation = s2Dot(d, normal) + cp->adjustedSeparation;
 
 			float bias = 0.0f;
 			if (separation > 0.0f)
@@ -222,8 +227,8 @@ static void s2SolveContacts_TGS_Sticky(s2World* world, s2ContactConstraint* cons
 			}
 
 			// Relative velocity at contact
-			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rB));
 			s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, rA));
+			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rB));
 			float vn = s2Dot(s2Sub(vrB, vrA), normal);
 
 			// Compute normal impulse
@@ -254,14 +259,14 @@ static void s2SolveContacts_TGS_Sticky(s2World* world, s2ContactConstraint* cons
 			s2Vec2 rAf = s2RotateVector(qA, cp->localFrictionAnchorA);
 			s2Vec2 rBf = s2RotateVector(qB, cp->localFrictionAnchorB);
 
-			// Compute change in separation
-			s2Vec2 d = s2Sub(s2Add(cB, rBf), s2Add(cA, rAf));
+			// Current tangent separation
+			s2Vec2 d = s2Add(s2Sub(dcB, dcA), s2Sub(rBf, rAf));
 			float separation = s2Dot(d, tangent) + cp->tangentSeparation;
 			float bias = useBias ? frictionBaumgarte * separation * inv_h : 0.0f;
 
 			// Relative velocity at contact
-			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rBf));
 			s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, rAf));
+			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rBf));
 			float vt = s2Dot(s2Sub(vrB, vrA), tangent);
 
 			// Compute tangent impulse
@@ -350,8 +355,8 @@ void s2Solve_TGS_Sticky(s2World* world, s2StepContext* context)
 	s2PrepareContacts_Sticky(world, constraints, constraintCount);
 
 	int substepCount = context->iterations;
-	float h = context->dt / substepCount;
-	float inv_h = substepCount / context->dt;
+	float h = context->h;
+	float inv_h = context->inv_h;
 
 	// TGS solve
 	bool useBias = true;
@@ -374,6 +379,8 @@ void s2Solve_TGS_Sticky(s2World* world, s2StepContext* context)
 		
 		s2IntegratePositions(world, h);
 	}
+
+	s2FinalizePositions(world);
 
 	// Relax
 	useBias = false;

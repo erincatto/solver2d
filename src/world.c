@@ -184,6 +184,21 @@ void s2World_Step(s2WorldId worldId, float timeStep, int velIters, int posIters,
 		context.inv_dt = 0.0f;
 	}
 
+	s2SolverType type = world->solverType;
+	if (type == s2_solverXPBD ||
+		type == s2_solverTGS_Soft ||
+		type == s2_solverTGS_Sticky ||
+		type == s2_solverTGS_NGS)
+	{
+		context.h = context.dt / context.iterations;
+		context.inv_h = context.inv_dt * context.iterations;
+	}
+	else
+	{
+		context.h = context.dt;
+		context.inv_h = context.inv_dt;
+	}
+
 	context.bodies = world->bodies;
 	context.bodyCapacity = world->bodyPool.capacity;
 
@@ -361,7 +376,7 @@ void s2World_Draw(s2WorldId worldId, s2DebugDraw* draw)
 				if (body->type == s2_dynamicBody && body->mass == 0.0f)
 				{
 					// Bad body
-					s2DrawShape(draw, shape, transform, (s2Color){1.0f, 0.0f, 0.0f, 1.0f});
+					s2DrawShape(draw, shape, transform, (s2Color){0.9f, 0.1f, 0.1f, 1.0f});
 				}
 				else if (body->type == s2_staticBody)
 				{
@@ -450,7 +465,7 @@ void s2World_Draw(s2WorldId worldId, s2DebugDraw* draw)
 			s2Vec2 p = s2TransformPoint(transform, offset);
 
 			char buffer[32];
-			sprintf(buffer, "%g", body->mass);
+			sprintf(buffer, "%.2g", body->mass);
 			draw->DrawString(p, buffer, draw->context);
 		}
 	}

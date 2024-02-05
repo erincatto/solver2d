@@ -39,13 +39,15 @@ void s2PrepareRevolute(s2Joint* base, s2StepContext* context, bool warmStart)
 	S2_ASSERT(bodyB->object.index == bodyB->object.next);
 
 	s2RevoluteJoint* joint = &base->revoluteJoint;
-	joint->localCenterA = bodyA->localCenter;
+	joint->localAnchorA = s2Sub(base->localOriginAnchorA, bodyA->localCenter);
 	joint->invMassA = bodyA->invMass;
 	joint->invIA = bodyA->invI;
 
-	joint->localCenterB = bodyB->localCenter;
+	joint->localAnchorB = s2Sub(base->localOriginAnchorB, bodyB->localCenter);
 	joint->invMassB = bodyB->invMass;
 	joint->invIB = bodyB->invI;
+
+	joint->centerDiff0 = s2Sub(bodyB->position, bodyA->position);
 
 	s2Rot qA = bodyA->rot;
 	s2Vec2 vA = bodyA->linearVelocity;
@@ -55,8 +57,8 @@ void s2PrepareRevolute(s2Joint* base, s2StepContext* context, bool warmStart)
 	s2Vec2 vB = bodyB->linearVelocity;
 	float wB = bodyB->angularVelocity;
 
-	s2Vec2 rA = s2RotateVector(qA, s2Sub(base->localAnchorA, joint->localCenterA));
-	s2Vec2 rB = s2RotateVector(qB, s2Sub(base->localAnchorB, joint->localCenterB));
+	s2Vec2 rA = s2RotateVector(qA, joint->localAnchorA);
+	s2Vec2 rB = s2RotateVector(qB, joint->localAnchorB);
 
 	// J = [-I -r1_skew I r2_skew]
 	// r_skew = [-ry; rx]
@@ -126,8 +128,8 @@ void s2WarmStartRevolute(s2Joint* base, s2StepContext* context)
 	s2Vec2 vB = bodyB->linearVelocity;
 	float wB = bodyB->angularVelocity;
 
-	s2Vec2 rA = s2RotateVector(qA, s2Sub(base->localAnchorA, joint->localCenterA));
-	s2Vec2 rB = s2RotateVector(qB, s2Sub(base->localAnchorB, joint->localCenterB));
+	s2Vec2 rA = s2RotateVector(qA, joint->localAnchorA);
+	s2Vec2 rB = s2RotateVector(qB, joint->localAnchorB);
 
 	float mA = joint->invMassA, mB = joint->invMassB;
 	float iA = joint->invIA, iB = joint->invIB;
@@ -218,8 +220,8 @@ void s2SolveRevolute(s2Joint* base, s2StepContext* context, float h)
 
 	// Solve point-to-point constraint
 	{
-		s2Vec2 rA = s2RotateVector(qA, s2Sub(base->localAnchorA, joint->localCenterA));
-		s2Vec2 rB = s2RotateVector(qB, s2Sub(base->localAnchorB, joint->localCenterB));
+		s2Vec2 rA = s2RotateVector(qA, joint->localAnchorA);
+		s2Vec2 rB = s2RotateVector(qB, joint->localAnchorB);
 
 		s2Vec2 Cdot = s2Sub(s2Add(vB, s2CrossSV(wB, rB)), s2Add(vA, s2CrossSV(wA, rA)));
 		s2Vec2 impulse = s2Solve22(joint->K, s2Neg(Cdot));
@@ -249,9 +251,9 @@ void s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
 	s2Body* bodyA = context->bodies + base->edges[0].bodyIndex;
 	s2Body* bodyB = context->bodies + base->edges[1].bodyIndex;
 
-	s2Vec2 cA = bodyA->position;
+	s2Vec2 dcA = bodyA->deltaPosition;
 	s2Rot qA = bodyA->rot;
-	s2Vec2 cB = bodyB->position;
+	s2Vec2 dcB = bodyB->deltaPosition;
 	s2Rot qB = bodyB->rot;
 
 	bool fixedRotation = (joint->invIA + joint->invIB == 0.0f);
@@ -285,10 +287,10 @@ void s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
 
 	// Solve point-to-point constraint.
 	{
-		s2Vec2 rA = s2RotateVector(qA, s2Sub(base->localAnchorA, joint->localCenterA));
-		s2Vec2 rB = s2RotateVector(qB, s2Sub(base->localAnchorB, joint->localCenterB));
+		s2Vec2 rA = s2RotateVector(qA, joint->localAnchorA);
+		s2Vec2 rB = s2RotateVector(qB, joint->localAnchorB);
 
-		s2Vec2 C = s2Sub(s2Add(cB, rB), s2Add(cA, rA));
+		s2Vec2 C = s2Add(s2Add(s2Sub(dcB, dcA), s2Sub(rB, rA)), joint->centerDiff0);
 
 		float mA = joint->invMassA, mB = joint->invMassB;
 		float iA = joint->invIA, iB = joint->invIB;
@@ -301,16 +303,16 @@ void s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
 
 		s2Vec2 impulse = s2Solve22(K, s2Neg(C));
 
-		cA = s2MulSub(cA, mA, impulse);
+		dcA = s2MulSub(dcA, mA, impulse);
 		qA = s2IntegrateRot(qA, -iA * s2Cross(rA, impulse));
 
-		cB = s2MulAdd(cB, mB, impulse);
+		dcB = s2MulAdd(dcB, mB, impulse);
 		qB = s2IntegrateRot(qB, iB * s2Cross(rB, impulse));
 	}
 
-	bodyA->position = cA;
+	bodyA->deltaPosition = dcA;
 	bodyA->rot = qA;
-	bodyB->position = cB;
+	bodyB->deltaPosition = dcB;
 	bodyB->rot = qB;
 }
 
@@ -329,19 +331,15 @@ void s2PrepareRevolute_Soft(s2Joint* base, s2StepContext* context, float h, floa
 	S2_ASSERT(bodyB->object.index == bodyB->object.next);
 
 	s2RevoluteJoint* joint = &base->revoluteJoint;
-	joint->localCenterA = bodyA->localCenter;
+	joint->localAnchorA = s2Sub(base->localOriginAnchorA, bodyA->localCenter);
 	joint->invMassA = bodyA->invMass;
 	joint->invIA = bodyA->invI;
 
-	joint->localCenterB = bodyB->localCenter;
+	joint->localAnchorB = s2Sub(base->localOriginAnchorB, bodyB->localCenter);
 	joint->invMassB = bodyB->invMass;
 	joint->invIB = bodyB->invI;
 
-	s2Rot qA = bodyA->rot;
-	s2Rot qB = bodyB->rot;
-
-	s2Vec2 rA = s2RotateVector(qA, s2Sub(base->localAnchorA, joint->localCenterA));
-	s2Vec2 rB = s2RotateVector(qB, s2Sub(base->localAnchorB, joint->localCenterB));
+	joint->centerDiff0 = s2Sub(bodyB->position, bodyA->position);
 
 	// J = [-I -r1_skew I r2_skew]
 	// r_skew = [-ry; rx]
@@ -352,6 +350,12 @@ void s2PrepareRevolute_Soft(s2Joint* base, s2StepContext* context, float h, floa
 
 	float mA = joint->invMassA, mB = joint->invMassB;
 	float iA = joint->invIA, iB = joint->invIB;
+
+	s2Rot qA = bodyA->rot;
+	s2Rot qB = bodyB->rot;
+
+	s2Vec2 rA = s2RotateVector(qA, joint->localAnchorA);
+	s2Vec2 rB = s2RotateVector(qB, joint->localAnchorB);
 
 	joint->K.cx.x = mA + mB + rA.y * rA.y * iA + rB.y * rB.y * iB;
 	joint->K.cy.x = -rA.y * rA.x * iA - rB.y * rB.x * iB;
@@ -499,9 +503,8 @@ void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float 
 		// Anchors are wastfully recomputed for PGS solvers or relax stages.
 		s2Rot qA = bodyA->rot;
 		s2Rot qB = bodyB->rot;
-
-		s2Vec2 rA = s2RotateVector(qA, s2Sub(base->localAnchorA, joint->localCenterA));
-		s2Vec2 rB = s2RotateVector(qB, s2Sub(base->localAnchorB, joint->localCenterB));
+		s2Vec2 rA = s2RotateVector(qA, joint->localAnchorA);
+		s2Vec2 rB = s2RotateVector(qB, joint->localAnchorB);
 
 		s2Mat22 K;
 		K.cx.x = mA + mB + rA.y * rA.y * iA + rB.y * rB.y * iB;
@@ -516,10 +519,10 @@ void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float 
 		float impulseScale = 0.0f;
 		if (useBias)
 		{
-			s2Vec2 cA = bodyA->position;
-			s2Vec2 cB = bodyB->position;
+			s2Vec2 dcA = bodyA->deltaPosition;
+			s2Vec2 dcB = bodyB->deltaPosition;
 
-			s2Vec2 separation = s2Add(s2Sub(rB, rA), s2Sub(cB, cA));
+			s2Vec2 separation = s2Add(s2Add(s2Sub(dcB, dcA), s2Sub(rB, rA)), joint->centerDiff0);
 			bias = s2MulSV(joint->biasCoefficient, separation);
 			massScale = joint->massCoefficient;
 			impulseScale = joint->impulseCoefficient;
@@ -640,11 +643,11 @@ void s2SolveRevolute_Baumgarte(s2Joint* base, s2StepContext* context, float h, f
 	{
 		s2Rot qA = bodyA->rot;
 		s2Rot qB = bodyB->rot;
-		s2Vec2 cA = bodyA->position;
-		s2Vec2 cB = bodyB->position;
+		s2Vec2 dcA = bodyA->deltaPosition;
+		s2Vec2 dcB = bodyB->deltaPosition;
 
-		s2Vec2 rA = s2RotateVector(qA, s2Sub(base->localAnchorA, joint->localCenterA));
-		s2Vec2 rB = s2RotateVector(qB, s2Sub(base->localAnchorB, joint->localCenterB));
+		s2Vec2 rA = s2RotateVector(qA, joint->localAnchorA);
+		s2Vec2 rB = s2RotateVector(qB, joint->localAnchorB);
 
 		s2Mat22 K;
 		K.cx.x = mA + mB + rA.y * rA.y * iA + rB.y * rB.y * iB;
@@ -654,7 +657,7 @@ void s2SolveRevolute_Baumgarte(s2Joint* base, s2StepContext* context, float h, f
 
 		s2Vec2 Cdot = s2Sub(s2Add(vB, s2CrossSV(wB, rB)), s2Add(vA, s2CrossSV(wA, rA)));
 
-		s2Vec2 separation = s2Add(s2Sub(rB, rA), s2Sub(cB, cA));
+		s2Vec2 separation = s2Add(s2Add(s2Sub(dcB, dcA), s2Sub(rB, rA)), joint->centerDiff0);
 		s2Vec2 bias = s2MulSV(s2_baumgarte * inv_h, separation);
 
 		// s2Vec2 b = s2MulMV(joint->pivotMass, s2Add(Cdot, bias));
@@ -691,13 +694,15 @@ void s2PrepareRevolute_XPBD(s2Joint* base, s2StepContext* context)
 	S2_ASSERT(bodyB->object.index == bodyB->object.next);
 
 	s2RevoluteJoint* joint = &base->revoluteJoint;
-	joint->localCenterA = bodyA->localCenter;
+	joint->localAnchorA = s2Sub(base->localOriginAnchorA, bodyA->localCenter);
 	joint->invMassA = bodyA->invMass;
 	joint->invIA = bodyA->invI;
 
-	joint->localCenterB = bodyB->localCenter;
+	joint->localAnchorB = s2Sub(base->localOriginAnchorB, bodyB->localCenter);
 	joint->invMassB = bodyB->invMass;
 	joint->invIB = bodyB->invI;
+
+	joint->centerDiff0 = s2Sub(bodyB->position, bodyA->position);
 
 	joint->K.cx = s2Vec2_zero;
 	joint->K.cy = s2Vec2_zero;
@@ -706,10 +711,6 @@ void s2PrepareRevolute_XPBD(s2Joint* base, s2StepContext* context)
 	joint->lowerImpulse = 0.0f;
 	joint->upperImpulse = 0.0f;
 	joint->motorImpulse = 0.0f;
-
-	base->rA0 = s2RotateVector(bodyA->rot, s2Sub(base->localAnchorA, joint->localCenterA));
-	base->rB0 = s2RotateVector(bodyB->rot, s2Sub(base->localAnchorB, joint->localCenterB));
-	joint->separation0 = s2Add(s2Sub(bodyB->position, bodyA->position), s2Sub(base->rB0, base->rA0));
 }
 
 void s2SolveRevolute_XPBD(s2Joint* base, s2StepContext* context, float inv_h)
@@ -732,15 +733,13 @@ void s2SolveRevolute_XPBD(s2Joint* base, s2StepContext* context, float inv_h)
 
 	// Solve point-to-point constraint.
 	{
-		s2Vec2 rA = s2RotateVector(qA, s2Sub(base->localAnchorA, joint->localCenterA));
-		s2Vec2 rB = s2RotateVector(qB, s2Sub(base->localAnchorB, joint->localCenterB));
-		s2Vec2 drA = s2Sub(rA, base->rA0);
-		s2Vec2 drB = s2Sub(rB, base->rB0);
+		s2Vec2 rA = s2RotateVector(qA, joint->localAnchorA);
+		s2Vec2 rB = s2RotateVector(qB, joint->localAnchorB);
 
-		s2Vec2 deltaX = s2Add(s2Add(s2Sub(dcB, dcA), s2Sub(drB, drA)), joint->separation0);
+		s2Vec2 separation = s2Add(s2Add(s2Sub(dcB, dcA), s2Sub(rB, rA)), joint->centerDiff0);
 
-		float c = s2Length(deltaX);
-		s2Vec2 n = s2Normalize(deltaX);
+		float c = s2Length(separation);
+		s2Vec2 n = s2Normalize(separation);
 
 		float mA = joint->invMassA, mB = joint->invMassB;
 
@@ -831,29 +830,6 @@ float s2RevoluteJoint_GetMotorTorque(s2JointId jointId, float inverseTimeStep)
 	return inverseTimeStep * joint->revoluteJoint.motorImpulse;
 }
 
-#if 0
-void s2RevoluteJoint::Dump()
-{
-	int32 indexA = joint->bodyA->joint->islandIndex;
-	int32 indexB = joint->bodyB->joint->islandIndex;
-
-	s2Dump("  s2RevoluteJointDef jd;\n");
-	s2Dump("  jd.bodyA = bodies[%d];\n", indexA);
-	s2Dump("  jd.bodyB = bodies[%d];\n", indexB);
-	s2Dump("  jd.collideConnected = bool(%d);\n", joint->collideConnected);
-	s2Dump("  jd.localAnchorA.Set(%.9g, %.9g);\n", joint->localAnchorA.x, joint->localAnchorA.y);
-	s2Dump("  jd.localAnchorB.Set(%.9g, %.9g);\n", joint->localAnchorB.x, joint->localAnchorB.y);
-	s2Dump("  jd.referenceAngle = %.9g;\n", joint->referenceAngle);
-	s2Dump("  jd.enableLimit = bool(%d);\n", joint->enableLimit);
-	s2Dump("  jd.lowerAngle = %.9g;\n", joint->lowerAngle);
-	s2Dump("  jd.upperAngle = %.9g;\n", joint->upperAngle);
-	s2Dump("  jd.enableMotor = bool(%d);\n", joint->enableMotor);
-	s2Dump("  jd.motorSpeed = %.9g;\n", joint->motorSpeed);
-	s2Dump("  jd.maxMotorTorque = %.9g;\n", joint->maxMotorTorque);
-	s2Dump("  joints[%d] = joint->world->CreateJoint(&jd);\n", joint->index);
-}
-#endif
-
 void s2DrawRevolute(s2DebugDraw* draw, s2Joint* base, s2Body* bodyA, s2Body* bodyB)
 {
 	S2_ASSERT(base->type == s2_revoluteJoint);
@@ -862,8 +838,8 @@ void s2DrawRevolute(s2DebugDraw* draw, s2Joint* base, s2Body* bodyA, s2Body* bod
 
 	s2Transform xfA = S2_TRANSFORM(bodyA);
 	s2Transform xfB = S2_TRANSFORM(bodyB);
-	s2Vec2 pA = s2TransformPoint(xfA, base->localAnchorA);
-	s2Vec2 pB = s2TransformPoint(xfB, base->localAnchorB);
+	s2Vec2 pA = s2TransformPoint(xfA, base->localOriginAnchorA);
+	s2Vec2 pB = s2TransformPoint(xfB, base->localOriginAnchorB);
 
 	s2Color c1 = {0.7f, 0.7f, 0.7f, 1.0f};
 	s2Color c2 = {0.3f, 0.9f, 0.3f, 1.0f};

@@ -14,6 +14,8 @@ typedef struct s2StepContext
 {
 	float dt;
 	float inv_dt;
+	float h;
+	float inv_h;
 	int32_t iterations;
 	int32_t extraIterations;
 	s2Body* bodies;
@@ -23,7 +25,7 @@ typedef struct s2StepContext
 
 typedef struct s2ContactConstraintPoint
 {
-	// static anchors, need to be careful to not use these in TGS solvers
+	// initial anchor vectors in world space
 	s2Vec2 rA0, rB0;
 
 	// local anchor relative center of mass
@@ -31,6 +33,7 @@ typedef struct s2ContactConstraintPoint
 	s2Vec2 localFrictionAnchorA, localFrictionAnchorB;
 	float tangentSeparation;
 	float separation;
+	float adjustedSeparation;
 	float normalImpulse;
 	float tangentImpulse;
 	float normalMass;
@@ -55,6 +58,7 @@ typedef struct s2ContactConstraint
 // common
 void s2IntegrateVelocities(s2World* world, float h);
 void s2IntegratePositions(s2World* world, float h);
+void s2FinalizePositions(s2World* world);
 void s2PrepareContacts_PGS(s2World* world, s2ContactConstraint* constraints, int constraintCount, bool warmStart);
 void s2PrepareContacts_Soft(s2World* world, s2ContactConstraint* constraints, int constraintCount, s2StepContext* context,
 							float h, float hertz);

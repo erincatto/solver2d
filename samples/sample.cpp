@@ -89,10 +89,6 @@ void Sample::MouseDown(s2Vec2 p, int button, int mod)
 
 		if (S2_NON_NULL(queryContext.bodyId))
 		{
-			float frequencyHertz = 5.0f;
-			float dampingRatio = 0.7f;
-			float mass = s2Body_GetMass(queryContext.bodyId);
-
 			s2BodyDef bodyDef = s2_defaultBodyDef;
 			m_groundBodyId = s2CreateBody(m_worldId, &bodyDef);
 
@@ -100,11 +96,8 @@ void Sample::MouseDown(s2Vec2 p, int button, int mod)
 			jd.bodyIdA = m_groundBodyId;
 			jd.bodyIdB = queryContext.bodyId;
 			jd.target = p;
-			jd.maxForce = 1000.0f * mass;
-
-			float omega = 2.0f * s2_pi * frequencyHertz;
-			jd.stiffness = mass * omega * omega;
-			jd.damping = 2.0f * mass * dampingRatio * omega;
+			jd.hertz = 4.0f;
+			jd.dampingRatio = 1.0f;
 
 			m_mouseJointId = s2CreateMouseJoint(m_worldId, &jd);
 		}

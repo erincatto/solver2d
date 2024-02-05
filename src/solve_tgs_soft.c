@@ -41,9 +41,9 @@ static void s2SolveContacts_TGS_Soft(s2World* world, s2ContactConstraint* constr
 		s2Vec2 vB = bodyB->linearVelocity;
 		float wB = bodyB->angularVelocity;
 
-		s2Vec2 cA = bodyA->position;
-		s2Vec2 cB = bodyB->position;
+		s2Vec2 dcA = bodyA->deltaPosition;
 		s2Rot qA = bodyA->rot;
+		s2Vec2 dcB = bodyB->deltaPosition;
 		s2Rot qB = bodyB->rot;
 
 		s2Vec2 normal = constraint->normal;
@@ -54,13 +54,13 @@ static void s2SolveContacts_TGS_Soft(s2World* world, s2ContactConstraint* constr
 		{
 			s2ContactConstraintPoint* cp = constraint->points + j;
 
-			// Current anchor points
+			// anchor points
 			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
 			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
 
-			// Compute change in separation
-			s2Vec2 d = s2Sub(s2Add(cB, rB), s2Add(cA, rA));
-			float s = s2Dot(d, normal) + cp->separation;
+			// compute current separation
+			s2Vec2 ds = s2Add(s2Sub(dcB, dcA), s2Sub(rB, rA));
+			float s = s2Dot(ds, normal) + cp->adjustedSeparation;
 
 			float bias = 0.0f;
 			float massScale = 1.0f;
@@ -170,8 +170,8 @@ void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
 	}
 
 	int substepCount = context->iterations;
-	float h = context->dt / substepCount;
-	float inv_h = 1.0f / h;
+	float h = context->h;
+	float inv_h = context->inv_h;
 
 	float contactHertz = S2_MIN(s2_contactHertz, 0.25f * inv_h);
 	float jointHertz = S2_MIN(s2_jointHertz, 0.125f * inv_h);
@@ -248,6 +248,9 @@ void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
 		
 		s2SolveContacts_TGS_Soft(world, constraints, constraintCount, inv_h, useBias);
 	}
+
+	// Finalize body position
+	s2FinalizePositions(world);
 
 	// Store results
 	s2StoreContactImpulses(constraints, constraintCount);

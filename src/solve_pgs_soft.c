@@ -225,6 +225,8 @@ void s2Solve_PGS_Soft(s2World* world, s2StepContext* context)
 		s2SolveContacts_PGS_Soft(world, constraints, constraintCount, inv_h, useBias);
 	}
 
+	s2FinalizePositions(world);
+
 	s2StoreContactImpulses(constraints, constraintCount);
 
 	s2FreeStackItem(world->stackAllocator, constraints);
