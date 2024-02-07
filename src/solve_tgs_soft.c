@@ -1,13 +1,9 @@
 // SPDX-FileCopyrightText: 2024 Erin Catto
 // SPDX-License-Identifier: MIT
 
-#include "allocate.h"
-#include "array.h"
 #include "body.h"
 #include "contact.h"
-#include "core.h"
 #include "joint.h"
-#include "shape.h"
 #include "solvers.h"
 #include "stack_allocator.h"
 #include "world.h"
@@ -17,7 +13,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-// this differes from PGS because it uses updated anchors
+// this differs from PGS because it uses updated anchors
 static void s2SolveContacts_TGS_Soft(s2World* world, s2ContactConstraint* constraints, int constraintCount, float inv_h,
 											  bool useBias)
 {
@@ -81,7 +77,7 @@ static void s2SolveContacts_TGS_Soft(s2World* world, s2ContactConstraint* constr
 			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rB));
 			s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, rA));
 			float vn = s2Dot(s2Sub(vrB, vrA), normal);
-
+			
 			// Compute normal impulse
 			float impulse = -cp->normalMass * massScale * (vn + bias) - impulseScale * cp->normalImpulse;
 
