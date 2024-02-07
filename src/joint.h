@@ -72,7 +72,7 @@ typedef struct s2RevoluteJoint
 	float invMassB;
 	float invIA;
 	float invIB;
-	s2Mat22 K;
+	s2Mat22 pivotMass;
 	float biasCoefficient;
 	float massCoefficient;
 	float impulseCoefficient;

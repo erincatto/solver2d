@@ -11,6 +11,9 @@
 
 #include <assert.h>
 
+// stale mass can slightly increase the jitter on ragdolls far from the origin
+#define S2_FRESH_PIVOT_MASS 1
+
 // Point-to-point constraint
 // C = p2 - p1
 // Cdot = v2 - v1
@@ -50,12 +53,7 @@ void s2PrepareRevolute(s2Joint* base, s2StepContext* context, bool warmStart)
 	joint->centerDiff0 = s2Sub(bodyB->position, bodyA->position);
 
 	s2Rot qA = bodyA->rot;
-	s2Vec2 vA = bodyA->linearVelocity;
-	float wA = bodyA->angularVelocity;
-
 	s2Rot qB = bodyB->rot;
-	s2Vec2 vB = bodyB->linearVelocity;
-	float wB = bodyB->angularVelocity;
 
 	s2Vec2 rA = s2RotateVector(qA, joint->localAnchorA);
 	s2Vec2 rB = s2RotateVector(qB, joint->localAnchorB);
@@ -70,10 +68,12 @@ void s2PrepareRevolute(s2Joint* base, s2StepContext* context, bool warmStart)
 	float mA = joint->invMassA, mB = joint->invMassB;
 	float iA = joint->invIA, iB = joint->invIB;
 
-	joint->K.cx.x = mA + mB + rA.y * rA.y * iA + rB.y * rB.y * iB;
-	joint->K.cy.x = -rA.y * rA.x * iA - rB.y * rB.x * iB;
-	joint->K.cx.y = joint->K.cy.x;
-	joint->K.cy.y = mA + mB + rA.x * rA.x * iA + rB.x * rB.x * iB;
+	s2Mat22 K;
+	K.cx.x = mA + mB + rA.y * rA.y * iA + rB.y * rB.y * iB;
+	K.cy.x = -rA.y * rA.x * iA - rB.y * rB.x * iB;
+	K.cx.y = K.cy.x;
+	K.cy.y = mA + mB + rA.x * rA.x * iA + rB.x * rB.x * iB;
+	joint->pivotMass = s2GetInverse22(K);
 
 	joint->axialMass = iA + iB;
 	bool fixedRotation;
@@ -224,7 +224,7 @@ void s2SolveRevolute(s2Joint* base, s2StepContext* context, float h)
 		s2Vec2 rB = s2RotateVector(qB, joint->localAnchorB);
 
 		s2Vec2 Cdot = s2Sub(s2Add(vB, s2CrossSV(wB, rB)), s2Add(vA, s2CrossSV(wA, rA)));
-		s2Vec2 impulse = s2Solve22(joint->K, s2Neg(Cdot));
+		s2Vec2 impulse = s2MulMV(joint->pivotMass, s2Neg(Cdot));
 
 		joint->impulse.x += impulse.x;
 		joint->impulse.y += impulse.y;
@@ -294,14 +294,17 @@ void s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
 
 		float mA = joint->invMassA, mB = joint->invMassB;
 		float iA = joint->invIA, iB = joint->invIB;
-
+		
+#if S2_FRESH_PIVOT_MASS == 1
 		s2Mat22 K;
 		K.cx.x = mA + mB + iA * rA.y * rA.y + iB * rB.y * rB.y;
 		K.cx.y = -iA * rA.x * rA.y - iB * rB.x * rB.y;
 		K.cy.x = K.cx.y;
 		K.cy.y = mA + mB + iA * rA.x * rA.x + iB * rB.x * rB.x;
-
 		s2Vec2 impulse = s2Solve22(K, s2Neg(C));
+#else
+		s2Vec2 impulse = s2MulMV(joint->pivotMass, s2Neg(C));
+#endif
 
 		dcA = s2MulSub(dcA, mA, impulse);
 		qA = s2IntegrateRot(qA, -iA * s2Cross(rA, impulse));
@@ -357,11 +360,14 @@ void s2PrepareRevolute_Soft(s2Joint* base, s2StepContext* context, float h, floa
 	s2Vec2 rA = s2RotateVector(qA, joint->localAnchorA);
 	s2Vec2 rB = s2RotateVector(qB, joint->localAnchorB);
 
-	joint->K.cx.x = mA + mB + rA.y * rA.y * iA + rB.y * rB.y * iB;
-	joint->K.cy.x = -rA.y * rA.x * iA - rB.y * rB.x * iB;
-	joint->K.cx.y = joint->K.cy.x;
-	joint->K.cy.y = mA + mB + rA.x * rA.x * iA + rB.x * rB.x * iB;
+	s2Mat22 K;
+	K.cx.x = mA + mB + rA.y * rA.y * iA + rB.y * rB.y * iB;
+	K.cy.x = -rA.y * rA.x * iA - rB.y * rB.x * iB;
+	K.cx.y = K.cy.x;
+	K.cy.y = mA + mB + rA.x * rA.x * iA + rB.x * rB.x * iB;
 	
+	joint->pivotMass = s2GetInverse22(K);
+
 	{
 		const float zeta = 1.0f;
 		float omega = 2.0f * s2_pi * hertz;
@@ -506,12 +512,6 @@ void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float 
 		s2Vec2 rA = s2RotateVector(qA, joint->localAnchorA);
 		s2Vec2 rB = s2RotateVector(qB, joint->localAnchorB);
 
-		s2Mat22 K;
-		K.cx.x = mA + mB + rA.y * rA.y * iA + rB.y * rB.y * iB;
-		K.cy.x = -rA.y * rA.x * iA - rB.y * rB.x * iB;
-		K.cx.y = K.cy.x;
-		K.cy.y = mA + mB + rA.x * rA.x * iA + rB.x * rB.x * iB;
-
 		s2Vec2 Cdot = s2Sub(s2Add(vB, s2CrossSV(wB, rB)), s2Add(vA, s2CrossSV(wA, rA)));
 
 		s2Vec2 bias = s2Vec2_zero;
@@ -527,9 +527,17 @@ void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float 
 			massScale = joint->massCoefficient;
 			impulseScale = joint->impulseCoefficient;
 		}
-
-		//s2Vec2 b = s2MulMV(joint->pivotMass, s2Add(Cdot, bias));
+		
+#if S2_FRESH_PIVOT_MASS == 1
+		s2Mat22 K;
+		K.cx.x = mA + mB + rA.y * rA.y * iA + rB.y * rB.y * iB;
+		K.cy.x = -rA.y * rA.x * iA - rB.y * rB.x * iB;
+		K.cx.y = K.cy.x;
+		K.cy.y = mA + mB + rA.x * rA.x * iA + rB.x * rB.x * iB;
 		s2Vec2 b = s2Solve22(K, s2Add(Cdot, bias));
+#else
+		s2Vec2 b = s2MulMV(joint->pivotMass, s2Add(Cdot, bias));
+#endif
 
 		s2Vec2 impulse;
 		impulse.x = -massScale * b.x - impulseScale * joint->impulse.x;
@@ -649,19 +657,22 @@ void s2SolveRevolute_Baumgarte(s2Joint* base, s2StepContext* context, float h, f
 		s2Vec2 rA = s2RotateVector(qA, joint->localAnchorA);
 		s2Vec2 rB = s2RotateVector(qB, joint->localAnchorB);
 
-		s2Mat22 K;
-		K.cx.x = mA + mB + rA.y * rA.y * iA + rB.y * rB.y * iB;
-		K.cy.x = -rA.y * rA.x * iA - rB.y * rB.x * iB;
-		K.cx.y = K.cy.x;
-		K.cy.y = mA + mB + rA.x * rA.x * iA + rB.x * rB.x * iB;
 
 		s2Vec2 Cdot = s2Sub(s2Add(vB, s2CrossSV(wB, rB)), s2Add(vA, s2CrossSV(wA, rA)));
 
 		s2Vec2 separation = s2Add(s2Add(s2Sub(dcB, dcA), s2Sub(rB, rA)), joint->centerDiff0);
 		s2Vec2 bias = s2MulSV(s2_baumgarte * inv_h, separation);
-
-		// s2Vec2 b = s2MulMV(joint->pivotMass, s2Add(Cdot, bias));
+		
+#if S2_FRESH_PIVOT_MASS == 1
+		s2Mat22 K;
+		K.cx.x = mA + mB + rA.y * rA.y * iA + rB.y * rB.y * iB;
+		K.cy.x = -rA.y * rA.x * iA - rB.y * rB.x * iB;
+		K.cx.y = K.cy.x;
+		K.cy.y = mA + mB + rA.x * rA.x * iA + rB.x * rB.x * iB;
 		s2Vec2 b = s2Solve22(K, s2Add(Cdot, bias));
+#else
+		s2Vec2 b = s2MulMV(joint->pivotMass, s2Add(Cdot, bias));
+#endif
 
 		s2Vec2 impulse = {-b.x, -b.y};
 		joint->impulse.x += impulse.x;
@@ -704,8 +715,7 @@ void s2PrepareRevolute_XPBD(s2Joint* base, s2StepContext* context)
 
 	joint->centerDiff0 = s2Sub(bodyB->position, bodyA->position);
 
-	joint->K.cx = s2Vec2_zero;
-	joint->K.cy = s2Vec2_zero;
+	joint->pivotMass = (s2Mat22){0};
 	joint->axialMass = 0.0f;
 	joint->impulse = s2Vec2_zero;
 	joint->lowerImpulse = 0.0f;
