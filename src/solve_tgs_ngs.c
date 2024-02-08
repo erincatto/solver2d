@@ -234,6 +234,11 @@ void s2Solve_TGS_NGS(s2World* world, s2StepContext* context)
 		constraintCount += 1;
 	}
 
+	// Loops
+	// body: 1 + 2 * substepCount
+	// constraint: 2 + 2 * substepCount
+
+	// constraint loop
 	s2PrepareContacts(world, constraints, constraintCount, context->warmStart);
 
 	for (int i = 0; i < jointCapacity; ++i)
@@ -251,6 +256,8 @@ void s2Solve_TGS_NGS(s2World* world, s2StepContext* context)
 	float h = context->h;
 	float inv_h = context->inv_h;
 
+	// body 2 * substepCount
+	// constraint 2 * substepCount (merge warm starting)
 	for (int substep = 0; substep < substepCount; ++substep)
 	{
 		s2IntegrateVelocities(world, h);
@@ -300,8 +307,10 @@ void s2Solve_TGS_NGS(s2World* world, s2StepContext* context)
 		s2SolveContact_NGS(world, constraints, constraintCount);
 	}
 
+	// body loop
 	s2FinalizePositions(world);
 
+	// constraint loop
 	s2StoreContactImpulses(constraints, constraintCount);
 
 	s2FreeStackItem(world->stackAllocator, constraints);

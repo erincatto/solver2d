@@ -156,8 +156,12 @@ void s2Solve_PGS(s2World* world, s2StepContext* context)
 	float h = context->dt;
 	float inv_h = context->inv_dt;
 
+	// Loops: body 2, constraint 2 + iterations
+
+	// body loop
 	s2IntegrateVelocities(world, h);
 
+	// constraint loop
 	s2PrepareContacts_PGS(world, constraints, constraintCount, context->warmStart);
 
 	if (context->warmStart)
@@ -197,10 +201,12 @@ void s2Solve_PGS(s2World* world, s2StepContext* context)
 		s2SolveContacts_PGS_Baumgarte(world, constraints, constraintCount, inv_h);
 	}
 
+	// body loop
 	// Update positions from velocity
 	s2IntegratePositions(world, h);
 	s2FinalizePositions(world);
 
+	// constraint loop
 	s2StoreContactImpulses(constraints, constraintCount);
 
 	s2FreeStackItem(world->stackAllocator, constraints);

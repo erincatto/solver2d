@@ -145,8 +145,12 @@ void s2Solve_PGS_NGS(s2World* world, s2StepContext* context)
 	float h = context->dt;
 	float inv_h = context->inv_dt;
 
+	// Loops: body 3, constraint 2 + vel iter + pos iter
+
+	// body loop
 	s2IntegrateVelocities(world, h);
 
+	// constraint loop
 	s2PrepareContacts_PGS(world, constraints, constraintCount, context->warmStart);
 
 	if (context->warmStart)
@@ -169,6 +173,7 @@ void s2Solve_PGS_NGS(s2World* world, s2StepContext* context)
 		}
 	}
 
+	// constraint loop * velocityIterations
 	for (int iter = 0; iter < velocityIterations; ++iter)
 	{
 		for (int i = 0; i < jointCapacity; ++i)
@@ -185,10 +190,13 @@ void s2Solve_PGS_NGS(s2World* world, s2StepContext* context)
 		s2SolveContacts_PGS(world, constraints, constraintCount, inv_h);
 	}
 
+	// body loop
 	s2IntegratePositions(world, h);
 
+	// constraint loop
 	s2StoreContactImpulses(constraints, constraintCount);
 
+	// constraint loop * positionIterations
 	for (int iter = 0; iter < positionIterations; ++iter)
 	{
 		for (int i = 0; i < jointCapacity; ++i)
@@ -205,6 +213,7 @@ void s2Solve_PGS_NGS(s2World* world, s2StepContext* context)
 		s2SolveContact_NGS(world, constraints, constraintCount);
 	}
 
+	// body loop
 	s2FinalizePositions(world);
 
 	s2FreeStackItem(world->stackAllocator, constraints);

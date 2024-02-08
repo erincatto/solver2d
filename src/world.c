@@ -6,7 +6,6 @@
 #include "world.h"
 
 #include "allocate.h"
-#include "array.h"
 #include "block_allocator.h"
 #include "body.h"
 #include "broad_phase.h"
@@ -21,7 +20,6 @@
 #include "solver2d/aabb.h"
 #include "solver2d/constants.h"
 #include "solver2d/debug_draw.h"
-#include "solver2d/distance.h"
 #include "solver2d/solver2d.h"
 #include "solver2d/timer.h"
 
@@ -206,36 +204,41 @@ void s2World_Step(s2WorldId worldId, float timeStep, int velIters, int posIters,
 	{
 		switch (world->solverType)
 		{
-			case s2_solverPGS_NGS_Block:
-				s2Solve_PGS_NGS_Block(world, &context);
+			case s2_solverPGS:
+				//context.iterations += 4;
+				s2Solve_PGS(world, &context);
 				break;
 
 			case s2_solverPGS_NGS:
+				//context.iterations += 2;
 				s2Solve_PGS_NGS(world, &context);
 				break;
 
+			case s2_solverPGS_NGS_Block:
+				//context.iterations += 2;
+				s2Solve_PGS_NGS_Block(world, &context);
+				break;
+
 			case s2_solverPGS_Soft:
+				//context.iterations += 2;
 				s2Solve_PGS_Soft(world, &context);
 				break;
 
-			case s2_solverXPBD:
-				s2Solve_XPBD(world, &context);
+			case s2_solverTGS_Sticky:
+				//context.iterations += 2;
+				s2Solve_TGS_Sticky(world, &context);
 				break;
 
 			case s2_solverTGS_Soft:
 				s2Solve_TGS_Soft(world, &context);
 				break;
 
-			case s2_solverTGS_Sticky:
-				s2Solve_TGS_Sticky(world, &context);
-				break;
-
 			case s2_solverTGS_NGS:
 				s2Solve_TGS_NGS(world, &context);
 				break;
 
-			case s2_solverPGS:
-				s2Solve_PGS(world, &context);
+			case s2_solverXPBD:
+				s2Solve_XPBD(world, &context);
 				break;
 
 			default:

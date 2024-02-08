@@ -251,6 +251,63 @@ public:
 
 static int sampleHighMassRatio2 = RegisterSample("Contact", "HighMassRatio2", HighMassRatio2::Create);
 
+// Big box on small boxes with thick ground
+class HighMassRatio3 : public Sample
+{
+public:
+	HighMassRatio3(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		if (settings.restart == false)
+		{
+			g_camera.m_center = {0.0f, 12.0f};
+			g_camera.m_zoom = 1.0f;
+		}
+
+		float extent = 1.0f;
+
+		s2BodyDef bodyDef = s2_defaultBodyDef;
+		bodyDef.position = {0.0f, -2.0f};
+		s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
+
+		s2ShapeDef shapeDef = s2_defaultShapeDef;
+		shapeDef.density = 1.0f;
+
+		s2Polygon groundBox = s2MakeBox(40.0f, 2.0f);
+		s2CreatePolygonShape(groundId, &shapeDef, &groundBox);
+
+		bodyDef.type = s2_dynamicBody;
+
+		s2Polygon smallBox = s2MakeBox(0.5f * extent, 0.5f * extent);
+		s2Polygon bigBox = s2MakeBox(10.0f * extent, 10.0f * extent);
+
+		{
+			bodyDef.position = {-9.0f * extent, 0.5f * extent};
+			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+			s2CreatePolygonShape(bodyId, &shapeDef, &smallBox);
+		}
+
+		{
+			bodyDef.position = {9.0f * extent, 0.5f * extent};
+			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+			s2CreatePolygonShape(bodyId, &shapeDef, &smallBox);
+		}
+
+		{
+			bodyDef.position = {0.0f, (10.0f + 16.0f) * extent};
+			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+			s2CreatePolygonShape(bodyId, &shapeDef, &bigBox);
+		}
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new HighMassRatio3(settings, solverType);
+	}
+};
+
+static int sampleHighMassRatio3 = RegisterSample("Contact", "HighMassRatio3", HighMassRatio3::Create);
+
 class FrictionRamp : public Sample
 {
 public:
