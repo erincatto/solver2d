@@ -340,6 +340,11 @@ void s2Solve_TGS_Sticky(s2World* world, s2StepContext* context)
 		constraintCount += 1;
 	}
 
+	// Loops
+	// body: 1 + 2 * substepCount + relaxCount
+	// constraint: 2 + substepCount + relaxCount
+
+	// constraint loop
 	for (int i = 0; i < jointCapacity; ++i)
 	{
 		s2Joint* joint = joints + i;
@@ -359,6 +364,7 @@ void s2Solve_TGS_Sticky(s2World* world, s2StepContext* context)
 	float inv_h = context->inv_h;
 
 	// TGS solve
+	// (2 * body + constraint) * substepCount
 	bool useBias = true;
 	for (int substep = 0; substep < substepCount; ++substep)
 	{
@@ -380,9 +386,11 @@ void s2Solve_TGS_Sticky(s2World* world, s2StepContext* context)
 		s2IntegratePositions(world, h);
 	}
 
+	// body loop
 	s2FinalizePositions(world);
 
 	// Relax
+	// constraint loop * relaxCount
 	useBias = false;
 	int relaxCount = context->extraIterations;
 	for (int iter = 0; iter < relaxCount; ++iter)
@@ -402,6 +410,7 @@ void s2Solve_TGS_Sticky(s2World* world, s2StepContext* context)
 	}
 
 	// warm starting is not used, this is just for reporting
+	// constraint loop
 	s2StoreContactImpulses(constraints, constraintCount);
 
 	s2FreeStackItem(world->stackAllocator, constraints);

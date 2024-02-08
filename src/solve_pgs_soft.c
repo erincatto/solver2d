@@ -162,8 +162,12 @@ void s2Solve_PGS_Soft(s2World* world, s2StepContext* context)
 	float contactHertz = S2_MIN(s2_contactHertz, 0.333f * inv_h);
 	float jointHertz = S2_MIN(s2_jointHertz, 0.5f * inv_h);
 
+	// Loops: body 3, constraint 2 + vel iter + pos iter
+
+	// body loop
 	s2IntegrateVelocities(world, h);
 
+	// constraint loop
 	s2PrepareContacts_Soft(world, constraints, constraintCount, context, h, contactHertz);
 	
 	if (context->warmStart)
@@ -187,6 +191,7 @@ void s2Solve_PGS_Soft(s2World* world, s2StepContext* context)
 		}
 	}
 
+	// constraint loop * velocityIterations
 	bool useBias = true;
 	for (int iter = 0; iter < velocityIterations; ++iter)
 	{
@@ -205,9 +210,11 @@ void s2Solve_PGS_Soft(s2World* world, s2StepContext* context)
 	}
 
 	// Update positions from velocity
+	// body loop
 	s2IntegratePositions(world, h);
 
 	// Relax
+	// constraint loop * positionIterations
 	useBias = false;
 	for (int iter = 0; iter < positionIterations; ++iter)
 	{
@@ -225,8 +232,10 @@ void s2Solve_PGS_Soft(s2World* world, s2StepContext* context)
 		s2SolveContacts_PGS_Soft(world, constraints, constraintCount, inv_h, useBias);
 	}
 
+	// body loop
 	s2FinalizePositions(world);
 
+	// constraint loop
 	s2StoreContactImpulses(constraints, constraintCount);
 
 	s2FreeStackItem(world->stackAllocator, constraints);

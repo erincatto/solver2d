@@ -172,7 +172,12 @@ void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
 	float contactHertz = S2_MIN(s2_contactHertz, 0.25f * inv_h);
 	float jointHertz = S2_MIN(s2_jointHertz, 0.125f * inv_h);
 
+	// Loops
+	// body: 1 + 2 * substepCount
+	// constraint: 2 + 2 * substepCount
+
 	// Prepare
+	// constraint loop
 	s2PrepareContacts_Soft(world, constraints, constraintCount, context, h, contactHertz);
 
 	for (int i = 0; i < jointCapacity; ++i)
@@ -188,6 +193,8 @@ void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
 	}
 
 	// Solve
+	// body 2 * substepCount
+	// constraint 2 * substepCount (merge warm starting)
 	for (int substep = 0; substep < substepCount; ++substep)
 	{
 		// Integrate gravity and forces
@@ -246,9 +253,11 @@ void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
 	}
 
 	// Finalize body position
+	// body loop
 	s2FinalizePositions(world);
 
 	// Store results
+	// constraint loop
 	s2StoreContactImpulses(constraints, constraintCount);
 
 	s2FreeStackItem(world->stackAllocator, constraints);

@@ -387,6 +387,11 @@ void s2Solve_XPBD(s2World* world, s2StepContext* context)
 		constraintCount += 1;
 	}
 
+	// Loops
+	// body: 1 + 2 * substepCount
+	// constraint: 2 + 2 * substepCount
+
+	// constraint loop
 	s2PrepareContacts_XPBD(world, constraints, constraintCount);
 
 	for (int i = 0; i < jointCapacity; ++i)
@@ -405,6 +410,8 @@ void s2Solve_XPBD(s2World* world, s2StepContext* context)
 	int bodyCapacity = world->bodyPool.capacity;
 	s2Vec2 gravity = world->gravity;
 
+	// body 2 * substepCount
+	// constraint 2 * substepCount
 	for (int substep = 0; substep < substepCount; ++substep)
 	{
 		// Integrate velocities and positions
@@ -493,6 +500,7 @@ void s2Solve_XPBD(s2World* world, s2StepContext* context)
 	}
 
 	// Finalize body position
+	// body loop
 	for (int i = 0; i < bodyCapacity; ++i)
 	{
 		s2Body* body = bodies + i;
@@ -511,6 +519,7 @@ void s2Solve_XPBD(s2World* world, s2StepContext* context)
 	}
 
 	// warm starting is not used, this is just for reporting
+	// constraint loop
 	for (int i = 0; i < constraintCount; ++i)
 	{
 		s2ContactConstraint* constraint = constraints + i;
