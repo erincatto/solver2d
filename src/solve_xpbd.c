@@ -1,13 +1,10 @@
 // SPDX-FileCopyrightText: 2024 Erin Catto
 // SPDX-License-Identifier: MIT
 
-#include "allocate.h"
-#include "array.h"
 #include "body.h"
 #include "contact.h"
 #include "core.h"
 #include "joint.h"
-#include "shape.h"
 #include "solvers.h"
 #include "stack_allocator.h"
 #include "world.h"
@@ -15,6 +12,7 @@
 #include "solver2d/aabb.h"
 
 #include <assert.h>
+#include <float.h>
 #include <stdbool.h>
 
 static void s2PrepareContacts_XPBD(s2World* world, s2ContactConstraint* constraints, int constraintCount)
@@ -68,10 +66,7 @@ static void s2PrepareContacts_XPBD(s2World* world, s2ContactConstraint* constrai
 			cp->rA0 = rA;
 			cp->rB0 = rB;
 			cp->separation = mp->separation;
-			if (mp->separation < -0.5f)
-			{
-				cp->separation += 0.0f;
-			}
+			cp->adjustedSeparation = mp->separation - s2Dot(s2Sub(rB, rA), normal);
 
 			cp->biasCoefficient = 0.0f;
 
@@ -96,7 +91,7 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 	float inv_h = h > 0.0f ? 1.0f / h : 0.0f;
 
 	// compliance because contacts are too energetic otherwise
-	//float baseCompliance = 0.00001f * inv_h* inv_h;
+	// float baseCompliance = 0.00001f * inv_h* inv_h;
 	// but the rush sample has too much overlap ...
 	float baseCompliance = 0.0f;
 
@@ -143,7 +138,7 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 			}
 
 			// this clamping is not in the paper, but it is used in other solvers
-			//float C_clamped = S2_MAX(-s2_maxBaumgarteVelocity * h, C);
+			C = S2_MAX(-s2_maxBaumgarteVelocity * h, C);
 
 			float rnA = s2Cross(rA, normal);
 			float rnB = s2Cross(rB, normal);
@@ -152,7 +147,7 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 			float kA = mA + iA * rnA * rnA;
 			float kB = mB + iB * rnB * rnB;
 
-			//float lambda = -C_clamped / (kA + kB + compliance);
+			// lambda has units of Mass * Length
 			float lambda = -C / (kA + kB + compliance);
 			cp->normalImpulse = lambda;
 
@@ -160,17 +155,8 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 
 			dcA = s2MulSub(dcA, mA, P);
 			qA = s2IntegrateRot(qA, -iA * s2Cross(rA, P));
-			if (s2Length(dcA) > 1.0f)
-			{
-				dcA.x += 0.0f;
-			}
 
 			dcB = s2MulAdd(dcB, mB, P);
-			if (s2Length(dcB) > 1.0f)
-			{
-				dcB.x += 0.0f;
-			}
-
 			qB = s2IntegrateRot(qB, iB * s2Cross(rB, P));
 		}
 
@@ -198,13 +184,18 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 			float kB = mB + iB * rtB * rtB;
 
 			float lambda = -C / (kA + kB);
-
 			float maxLambda = friction * cp->normalImpulse;
+
+#if 1
 			if (lambda < -maxLambda || maxLambda < lambda)
 			{
 				cp->tangentImpulse = 0.0f;
 				continue;
 			}
+#else
+			// this seems to behave better, but does not follow the paper
+			lambda = S2_CLAMP(lambda, -maxLambda, maxLambda);
+#endif
 
 			cp->tangentImpulse = lambda;
 
@@ -250,11 +241,6 @@ static void s2SolveContactVelocities_XPBD(s2World* world, s2ContactConstraint* c
 		float wA = bodyA->angularVelocity;
 		s2Vec2 vB = bodyB->linearVelocity;
 		float wB = bodyB->angularVelocity;
-
-		s2Vec2 vA0 = bodyA->linearVelocity0;
-		float wA0 = bodyA->angularVelocity0;
-		s2Vec2 vB0 = bodyB->linearVelocity0;
-		float wB0 = bodyB->angularVelocity0;
 
 		s2Vec2 normal = constraint->normal;
 		s2Vec2 tangent = s2CrossVS(normal, 1.0f);
@@ -316,12 +302,6 @@ static void s2SolveContactVelocities_XPBD(s2World* world, s2ContactConstraint* c
 				continue;
 			}
 
-			// eq 31
-			cp->tangentImpulse = friction * cp->normalImpulse;
-			float huf = cp->tangentImpulse * inv_h;
-			float abs_vt = S2_ABS(vt);
-			float Cdot = (vt / abs_vt) * S2_MIN(huf, abs_vt);
-
 			float rtA = s2Cross(rA, tangent);
 			float rtB = s2Cross(rB, tangent);
 
@@ -329,6 +309,16 @@ static void s2SolveContactVelocities_XPBD(s2World* world, s2ContactConstraint* c
 			float kA = mA + iA * rtA * rtA;
 			float kB = mB + iB * rtB * rtB;
 
+			// eq 31
+			cp->tangentImpulse = friction * cp->normalImpulse;
+
+			// Length / Time (this is wrong in the paper, fixed here)
+			float huf = (cp->tangentImpulse * inv_h) * (kA + kB);
+
+			// Length / Time
+			float abs_vt = S2_ABS(vt);
+
+			float Cdot = (vt / abs_vt) * S2_MIN(huf, abs_vt);
 			float lambda = -Cdot / (kA + kB);
 
 			s2Vec2 P = s2MulSV(lambda, tangent);
@@ -366,8 +356,9 @@ void s2Solve_XPBD(s2World* world, s2StepContext* context)
 	s2Joint* joints = world->joints;
 	int jointCapacity = world->jointPool.capacity;
 
-	s2ContactConstraint* constraints = s2AllocateStackItem(world->stackAllocator, contactCapacity * sizeof(s2ContactConstraint), "constraint");
-	
+	s2ContactConstraint* constraints =
+		s2AllocateStackItem(world->stackAllocator, contactCapacity * sizeof(s2ContactConstraint), "constraint");
+
 	int constraintCount = 0;
 	for (int i = 0; i < contactCapacity; ++i)
 	{

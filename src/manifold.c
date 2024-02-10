@@ -415,7 +415,7 @@ static float s2FindMaxSeparation(int* edgeIndex, const s2Polygon* poly1, const s
 		s2Vec2 n = n1s[i];
 		s2Vec2 v1 = v1s[i];
 
-		// Find deepest point for normal i.
+		// Find the deepest point for normal i.
 		float si = FLT_MAX;
 		for (int j = 0; j < count2; ++j)
 		{
