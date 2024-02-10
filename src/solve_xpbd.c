@@ -310,16 +310,18 @@ static void s2SolveContactVelocities_XPBD(s2World* world, s2ContactConstraint* c
 			float kB = mB + iB * rtB * rtB;
 
 			// eq 31
-			cp->tangentImpulse = friction * cp->normalImpulse;
+			float maxFrictionImpulse = friction * cp->normalImpulse;
 
 			// Length / Time (this is wrong in the paper, fixed here)
-			float huf = (cp->tangentImpulse * inv_h) * (kA + kB);
+			float huf = (maxFrictionImpulse * inv_h) * (kA + kB);
 
 			// Length / Time
 			float abs_vt = S2_ABS(vt);
 
 			float Cdot = (vt / abs_vt) * S2_MIN(huf, abs_vt);
 			float lambda = -Cdot / (kA + kB);
+			
+			cp->tangentImpulse = lambda;
 
 			s2Vec2 P = s2MulSV(lambda, tangent);
 			vA = s2MulSub(vA, mA, P);
