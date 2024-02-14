@@ -154,7 +154,7 @@ void s2Solve_PGS_Soft(s2World* world, s2StepContext* context)
 		constraintCount += 1;
 	}
 
-	int velocityIterations = context->iterations;
+	int primaryIterations = context->iterations;
 	int positionIterations = context->extraIterations;
 	float h = context->dt;
 	float inv_h = context->inv_dt;
@@ -191,9 +191,9 @@ void s2Solve_PGS_Soft(s2World* world, s2StepContext* context)
 		}
 	}
 
-	// constraint loop * velocityIterations
+	// constraint loop * primaryIterations
 	bool useBias = true;
-	for (int iter = 0; iter < velocityIterations; ++iter)
+	for (int iter = 0; iter < primaryIterations; ++iter)
 	{
 		for (int i = 0; i < jointCapacity; ++i)
 		{

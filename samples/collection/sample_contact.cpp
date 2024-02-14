@@ -271,8 +271,6 @@ public:
 		s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
 
 		s2ShapeDef shapeDef = s2_defaultShapeDef;
-		shapeDef.density = 1.0f;
-
 		s2Polygon groundBox = s2MakeBox(40.0f, 2.0f);
 		s2CreatePolygonShape(groundId, &shapeDef, &groundBox);
 
@@ -766,7 +764,6 @@ static int sampleArch = RegisterSample("Contact", "Arch", Arch::Create);
 class DoubleDomino : public Sample
 {
 public:
-
 	DoubleDomino(const Settings& settings, s2SolverType solverType)
 		: Sample(settings, solverType)
 	{
@@ -785,7 +782,6 @@ public:
 			s2ShapeDef shapeDef = s2_defaultShapeDef;
 			s2CreatePolygonShape(groundId, &shapeDef, &box);
 		}
-
 
 		s2Polygon box = s2MakeBox(0.125f, 0.5f);
 
@@ -891,3 +887,80 @@ public:
 };
 
 static int sampleConfined = RegisterSample("Contact", "Confined", Confined::Create);
+
+// From PEEL
+class CardHouse : public Sample
+{
+public:
+	CardHouse(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		if (settings.restart == false)
+		{
+			g_camera.m_center = {0.75f, 0.9f};
+			g_camera.m_zoom = 0.05f;
+		}
+
+		s2BodyDef bodyDef = s2_defaultBodyDef;
+		bodyDef.position = {0.0f, -2.0f};
+		s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
+
+		s2ShapeDef shapeDef = s2_defaultShapeDef;
+		shapeDef.friction = 0.7f;
+
+		s2Polygon groundBox = s2MakeBox(40.0f, 2.0f);
+		s2CreatePolygonShape(groundId, &shapeDef, &groundBox);
+
+		float cardHeight = 0.2f;
+		float cardThickness = 0.001f;
+
+		float angle0 = 25.0f * s2_pi / 180.0f;
+		float angle1 = -25.0f * s2_pi / 180.0f;
+		float angle2 = 0.5f * s2_pi;
+
+		s2Polygon cardBox = s2MakeBox(cardThickness, cardHeight);
+		bodyDef.type = s2_dynamicBody;
+
+		int Nb = 5;
+		float z0 = 0.0f;
+		float y = cardHeight - 0.02f;
+		while (Nb)
+		{
+			float z = z0;
+			for (int i = 0; i < Nb; i++)
+			{
+				if (i != Nb - 1)
+				{
+					bodyDef.position = {z + 0.25f, y + cardHeight - 0.015f};
+					bodyDef.angle = angle2;
+					s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+					s2CreatePolygonShape(bodyId, &shapeDef, &cardBox);
+				}
+
+				bodyDef.position = {z, y};
+				bodyDef.angle = angle1;
+				s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+				s2CreatePolygonShape(bodyId, &shapeDef, &cardBox);
+
+				z += 0.175f;
+
+				bodyDef.position = {z, y};
+				bodyDef.angle = angle0;
+				bodyId = s2CreateBody(m_worldId, &bodyDef);
+				s2CreatePolygonShape(bodyId, &shapeDef, &cardBox);
+
+				z += 0.175f;
+			}
+			y += cardHeight * 2.0f - 0.03f;
+			z0 += 0.175f;
+			Nb--;
+		}
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new CardHouse(settings, solverType);
+	}
+};
+
+static int sampleCardHouse = RegisterSample("Contact", "Card House", CardHouse::Create);
