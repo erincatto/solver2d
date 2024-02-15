@@ -11,7 +11,6 @@
 #define s2_maxPolygonVertices 8
 #define s2_maxWorlds 32
 #define s2_maxLinearCorrection 0.2f
-//#define s2_maxLinearCorrection 200.0f
 #define s2_maxAngularCorrection (8.0f / 180.0f * s2_pi)
 #define s2_baumgarte 0.2f
 #define s2_timeToSleep 0.5f
@@ -19,6 +18,5 @@
 #define s2_angularSleepTolerance (2.0f / 180.0f * s2_pi)
 #define s2_huge (100000.0f)
 #define s2_maxBaumgarteVelocity 4.0f
-//#define s2_maxBaumgarteVelocity 400.0f
 #define s2_contactHertz 30.0f
 #define s2_jointHertz 60.0f

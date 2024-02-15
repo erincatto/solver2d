@@ -211,6 +211,14 @@ static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, i
 				}
 				break;
 
+			case GLFW_KEY_9:
+				s_settings.primaryIterations = S2_MAX(1, s_settings.primaryIterations - 1);
+				break;
+
+			case GLFW_KEY_0:
+				s_settings.primaryIterations += 1;
+				break;
+
 			case GLFW_KEY_COMMA:
 				// Switch to previous solver
 				{
@@ -379,7 +387,7 @@ static void ScrollCallback(GLFWwindow* window, double dx, double dy)
 
 static void UpdateUI(s2Color* solverColors)
 {
-	float menuWidth = 180.0f;
+	float menuWidth = 200.0f;
 	if (g_draw.m_showUI == false)
 	{
 		return;
@@ -394,11 +402,13 @@ static void UpdateUI(s2Color* solverColors)
 	{
 		if (ImGui::BeginTabItem("Controls"))
 		{
-			ImGui::SliderInt("Vel Iters", &s_settings.velocityIterations, 0, 50);
-			ImGui::SliderInt("Pos Iters", &s_settings.positionIterations, 0, 50);
-			ImGui::SliderInt("Multi-Steps", &s_settings.multiSteps, 1, 500);
-			ImGui::SliderFloat("Hertz", &s_settings.hertz, 5.0f, 480.0f, "%.0f hz");
+			ImGui::PushItemWidth(100.0f);
+			ImGui::SliderInt("Main Iters", &s_settings.primaryIterations, 0, 50);
+			ImGui::SliderInt("Extra Iters", &s_settings.secondaryIterations, 0, 50);
+			ImGui::SliderInt("Multi-Steps", &s_settings.multiSteps, 1, 200);
+			ImGui::SliderFloat("Hertz", &s_settings.hertz, 5.0f, 480.0f, "%.0f Hz");
 			ImGui::Checkbox("Warm Starting", &s_settings.enableWarmStarting);
+			ImGui::PopItemWidth();
 
 			ImGui::Separator();
 

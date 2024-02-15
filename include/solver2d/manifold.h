@@ -18,11 +18,7 @@ typedef struct s2SmoothSegment s2SmoothSegment;
 
 typedef struct s2ManifoldPoint
 {
-	// world coordinates of contact point
-	// todo accuracy problem
-	//s2Vec2 point;
-
-	// todo more accurate
+	// local anchors relative to body origin
 	s2Vec2 localAnchorA;
 	s2Vec2 localAnchorB;
 
