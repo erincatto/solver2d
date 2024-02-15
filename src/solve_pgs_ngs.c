@@ -140,7 +140,7 @@ void s2Solve_PGS_NGS(s2World* world, s2StepContext* context)
 		constraintCount += 1;
 	}
 
-	int primaryIterations = context->iterations;
+	int velocityIterations = context->iterations;
 	int positionIterations = context->extraIterations;
 	float h = context->dt;
 	float inv_h = context->inv_dt;
@@ -173,8 +173,8 @@ void s2Solve_PGS_NGS(s2World* world, s2StepContext* context)
 		}
 	}
 
-	// constraint loop * primaryIterations
-	for (int iter = 0; iter < primaryIterations; ++iter)
+	// constraint loop * velocityIterations
+	for (int iter = 0; iter < velocityIterations; ++iter)
 	{
 		for (int i = 0; i < jointCapacity; ++i)
 		{
