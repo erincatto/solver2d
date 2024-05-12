@@ -1,3 +1,5 @@
+![Solver2D Logo](extras/solver2d.png)
+
 # Solver2D 
 A project for testing various rigid body solvers.
 
