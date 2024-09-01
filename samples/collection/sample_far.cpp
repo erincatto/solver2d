@@ -223,7 +223,7 @@ public:
 		: Sample(settings, solverType)
 	{
 		//s2Vec2 origin = {0.0f, 0.0f};
-		s2Vec2 origin = {10000.0f, -7500.0f};
+		s2Vec2 origin = {6000.0f, -1500.0f};
 		//s2Vec2 origin = {20000.0f, -15000.0f};
 		//s2Vec2 origin = {80000.0f, -60000.0f};
 

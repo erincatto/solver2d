@@ -13,8 +13,57 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-// this differs from PGS because it uses updated anchors
-static void s2SolveContacts_TGS_Soft(s2World* world, s2ContactConstraint* constraints, int constraintCount, float inv_h,
+static void s2WarmStartContacts_Fixed(s2World* world, s2ContactConstraint* constraints, int constraintCount)
+{
+	s2Body* bodies = world->bodies;
+
+	for (int i = 0; i < constraintCount; ++i)
+	{
+		s2ContactConstraint* constraint = constraints + i;
+
+		int pointCount = constraint->pointCount;
+		S2_ASSERT(0 < pointCount && pointCount <= 2);
+
+		s2Body* bodyA = bodies + constraint->indexA;
+		s2Body* bodyB = bodies + constraint->indexB;
+
+		float mA = bodyA->invMass;
+		float iA = bodyA->invI;
+		float mB = bodyB->invMass;
+		float iB = bodyB->invI;
+
+		s2Vec2 vA = bodyA->linearVelocity;
+		float wA = bodyA->angularVelocity;
+		s2Vec2 vB = bodyB->linearVelocity;
+		float wB = bodyB->angularVelocity;
+
+		s2Vec2 normal = constraint->normal;
+		s2Vec2 tangent = s2RightPerp(normal);
+
+		for (int j = 0; j < pointCount; ++j)
+		{
+			s2ContactConstraintPoint* cp = constraint->points + j;
+
+			// fixed anchors
+			s2Vec2 rA = cp->rA0;
+			s2Vec2 rB = cp->rB0;
+
+			s2Vec2 P = s2Add(s2MulSV(cp->normalImpulse, normal), s2MulSV(cp->tangentImpulse, tangent));
+			wA -= iA * s2Cross(rA, P);
+			vA = s2MulAdd(vA, -mA, P);
+			wB += iB * s2Cross(rB, P);
+			vB = s2MulAdd(vB, mB, P);
+		}
+
+		bodyA->linearVelocity = vA;
+		bodyA->angularVelocity = wA;
+		bodyB->linearVelocity = vB;
+		bodyB->angularVelocity = wB;
+	}
+}
+
+// Uses fixed contact offsets which may be better for fast moving wheels
+static void s2SolveContacts_TGS_Fixed(s2World* world, s2ContactConstraint* constraints, int constraintCount, float inv_h,
 											  bool useBias)
 {
 	s2Body* bodies = world->bodies;
@@ -50,12 +99,8 @@ static void s2SolveContacts_TGS_Soft(s2World* world, s2ContactConstraint* constr
 		{
 			s2ContactConstraintPoint* cp = constraint->points + j;
 
-			// anchor points
-			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
-			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
-
-			// compute current separation
-			s2Vec2 ds = s2Add(s2Sub(dcB, dcA), s2Sub(rB, rA));
+			// compute current separation (current anchors)
+			s2Vec2 ds = s2Add(s2Sub(dcB, dcA), s2Sub(s2RotateVector(qB, cp->localAnchorB), s2RotateVector(qA, cp->localAnchorA)));
 			float s = s2Dot(ds, normal) + cp->adjustedSeparation;
 
 			float bias = 0.0f;
@@ -74,8 +119,9 @@ static void s2SolveContacts_TGS_Soft(s2World* world, s2ContactConstraint* constr
 			}
 
 			// Relative velocity at contact
-			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rB));
-			s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, rA));
+			// fixed anchors
+			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, cp->rB0));
+			s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, cp->rA0));
 			float vn = s2Dot(s2Sub(vrB, vrA), normal);
 			
 			// Compute normal impulse
@@ -87,25 +133,22 @@ static void s2SolveContacts_TGS_Soft(s2World* world, s2ContactConstraint* constr
 			cp->normalImpulse = newImpulse;
 
 			// Apply contact impulse
+			// fixed anchors
 			s2Vec2 P = s2MulSV(impulse, normal);
 			vA = s2MulSub(vA, mA, P);
-			wA -= iA * s2Cross(rA, P);
-
+			wA -= iA * s2Cross(cp->rA0, P);
 			vB = s2MulAdd(vB, mB, P);
-			wB += iB * s2Cross(rB, P);
+			wB += iB * s2Cross(cp->rB0, P);
 		}
 
 		for (int j = 0; j < pointCount; ++j)
 		{
 			s2ContactConstraintPoint* cp = constraint->points + j;
 
-			// Current anchor points
-			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
-			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
-
 			// Relative velocity at contact
-			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rB));
-			s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, rA));
+			// fixed anchors
+			s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, cp->rA0));
+			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, cp->rB0));
 			float vt = s2Dot(s2Sub(vrB, vrA), tangent);
 
 			// Compute tangent force
@@ -118,13 +161,12 @@ static void s2SolveContacts_TGS_Soft(s2World* world, s2ContactConstraint* constr
 			cp->tangentImpulse = newImpulse;
 
 			// Apply contact impulse
+			// fixed anchors
 			s2Vec2 P = s2MulSV(impulse, tangent);
-
 			vA = s2MulSub(vA, mA, P);
-			wA -= iA * s2Cross(rA, P);
-
+			wA -= iA * s2Cross(cp->rA0, P);
 			vB = s2MulAdd(vB, mB, P);
-			wB += iB * s2Cross(rB, P);
+			wB += iB * s2Cross(cp->rB0, P);
 		}
 
 		bodyA->linearVelocity = vA;
@@ -134,22 +176,11 @@ static void s2SolveContacts_TGS_Soft(s2World* world, s2ContactConstraint* constr
 	}
 }
 
-// Warm starting and relaxing in the substep loop
-void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
+// This solver is almost identical to TGS_Soft except that contact anchors are not updated with sub-steps.
+// This can improve rolling where the anchor should stay roughly fixed in direction.
+// Like TGS_Soft this uses warm starting and relaxing in the substep loop
+void s2Solve_SoftStep(s2World* world, s2StepContext* context)
 {
-	// #todo testing
-	//s2Rot a1 = s2MakeRot(0.3f);
-	//s2Rot b1 = s2MakeRot(-1.2f);
-	//s2Rot da = s2MakeRot(0.5f);
-	//s2Rot db = s2MakeRot(0.2f);
-	//s2Rot a2 = s2MakeRot(0.3f + 0.5f);
-	//s2Rot b2 = s2MakeRot(-1.2f + 0.2f);
-
-	//float angle1 = s2RelativeAngle(b1, a1);
-	//float dangle = s2RelativeAngle(db, da);
-	//float angle2 = s2RelativeAngle(b2, a2);
-	//float angle2a = angle1 + dangle;
-
 	s2Contact* contacts = world->contacts;
 	int contactCapacity = world->contactPool.capacity;
 
@@ -227,7 +258,7 @@ void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
 				s2WarmStartJoint(joint, context);
 			}
 
-			s2WarmStartContacts(world, constraints, constraintCount);
+			s2WarmStartContacts_Fixed(world, constraints, constraintCount);
 		}
 
 		// Solve velocities using position bias
@@ -243,7 +274,7 @@ void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
 			s2SolveJoint_Soft(joint, context, h, inv_h, useBias);
 		}
 
-		s2SolveContacts_TGS_Soft(world, constraints, constraintCount, inv_h, useBias);
+		s2SolveContacts_TGS_Fixed(world, constraints, constraintCount, inv_h, useBias);
 
 		// Integrate positions using biased velocities
 		s2IntegratePositions(world, h);
@@ -264,7 +295,7 @@ void s2Solve_TGS_Soft(s2World* world, s2StepContext* context)
 				s2SolveJoint_Soft(joint, context, h, inv_h, useBias);
 			}
 		
-			s2SolveContacts_TGS_Soft(world, constraints, constraintCount, inv_h, useBias);
+			s2SolveContacts_TGS_Fixed(world, constraints, constraintCount, inv_h, useBias);
 		}
 	}
 

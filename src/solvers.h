@@ -67,11 +67,12 @@ void s2SolveContact_NGS(s2World* world, s2ContactConstraint* constraints, int co
 void s2StoreContactImpulses(s2ContactConstraint* constraints, int constraintCount);
 
 // many solvers
-void s2Solve_PGS_NGS_Block(s2World* world, s2StepContext* stepContext);
+void s2Solve_PGS(s2World* world, s2StepContext* stepContext);
 void s2Solve_PGS_NGS(s2World* world, s2StepContext* context);
+void s2Solve_PGS_NGS_Block(s2World* world, s2StepContext* stepContext);
 void s2Solve_PGS_Soft(s2World* world, s2StepContext* stepContext);
-void s2Solve_XPBD(s2World* world, s2StepContext* stepContext);
 void s2Solve_TGS_Soft(s2World* world, s2StepContext* stepContext);
 void s2Solve_TGS_Sticky(s2World* world, s2StepContext* stepContext);
 void s2Solve_TGS_NGS(s2World* world, s2StepContext* stepContext);
-void s2Solve_PGS(s2World* world, s2StepContext* stepContext);
+void s2Solve_XPBD(s2World* world, s2StepContext* stepContext);
+void s2Solve_SoftStep(s2World* world, s2StepContext* stepContext);

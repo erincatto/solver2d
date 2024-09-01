@@ -9,10 +9,7 @@
 #include "solver2d/math.h"
 #include "solver2d/solver2d.h"
 
-#include <GLFW/glfw3.h>
-#include <imgui.h>
 #include <math.h>
-#include <stdio.h>
 
 class SingleBox : public Sample
 {
@@ -569,7 +566,8 @@ static int samplePyramid = RegisterSample("Contact", "Pyramid", Pyramid::Create)
 
 // This sample shows an artifact of sub-stepping. The velocity impulse is resolved
 // in the first sub-step and then normal impulse drops to zero and so does friction.
-// A better result would be had using a force that is applied each substep.
+// A better result would be had using a force that is applied each sub-step.
+// Note: does not work correctly with multi-step
 class Rush : public Sample
 {
 public:
@@ -636,19 +634,22 @@ public:
 		}
 #else
 		// forces work better with substepping
-		float force = 1000.0f;
-		for (int i = 0; i < e_count; ++i)
+		if (settings.timeStep > 0.0f)
 		{
-			s2Vec2 p = s2Body_GetPosition(m_bodyIds[i]);
-			float distance = s2Length(p);
-			if (distance < 0.1f)
+			float force = 1000.0f;
+			for (int i = 0; i < e_count; ++i)
 			{
-				continue;
-			}
+				s2Vec2 p = s2Body_GetPosition(m_bodyIds[i]);
+				float distance = s2Length(p);
+				if (distance < 0.1f)
+				{
+					continue;
+				}
 
-			float scale = force / distance;
-			s2Vec2 f = {-scale * p.x, -scale * p.y};
-			s2Body_ApplyForceToCenter(m_bodyIds[i], f);
+				float scale = force / distance;
+				s2Vec2 f = {-scale * p.x, -scale * p.y};
+				s2Body_ApplyForceToCenter(m_bodyIds[i], f);
+			}
 		}
 #endif
 

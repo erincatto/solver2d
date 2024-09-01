@@ -432,6 +432,11 @@ static void UpdateUI(s2Color* solverColors)
 			ImGui::Checkbox("PGS Soft", &s_settings.enabledSolvers[s2_solverPGS_Soft]);
 			ImGui::PopStyleColor();
 
+			c = solverColors[s2_solverSoftStep];
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{c.r, c.g, c.b, c.a});
+			ImGui::Checkbox("Soft Step", &s_settings.enabledSolvers[s2_solverSoftStep]);
+			ImGui::PopStyleColor();
+
 			c = solverColors[s2_solverTGS_Sticky];
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{c.r, c.g, c.b, c.a});
 			ImGui::Checkbox("TGS Sticky", &s_settings.enabledSolvers[s2_solverTGS_Sticky]);
@@ -451,6 +456,7 @@ static void UpdateUI(s2Color* solverColors)
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{c.r, c.g, c.b, c.a});
 			ImGui::Checkbox("XPBD", &s_settings.enabledSolvers[s2_solverXPBD]);
 			ImGui::PopStyleColor();
+
 
 			ImGui::Separator();
 
@@ -677,11 +683,12 @@ int main(int, char**)
 		s2MakeColor(s2_colorDodgerBlue, colorAlpha),
 		s2MakeColor(s2_colorBlueViolet, colorAlpha),
 		s2MakeColor(s2_colorCoral, colorAlpha),
+		s2MakeColor(s2_colorLightBlue, colorAlpha),
 		s2MakeColor(s2_colorLavenderBlush, colorAlpha),
 		s2MakeColor(s2_colorYellow2, colorAlpha),
 		s2MakeColor(s2_colorOrchid, colorAlpha),
 		s2MakeColor(s2_colorSpringGreen, colorAlpha),
-	};
+			};
 
 	static_assert(S2_ARRAY_COUNT(solverColors) == s2_solverTypeCount);
 
