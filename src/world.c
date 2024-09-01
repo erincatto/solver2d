@@ -186,7 +186,8 @@ void s2World_Step(s2WorldId worldId, float timeStep, int velIters, int posIters,
 	if (type == s2_solverXPBD ||
 		type == s2_solverTGS_Soft ||
 		type == s2_solverTGS_Sticky ||
-		type == s2_solverTGS_NGS)
+		type == s2_solverTGS_NGS ||
+		type == s2_solverSoftStep)
 	{
 		context.h = context.dt / context.iterations;
 		context.inv_h = context.inv_dt * context.iterations;
@@ -239,6 +240,10 @@ void s2World_Step(s2WorldId worldId, float timeStep, int velIters, int posIters,
 
 			case s2_solverXPBD:
 				s2Solve_XPBD(world, &context);
+				break;
+
+			case s2_solverSoftStep:
+				s2Solve_SoftStep(world, &context);
 				break;
 
 			default:

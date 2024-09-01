@@ -506,7 +506,7 @@ void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float 
 	// Solve point-to-point constraint
 	{
 		// Update anchors for TGS solvers.
-		// Anchors are wastfully recomputed for PGS solvers or relax stages.
+		// Anchors are wastefully recomputed for PGS solvers or relax stages.
 		s2Rot qA = bodyA->rot;
 		s2Rot qB = bodyB->rot;
 		s2Vec2 rA = s2RotateVector(qA, joint->localAnchorA);
