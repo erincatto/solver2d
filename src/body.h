@@ -44,6 +44,10 @@ typedef struct s2Body
 	s2Vec2 linearVelocity0;
 	float angularVelocity0;
 
+	// For jacobi
+	s2Vec2 dv;
+	float dw;
+
 	s2Vec2 force;
 	float torque;
 

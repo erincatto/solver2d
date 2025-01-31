@@ -412,7 +412,12 @@ static void UpdateUI(s2Color* solverColors)
 
 			ImGui::Separator();
 
-			s2Color c = solverColors[s2_solverPGS];
+			s2Color c = solverColors[s2_solverJacobi];
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{c.r, c.g, c.b, c.a});
+			ImGui::Checkbox("Jacobi", &s_settings.enabledSolvers[s2_solverJacobi]);
+			ImGui::PopStyleColor();
+
+			c = solverColors[s2_solverPGS];
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{c.r, c.g, c.b, c.a});
 			ImGui::Checkbox("PGS", &s_settings.enabledSolvers[s2_solverPGS]);
 			ImGui::PopStyleColor();
@@ -679,6 +684,7 @@ int main(int, char**)
 
 	float colorAlpha = 1.0f;
 	s2Color solverColors[s2_solverTypeCount] = {
+		s2MakeColor(s2_colorViolet, colorAlpha),
 		s2MakeColor(s2_colorCyan, colorAlpha),
 		s2MakeColor(s2_colorDodgerBlue, colorAlpha),
 		s2MakeColor(s2_colorBlueViolet, colorAlpha),

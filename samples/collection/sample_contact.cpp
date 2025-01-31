@@ -479,7 +479,7 @@ public:
 			bodyDef.type = s2_dynamicBody;
 
 			float shift = (i % 2 == 0 ? -offset : offset);
-			bodyDef.position = {shift, 0.5f + 1.0f * i};
+			bodyDef.position = {shift, 0.5f + 1.2f * i};
 			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
 
 			if (shapeType == e_circleShape)
