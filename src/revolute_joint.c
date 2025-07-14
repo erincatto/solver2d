@@ -223,6 +223,51 @@ void s2SolveRevolute(s2Joint* base, s2StepContext* context, float h)
 		s2Vec2 rA = s2RotateVector(qA, joint->localAnchorA);
 		s2Vec2 rB = s2RotateVector(qB, joint->localAnchorB);
 
+#if 0
+		// geometric stiffness
+		// J = [-I -r1_skew I r2_skew ]
+		// JT * lambda = [-lambda;
+		// dJT/dx * lambda = -skew(lambda) * skew(r)
+		//
+		float kA = fabsf(s2Cross(joint->impulse, rA));
+		float kB = fabsf(s2Cross(joint->impulse, rB));
+
+		//float iAt = 1.0f / (1.0f / iA + h * kA);
+		//float iBt = 1.0f / (1.0f / iB + h * kB);
+		float iAt = iA;
+		float iBt = iB;
+
+		if (h * kA * iA > 4.0f)
+		{
+			iAt = 1.0f / (1.0f / iA + 0.5f * (h * kA - 4.0f / iA) );
+		}
+
+		if (h * kB * iB > 4.0f)
+		{
+			iBt = 1.0f / (1.0f / iB + 0.5f * (h * kB - 4.0f / iB) );
+		}
+
+		if (iAt > iA)
+		{
+			iAt += 0.0f;
+		}
+
+		if (iBt > iB)
+		{
+			iBt += 0.0f;
+		}
+
+		s2Mat22 K;
+		K.cx.x = mA + mB + rA.y * rA.y * iAt + rB.y * rB.y * iBt;
+		K.cy.x = -rA.y * rA.x * iAt - rB.y * rB.x * iBt;
+		K.cx.y = K.cy.x;
+		K.cy.y = mA + mB + rA.x * rA.x * iAt + rB.x * rB.x * iBt;
+		joint->pivotMass = s2GetInverse22(K);
+#else
+		float iAt = iA;
+		float iBt = iB;
+#endif
+
 		s2Vec2 Cdot = s2Sub(s2Add(vB, s2CrossSV(wB, rB)), s2Add(vA, s2CrossSV(wA, rA)));
 		s2Vec2 impulse = s2MulMV(joint->pivotMass, s2Neg(Cdot));
 
@@ -294,7 +339,7 @@ void s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
 
 		float mA = joint->invMassA, mB = joint->invMassB;
 		float iA = joint->invIA, iB = joint->invIB;
-		
+
 #if S2_FRESH_PIVOT_MASS == 1
 		s2Mat22 K;
 		K.cx.x = mA + mB + iA * rA.y * rA.y + iB * rB.y * rB.y;
@@ -365,7 +410,7 @@ void s2PrepareRevolute_Soft(s2Joint* base, s2StepContext* context, float h, floa
 	K.cy.x = -rA.y * rA.x * iA - rB.y * rB.x * iB;
 	K.cx.y = K.cy.x;
 	K.cy.y = mA + mB + rA.x * rA.x * iA + rB.x * rB.x * iB;
-	
+
 	joint->pivotMass = s2GetInverse22(K);
 
 	{
@@ -527,7 +572,7 @@ void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float 
 			massScale = joint->massCoefficient;
 			impulseScale = joint->impulseCoefficient;
 		}
-		
+
 #if S2_FRESH_PIVOT_MASS == 1
 		s2Mat22 K;
 		K.cx.x = mA + mB + rA.y * rA.y * iA + rB.y * rB.y * iB;
@@ -608,7 +653,7 @@ void s2SolveRevolute_Baumgarte(s2Joint* base, s2StepContext* context, float h, f
 			{
 				bias = s2_baumgarte * inv_h * C;
 			}
-			
+
 			float Cdot = wB - wA;
 			float impulse = -joint->axialMass * (Cdot + bias);
 			float oldImpulse = joint->lowerImpulse;
@@ -662,7 +707,7 @@ void s2SolveRevolute_Baumgarte(s2Joint* base, s2StepContext* context, float h, f
 
 		s2Vec2 separation = s2Add(s2Add(s2Sub(dcB, dcA), s2Sub(rB, rA)), joint->centerDiff0);
 		s2Vec2 bias = s2MulSV(s2_baumgarte * inv_h, separation);
-		
+
 #if S2_FRESH_PIVOT_MASS == 1
 		s2Mat22 K;
 		K.cx.x = mA + mB + rA.y * rA.y * iA + rB.y * rB.y * iB;
@@ -728,7 +773,7 @@ void s2SolveRevolute_XPBD(s2Joint* base, s2StepContext* context, float inv_h)
 	S2_ASSERT(base->type == s2_revoluteJoint);
 
 	// joint grid sample blows up (more quickly) without compliance
-	//float compliance = 0.00001f * inv_h * inv_h;
+	// float compliance = 0.00001f * inv_h * inv_h;
 	float compliance = 0.0f;
 
 	s2RevoluteJoint* joint = &base->revoluteJoint;
@@ -770,7 +815,7 @@ void s2SolveRevolute_XPBD(s2Joint* base, s2StepContext* context, float inv_h)
 
 		assert(kA + kB > 0.0f);
 
-		//float lambda = -c / (kA + kB);
+		// float lambda = -c / (kA + kB);
 		float lambda = -c / (kA + kB + compliance);
 
 		s2Vec2 p = s2MulSV(lambda, n);

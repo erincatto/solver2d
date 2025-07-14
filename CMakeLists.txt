@@ -16,6 +16,12 @@ set(CMAKE_C_STANDARD_REQUIRED YES)
 set(CMAKE_C_EXTENSIONS YES)
 set(CMAKE_CXX_STANDARD 17)
 
+if(MSVC)
+	# enable hot reloading
+	add_compile_options("$<$<CONFIG:Debug>:/ZI>")
+	add_link_options("$<$<CONFIG:Debug>:/INCREMENTAL>")
+endif()
+
 add_subdirectory(src)
 add_subdirectory(samples)
 

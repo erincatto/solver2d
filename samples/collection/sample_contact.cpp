@@ -201,25 +201,20 @@ public:
 			g_camera.m_zoom = 1.0f;
 		}
 
-		float extent = 1.0f;
 
 		s2BodyDef bodyDef = s2_defaultBodyDef;
 		s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
 
-		float groundWidth = 66.0f * extent;
 		s2ShapeDef shapeDef = s2_defaultShapeDef;
 		shapeDef.density = 1.0f;
 
-		s2Segment segment = {{-0.5f * 2.0f * groundWidth, 0.0f}, {0.5f * 2.0f * groundWidth, 0.0f}};
+		s2Segment segment = {{-20.0f, 0.0f}, {20.0f, 0.0f}};
 		s2CreateSegmentShape(groundId, &shapeDef, &segment);
 
-		bodyDef.type = s2_dynamicBody;
-
-		s2Vec2 points[3] = {{-0.5f * extent, 0.0f}, {0.5f * extent, 0.0f}, {0.0f, 1.0f * extent}};
-		s2Hull hull = s2ComputeHull(points, 3);
-		s2Polygon smallTriangle = s2MakePolygon(&hull);
+		float extent = 1.0f;
 		s2Polygon smallBox = s2MakeBox(0.5f * extent, 0.5f * extent);
 		s2Polygon bigBox = s2MakeBox(10.0f * extent, 10.0f * extent);
+		bodyDef.type = s2_dynamicBody;
 
 		{
 			bodyDef.position = {-9.0f * extent, 0.5f * extent};
