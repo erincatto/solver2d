@@ -15,7 +15,7 @@
 #include <float.h>
 #include <stdbool.h>
 
-static void s2PrepareContacts_XPBD(s2World* world, s2ContactConstraint* constraints, int constraintCount)
+static void s2PrepareContacts_XPBD(s2World* world, s2ContactConstraint* constraints, int constraintCount, float h)
 {
 	s2Body* bodies = world->bodies;
 
@@ -55,8 +55,8 @@ static void s2PrepareContacts_XPBD(s2World* world, s2ContactConstraint* constrai
 			const s2ManifoldPoint* mp = manifold->points + j;
 			s2ContactConstraintPoint* cp = constraint->points + j;
 
-			cp->normalImpulse = 0.0f;
-			cp->tangentImpulse = 0.0f;
+			cp->normalImpulse = mp->normalImpulse * h;
+			cp->tangentImpulse = mp->tangentImpulse * h;
 
 			cp->localAnchorA = s2Sub(mp->localAnchorA, bodyA->localCenter);
 			cp->localAnchorB = s2Sub(mp->localAnchorB, bodyB->localCenter);
@@ -85,15 +85,11 @@ static void s2PrepareContacts_XPBD(s2World* world, s2ContactConstraint* constrai
 	}
 }
 
-static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* constraints, int constraintCount, float h)
+static void s2WarmStartContactPositions_XPBD(s2World* world, s2ContactConstraint* constraints, int constraintCount, float h)
 {
 	s2Body* bodies = world->bodies;
 	float inv_h = h > 0.0f ? 1.0f / h : 0.0f;
-
-	// compliance because contacts are too energetic otherwise
-	// float baseCompliance = 0.00001f * inv_h* inv_h;
-	// but the rush sample has too much overlap ...
-	float baseCompliance = 0.0f;
+	float warmStartCoefficient = 0.99;
 
 	for (int i = 0; i < constraintCount; ++i)
 	{
@@ -107,8 +103,6 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 		float mB = bodyB->invMass;
 		float iB = bodyB->invI;
 		int pointCount = constraint->pointCount;
-
-		float compliance = (mA == 0.0f || mB == 0.0f) ? 0.25f * baseCompliance : baseCompliance;
 
 		s2Vec2 dcA = bodyA->deltaPosition;
 		s2Rot qA = bodyA->rot;
@@ -128,18 +122,6 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 			s2Vec2 drA = s2Sub(rA, cp->rA0);
 			s2Vec2 drB = s2Sub(rB, cp->rB0);
 
-			// change in separation
-			s2Vec2 ds = s2Add(s2Sub(dcB, dcA), s2Sub(drB, drA));
-			float C = s2Dot(ds, normal) + cp->separation;
-			if (C > 0)
-			{
-				cp->normalImpulse = 0.0f;
-				continue;
-			}
-
-			// this clamping is not in the paper, but it is used in other solvers
-			C = S2_MAX(-s2_maxBaumgarteVelocity * h, C);
-
 			float rnA = s2Cross(rA, normal);
 			float rnB = s2Cross(rB, normal);
 
@@ -148,10 +130,9 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 			float kB = mB + iB * rnB * rnB;
 
 			// lambda has units of Mass * Length
-			float lambda = -C / (kA + kB + compliance);
-			cp->normalImpulse = lambda;
 
-			s2Vec2 P = s2MulSV(lambda, normal);
+			cp->normalImpulse *= warmStartCoefficient;
+			s2Vec2 P = s2MulSV(cp->normalImpulse, normal);
 
 			dcA = s2MulSub(dcA, mA, P);
 			qA = s2IntegrateRot(qA, -iA * s2Cross(rA, P));
@@ -183,23 +164,138 @@ static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* co
 			float kA = mA + iA * rtA * rtA;
 			float kB = mB + iB * rtB * rtB;
 
-			float lambda = -C / (kA + kB);
+			cp->tangentImpulse *= warmStartCoefficient;
+			s2Vec2 P = s2MulSV(cp->tangentImpulse, tangent);
+
+			dcA = s2MulSub(dcA, mA, P);
+			qA = s2IntegrateRot(qA, -iA * s2Cross(rA, P));
+
+			dcB = s2MulAdd(dcB, mB, P);
+			qB = s2IntegrateRot(qB, iB * s2Cross(rB, P));
+		}
+
+		bodyA->deltaPosition = dcA;
+		bodyA->rot = qA;
+		bodyB->deltaPosition = dcB;
+		bodyB->rot = qB;
+	}
+}
+
+static void s2SolveContactPositions_XPBD(s2World* world, s2ContactConstraint* constraints, int constraintCount, float h)
+{
+	s2Body* bodies = world->bodies;
+	float inv_h = h > 0.0f ? 1.0f / h : 0.0f;
+
+	// compliance because contacts are too energetic otherwise
+	float compliance = 0.0001;
+	float damping = 500.f;
+	float beta = damping * h * h;
+	float alpha = compliance * inv_h * inv_h;
+	float gamma = alpha * beta * inv_h;
+
+	// but the rush sample has too much overlap ...
+	// float baseCompliance = 0.0f;
+
+	for (int i = 0; i < constraintCount; ++i)
+	{
+		s2ContactConstraint* constraint = constraints + i;
+
+		s2Body* bodyA = bodies + constraint->indexA;
+		s2Body* bodyB = bodies + constraint->indexB;
+
+		float mA = bodyA->invMass;
+		float iA = bodyA->invI;
+		float mB = bodyB->invMass;
+		float iB = bodyB->invI;
+		int pointCount = constraint->pointCount;
+
+		s2Vec2 dcA = bodyA->deltaPosition;
+		s2Rot qA = bodyA->rot;
+		s2Vec2 dcB = bodyB->deltaPosition;
+		s2Rot qB = bodyB->rot;
+
+		s2Vec2 normal = constraint->normal;
+		s2Vec2 tangent = s2CrossVS(normal, 1.0f);
+
+		// non-penetration constraints
+		for (int j = 0; j < pointCount; ++j)
+		{
+			s2ContactConstraintPoint* cp = constraint->points + j;
+
+			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
+			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
+			s2Vec2 drA = s2Sub(rA, cp->rA0);
+			s2Vec2 drB = s2Sub(rB, cp->rB0);
+
+			// change in separation
+			s2Vec2 ds = s2Add(s2Sub(dcB, dcA), s2Sub(drB, drA));
+			float C = (1.0f + gamma) * s2Dot(ds, normal) + cp->separation + alpha * cp->normalImpulse;
+
+			// this clamping is not in the paper, but it is used in other solvers
+			//C = S2_MAX(-s2_maxBaumgarteVelocity * h, C);
+
+			float rnA = s2Cross(rA, normal);
+			float rnB = s2Cross(rB, normal);
+
+			// w1 and w2 in paper
+			float kA = mA + iA * rnA * rnA;
+			float kB = mB + iB * rnB * rnB;
+
+			// lambda has units of Mass * Length
+
+			float lambda = S2_MAX(0.f, cp->normalImpulse - C / ((1.f + gamma) * (kA + kB) + alpha));
+			float deltaLambda = lambda - cp->normalImpulse;
+			cp->normalImpulse = lambda;
+
+			s2Vec2 P = s2MulSV(deltaLambda, normal);
+
+			dcA = s2MulSub(dcA, mA, P);
+			qA = s2IntegrateRot(qA, -iA * s2Cross(rA, P));
+
+			dcB = s2MulAdd(dcB, mB, P);
+			qB = s2IntegrateRot(qB, iB * s2Cross(rB, P));
+		}
+
+		// static friction constraints
+		float friction = constraint->friction;
+
+		for (int j = 0; j < pointCount; ++j)
+		{
+			s2ContactConstraintPoint* cp = constraint->points + j;
+
+			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
+			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
+			s2Vec2 drA = s2Sub(rA, cp->rA0);
+			s2Vec2 drB = s2Sub(rB, cp->rB0);
+
+			// tangent separation
+			s2Vec2 dp = s2Add(s2Sub(dcB, dcA), s2Sub(drB, drA));
+			float C = s2Dot(dp, tangent);
+
+			float rtA = s2Cross(rA, tangent);
+			float rtB = s2Cross(rB, tangent);
+
+			// w1 and w2 in paper
+			float kA = mA + iA * rtA * rtA;
+			float kB = mB + iB * rtB * rtB;
+
+			float lambda = cp->tangentImpulse - C / (kA + kB);
 			float maxLambda = friction * cp->normalImpulse;
 
-#if 1
+#if 0
 			if (lambda < -maxLambda || maxLambda < lambda)
 			{
-				cp->tangentImpulse = 0.0f;
-				continue;
+				lambda = 0.0f;
 			}
 #else
 			// this seems to behave better, but does not follow the paper
 			lambda = S2_CLAMP(lambda, -maxLambda, maxLambda);
 #endif
 
+			float deltaLambda = lambda - cp->tangentImpulse;
 			cp->tangentImpulse = lambda;
 
-			s2Vec2 P = s2MulSV(lambda, tangent);
+			s2Vec2 P = s2MulSV(deltaLambda, tangent);
 
 			dcA = s2MulSub(dcA, mA, P);
 			qA = s2IntegrateRot(qA, -iA * s2Cross(rA, P));
@@ -320,8 +416,6 @@ static void s2SolveContactVelocities_XPBD(s2World* world, s2ContactConstraint* c
 
 			float Cdot = (vt / abs_vt) * S2_MIN(huf, abs_vt);
 			float lambda = -Cdot / (kA + kB);
-			
-			cp->tangentImpulse = lambda;
 
 			s2Vec2 P = s2MulSV(lambda, tangent);
 			vA = s2MulSub(vA, mA, P);
@@ -338,7 +432,7 @@ static void s2SolveContactVelocities_XPBD(s2World* world, s2ContactConstraint* c
 }
 
 // Detailed Rigid Body Simulation with Extended Position Based Dynamics, 2020
-// Matthias Müller, Miles Macklin, Nuttapong Chentanez, Stefan Jeschke, Tae-Yong Kim
+// Matthias MÃ¼ller, Miles Macklin, Nuttapong Chentanez, Stefan Jeschke, Tae-Yong Kim
 void s2Solve_XPBD(s2World* world, s2StepContext* context)
 {
 	int substepCount = context->iterations;
@@ -380,12 +474,15 @@ void s2Solve_XPBD(s2World* world, s2StepContext* context)
 		constraintCount += 1;
 	}
 
+	float h = context->dt / substepCount;
+	float inv_h = 1.0f / h;
+
 	// Loops
 	// body: 1 + 2 * substepCount
 	// constraint: 2 + 2 * substepCount
 
 	// constraint loop
-	s2PrepareContacts_XPBD(world, constraints, constraintCount);
+	s2PrepareContacts_XPBD(world, constraints, constraintCount, h);
 
 	for (int i = 0; i < jointCapacity; ++i)
 	{
@@ -397,8 +494,6 @@ void s2Solve_XPBD(s2World* world, s2StepContext* context)
 		s2PrepareJoint_XPBD(joint, context);
 	}
 
-	float h = context->dt / substepCount;
-	float inv_h = 1.0f / h;
 	s2Body* bodies = world->bodies;
 	int bodyCapacity = world->bodyPool.capacity;
 	s2Vec2 gravity = world->gravity;
@@ -447,6 +542,8 @@ void s2Solve_XPBD(s2World* world, s2StepContext* context)
 			body->deltaPosition = s2MulAdd(body->deltaPosition, h, v);
 			body->rot = s2IntegrateRot(body->rot, h * w);
 		}
+
+		s2WarmStartContactPositions_XPBD(world, constraints, constraintCount, h);
 
 		for (int i = 0; i < jointCapacity; ++i)
 		{
@@ -511,7 +608,6 @@ void s2Solve_XPBD(s2World* world, s2StepContext* context)
 		body->deltaPosition = s2Vec2_zero;
 	}
 
-	// warm starting is not used, this is just for reporting
 	// constraint loop
 	for (int i = 0; i < constraintCount; ++i)
 	{
