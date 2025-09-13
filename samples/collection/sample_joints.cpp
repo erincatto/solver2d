@@ -460,7 +460,7 @@ public:
 		int numk = 100;
 #else
 		int numi = 1;
-		int numk = 3;
+		int numk = 20;
 #endif
 
 		float shift = 1.0f;
@@ -485,9 +485,9 @@ public:
 			for (int i = 0; i < numi; ++i)
 			{
 				s2BodyDef bodyDef = s2_defaultBodyDef;
-				if (k == 0 && i == 0)
+				//if (k == 0 && i == 0)
 				//if ((k == 0 || k == numk - 1) && i == 0)
-				//if (k >= numk / 2 - 3 && k <= numk / 2 + 3 && i == 0)
+				if (k >= numk / 2 - 3 && k <= numk / 2 + 3 && i == 0)
 				{
 					bodyDef.type = s2_staticBody;
 				}

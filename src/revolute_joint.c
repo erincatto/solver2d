@@ -44,11 +44,11 @@ void s2PrepareRevolute(s2Joint* base, s2StepContext* context, bool warmStart)
 	s2RevoluteJoint* joint = &base->revoluteJoint;
 	joint->localAnchorA = s2Sub(base->localOriginAnchorA, bodyA->localCenter);
 	joint->invMassA = bodyA->invMass;
-	joint->invIA = bodyA->invI;
+	joint->invIA = joint->inertiaScale * bodyA->invI;
 
 	joint->localAnchorB = s2Sub(base->localOriginAnchorB, bodyB->localCenter);
 	joint->invMassB = bodyB->invMass;
-	joint->invIB = bodyB->invI;
+	joint->invIB = joint->inertiaScale * bodyB->invI;
 
 	joint->centerDiff0 = s2Sub(bodyB->position, bodyA->position);
 
@@ -287,6 +287,19 @@ void s2SolveRevolute(s2Joint* base, s2StepContext* context, float h)
 	bodyB->angularVelocity = wB;
 }
 
+// Nonlinear Gauss-Seidel (NGS)
+// This is similar to position based dynamics (PBD) except the position corrects
+// don't feed into the body velocity. This is very nice because large position errors
+// don't lead to large velocities.
+//
+// Unfortunately NGS can converge slowly and may conflict with velocity constraints leading
+// to instability. PGS-NGS is like applying two separate optimizers to the same problem, but
+// they may have different gradients and this can lead to instability.
+//
+// NGS by itself can have poor convergence for large systems when there is large constraint error.
+// Large constraint errors can lead to large pseudo-torques and high non-linearity.
+// I've experimented with using inertia scaling to act as a pre-conditioner when position error is large.
+// However, it still has the two-optimizer problem and can still become unstable.
 void s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
 {
 	S2_ASSERT(base->type == s2_revoluteJoint);
@@ -331,14 +344,37 @@ void s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
 	}
 
 	// Solve point-to-point constraint.
+	for (int i = 0; i < 1; ++i)
 	{
 		s2Vec2 rA = s2RotateVector(qA, joint->localAnchorA);
 		s2Vec2 rB = s2RotateVector(qB, joint->localAnchorB);
 
 		s2Vec2 C = s2Add(s2Add(s2Sub(dcB, dcA), s2Sub(rB, rA)), joint->centerDiff0);
 
+		//float largeTol = 100.0f * s2_linearSlop;
+		//joint->largeError = C.x < -largeTol | largeTol < C.x | C.y < -largeTol | largeTol < C.y;
+		//if (joint->largeError)
+		//{
+		//	bodyA->largeError = true;
+		//	bodyB->largeError = true;
+		//}
+
+		float lengthC = s2Length(C);
+		float threshold = 10.0f * s2_linearSlop;
+		if (lengthC > threshold)
+		{
+			float s = threshold / lengthC;
+			joint->inertiaScale = 0.95f * joint->inertiaScale + 0.05f * s * s;
+		}
+
+		//float tol = 0.5f * s2_linearSlop;
+		//if (i > 0 & -tol < C.x & C.x < tol & -tol < C.y & C.y < tol)
+		//{
+		//	break;
+		//}
+
 		float mA = joint->invMassA, mB = joint->invMassB;
-		float iA = joint->invIA, iB = joint->invIB;
+		float iA = joint->inertiaScale * bodyA->invI, iB = joint->inertiaScale * bodyB->invI;
 
 #if S2_FRESH_PIVOT_MASS == 1
 		s2Mat22 K;
@@ -356,6 +392,13 @@ void s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
 
 		dcB = s2MulAdd(dcB, mB, impulse);
 		qB = s2IntegrateRot(qB, iB * s2Cross(rB, impulse));
+
+
+		//rA = s2RotateVector(qA, joint->localAnchorA);
+		//rB = s2RotateVector(qB, joint->localAnchorB);
+		//s2Vec2 C2 = s2Add(s2Add(s2Sub(dcB, dcA), s2Sub(rB, rA)), joint->centerDiff0);
+		//C2.x += 0.0f;
+		//(void)C2;
 	}
 
 	bodyA->deltaPosition = dcA;

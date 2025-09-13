@@ -189,6 +189,10 @@ static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, i
 				RestartTest();
 				break;
 
+			case GLFW_KEY_O:
+				s_settings.singleStep = true;
+				break;
+
 			case GLFW_KEY_P:
 				s_settings.pause = !s_settings.pause;
 				break;
@@ -726,10 +730,10 @@ int main(int, char**)
 			// Zoom in
 			g_camera.m_zoom = S2_MAX(0.995f * g_camera.m_zoom, 0.02f);
 		}
-		else if (glfwGetKey(g_mainWindow, GLFW_KEY_O) == GLFW_PRESS)
-		{
-			s_settings.singleStep = true;
-		}
+		//else if (glfwGetKey(g_mainWindow, GLFW_KEY_O) == GLFW_PRESS)
+		//{
+		//	s_settings.singleStep = true;
+		//}
 
 		glfwGetWindowSize(g_mainWindow, &g_camera.m_width, &g_camera.m_height);
 		g_camera.m_width = int(g_camera.m_width / s_windowScale);
@@ -783,11 +787,11 @@ int main(int, char**)
 
 		if (s_settings.pause)
 		{
-			if (s_settings.singleStep)
-			{
-				s_settings.singleStep = 0;
-			}
-			else
+			//if (s_settings.singleStep)
+			//{
+			//	s_settings.singleStep = false;
+			//}
+			//else
 			{
 				s_settings.timeStep = 0.0f;
 			}
@@ -814,6 +818,8 @@ int main(int, char**)
 				stepCount = s_samples[i]->m_stepCount;
 			}
 		}
+
+		s_settings.singleStep = false;
 
 		g_draw.Flush();
 

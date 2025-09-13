@@ -129,7 +129,7 @@ void Sample::Step(Settings& settings, s2Color bodyColor)
 	bodyColor.a = 0.6f;
 	g_draw.m_debugDraw.dynamicBodyColor = bodyColor;
 
-	if (settings.timeStep > 0.0f)
+	if (settings.pause == false || settings.singleStep == true)
 	{
 		for (int i = 0; i < settings.multiSteps; ++i)
 		{
