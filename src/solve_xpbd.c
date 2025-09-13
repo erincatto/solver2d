@@ -85,6 +85,7 @@ static void s2PrepareContacts_XPBD(s2World* world, s2ContactConstraint* constrai
 	}
 }
 
+// Erin: I did not write this but I forget who wrote it
 static void s2WarmStartContactPositions_XPBD(s2World* world, s2ContactConstraint* constraints, int constraintCount, float h)
 {
 	s2Body* bodies = world->bodies;
