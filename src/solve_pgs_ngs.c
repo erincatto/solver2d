@@ -111,6 +111,29 @@ static void s2SolveContacts_PGS(s2World* world, s2ContactConstraint* constraints
 	}
 }
 
+// Nonlinear Gauss-Seidel (NGS)
+// This is a technique for correcting constraint position errors using pseudo velocities
+// that don't affect kinetic energy. At least not directly.
+//
+// This is similar to position based dynamics (PBD) except the position corrections
+// don't feed into the body velocity. This is very nice because large position errors
+// don't lead to large velocities.
+//
+// Unfortunately NGS can converge slowly and may conflict with velocity constraints leading
+// to instability. The lack of velocity based position correction is a nice property but
+// it also leads to slower convergence than PBD. By driving velocity, PBD is somewhat like
+// successive over-relaxation.
+//
+// PGS-NGS is like applying two separate optimizers to the same problem, but
+// they may have different gradients and this can lead to instability.
+//
+// NGS by itself can have poor convergence for large systems when there is large constraint error.
+// Large constraint errors can lead to large pseudo-torques and high non-linearity.
+// I've experimented with using inertia scaling to act as a pre-conditioner when position error is large.
+// However, it still has the two-optimizer problem and can still become unstable.
+//
+// I have not found any effective way to improve the convergence of NGS.
+
 void s2Solve_PGS_NGS(s2World* world, s2StepContext* context)
 {
 	s2Contact* contacts = world->contacts;

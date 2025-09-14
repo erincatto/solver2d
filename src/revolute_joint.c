@@ -287,19 +287,6 @@ void s2SolveRevolute(s2Joint* base, s2StepContext* context, float h)
 	bodyB->angularVelocity = wB;
 }
 
-// Nonlinear Gauss-Seidel (NGS)
-// This is similar to position based dynamics (PBD) except the position corrects
-// don't feed into the body velocity. This is very nice because large position errors
-// don't lead to large velocities.
-//
-// Unfortunately NGS can converge slowly and may conflict with velocity constraints leading
-// to instability. PGS-NGS is like applying two separate optimizers to the same problem, but
-// they may have different gradients and this can lead to instability.
-//
-// NGS by itself can have poor convergence for large systems when there is large constraint error.
-// Large constraint errors can lead to large pseudo-torques and high non-linearity.
-// I've experimented with using inertia scaling to act as a pre-conditioner when position error is large.
-// However, it still has the two-optimizer problem and can still become unstable.
 void s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
 {
 	S2_ASSERT(base->type == s2_revoluteJoint);
@@ -360,12 +347,21 @@ void s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
 		//}
 
 		float lengthC = s2Length(C);
-		float threshold = 10.0f * s2_linearSlop;
+		float threshold = 50.0f * s2_linearSlop;
+		float inertiaScale = 1.0f;
 		if (lengthC > threshold)
 		{
 			float s = threshold / lengthC;
-			joint->inertiaScale = 0.95f * joint->inertiaScale + 0.05f * s * s;
+			joint->impulse.x *= powf(s, 0.25f);
+			joint->impulse.y *= powf(s, 0.25f);
+			inertiaScale = s * s;
 		}
+
+		// smoother
+		joint->inertiaScale = 0.9f * joint->inertiaScale + 0.1f * inertiaScale;
+
+		//joint->impulse.x *= powf(joint->inertiaScale, 0.25f);
+		//joint->impulse.y *= powf(joint->inertiaScale, 0.25f);
 
 		//float tol = 0.5f * s2_linearSlop;
 		//if (i > 0 & -tol < C.x & C.x < tol & -tol < C.y & C.y < tol)
