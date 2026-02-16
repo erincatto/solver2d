@@ -960,3 +960,53 @@ public:
 };
 
 static int sampleCardHouse = RegisterSample("Contact", "Card House", CardHouse::Create);
+
+class CircleStack : public Sample
+{
+public:
+	CircleStack(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		if (settings.restart == false)
+		{
+			g_camera.m_center = {0.0f, 8.0f};
+			g_camera.m_zoom = 0.6f;
+		}
+
+		// Create ground
+		{
+			s2BodyDef bodyDef = s2_defaultBodyDef;
+			bodyDef.position = {0.0f, -1.0f};
+			s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
+
+			s2Polygon box = s2MakeBox(100.0f, 1.0f);
+			s2ShapeDef shapeDef = s2_defaultShapeDef;
+			s2CreatePolygonShape(groundId, &shapeDef, &box);
+		}
+
+		s2ShapeDef shapeDef = s2_defaultShapeDef;
+		s2BodyDef bodyDef = s2_defaultBodyDef;
+		bodyDef.type = s2_dynamicBody;
+
+		// Create vertical stack of circles above the box
+		s2Circle circle = {s2Vec2_zero, 0.5f};
+
+		int circleCount = 40;
+		float y = 0.5f * circle.radius; // Start above the box
+
+		for (int i = 0; i < circleCount; ++i)
+		{
+			bodyDef.position.y = y;
+			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+			s2CreateCircleShape(bodyId, &shapeDef, &circle);
+			y += 0.5f * circle.radius;
+		}
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new CircleStack(settings, solverType);
+	}
+};
+
+static int sampleCircleStack = RegisterSample("Contact", "Circle Stack", CircleStack::Create);

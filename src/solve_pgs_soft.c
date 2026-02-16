@@ -53,7 +53,7 @@ static void s2SolveContacts_PGS_Soft(s2World* world, s2ContactConstraint* constr
 			}
 			else if (useBias)
 			{
-				bias = S2_MAX(cp->biasCoefficient * cp->separation, -s2_maxBaumgarteVelocity);
+				bias = S2_MAX(cp->biasCoefficient * cp->separation, -0.5f * s2_maxBaumgarteVelocity);
 				massScale = cp->massCoefficient;
 				impulseScale = cp->impulseCoefficient;
 			}

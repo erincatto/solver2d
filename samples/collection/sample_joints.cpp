@@ -535,3 +535,75 @@ public:
 };
 
 static int sampleJointGrid = RegisterSample("Joints", "Joint Grid", JointGrid::Create);
+
+
+class StretchedChain : public Sample
+{
+public:
+	StretchedChain(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		if (settings.restart == false)
+		{
+			g_camera.m_center = {0.0f, 0.0f};
+			g_camera.m_zoom = 2.5f;
+		}
+
+		s2BodyId groundId = s2_nullBodyId;
+		{
+			s2BodyDef bodyDef = s2_defaultBodyDef;
+			groundId = s2CreateBody(m_worldId, &bodyDef);
+		}
+
+		int count = 40;
+		float length = 1.0f;
+		float base = length * count;
+
+		s2ShapeDef shapeDef = s2_defaultShapeDef;
+		shapeDef.filter.maskBits = 0;
+
+		s2Circle circle = {0};
+		circle.radius = 0.2f;
+
+		s2RevoluteJointDef jointDef = s2DefaultRevoluteJointDef();
+		jointDef.drawSize = 0.2f;
+		jointDef.bodyIdA = groundId;
+		jointDef.localAnchorA.y = base - 0.5f * length;
+		jointDef.localAnchorB.y = 0.5f * length;
+
+		float y = base - 2.0f * length;
+
+		s2BodyDef bodyDef = s2_defaultBodyDef;
+		bodyDef.type = s2_dynamicBody;
+
+		for (int i = 0; i < count; ++i)
+		{
+			bodyDef.position.y = y;
+
+			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+			s2CreateCircleShape(bodyId, &shapeDef, &circle);
+
+			jointDef.bodyIdB = bodyId;
+			s2CreateRevoluteJoint(m_worldId, &jointDef);
+
+			jointDef.bodyIdA = bodyId;
+			jointDef.localAnchorA.y = -0.5f * length;
+			y -= 2.0f * length;
+		}
+	}
+
+	void Step(Settings& settings, s2Color bodyColor) override
+	{
+		Sample::Step(settings, bodyColor);
+
+		s2Color c = s2MakeColor(s2_colorMistyRose1, 1.0f);
+		g_draw.DrawSegment({-2.0f, 0.0f}, {2.0f, 0.0f}, c);
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new StretchedChain(settings, solverType);
+	}
+};
+
+static int sampleStretchedChain = RegisterSample("Joints", "Stretched Chain", StretchedChain::Create);

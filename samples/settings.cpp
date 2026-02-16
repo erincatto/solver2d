@@ -117,5 +117,5 @@ void Settings::Load()
 
 	free(data);
 
-	enabledSolvers[s2_solverTGS_NGS] = true;
+	enabledSolvers[s2_solverPGS_Soft] = true;
 }

@@ -346,19 +346,19 @@ void s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
 		//	bodyB->largeError = true;
 		//}
 
-		float lengthC = s2Length(C);
-		float threshold = 50.0f * s2_linearSlop;
-		float inertiaScale = 1.0f;
-		if (lengthC > threshold)
-		{
-			float s = threshold / lengthC;
-			joint->impulse.x *= powf(s, 0.25f);
-			joint->impulse.y *= powf(s, 0.25f);
-			inertiaScale = s * s;
-		}
+		//float lengthC = s2Length(C);
+		//float threshold = 50.0f * s2_linearSlop;
+		//float inertiaScale = 1.0f;
+		//if (lengthC > threshold)
+		//{
+		//	float s = threshold / lengthC;
+		//	joint->impulse.x *= powf(s, 0.25f);
+		//	joint->impulse.y *= powf(s, 0.25f);
+		//	inertiaScale = s * s;
+		//}
 
 		// smoother
-		joint->inertiaScale = 0.9f * joint->inertiaScale + 0.1f * inertiaScale;
+		//joint->inertiaScale = 0.9f * joint->inertiaScale + 0.1f * inertiaScale;
 
 		//joint->impulse.x *= powf(joint->inertiaScale, 0.25f);
 		//joint->impulse.y *= powf(joint->inertiaScale, 0.25f);
@@ -370,7 +370,8 @@ void s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
 		//}
 
 		float mA = joint->invMassA, mB = joint->invMassB;
-		float iA = joint->inertiaScale * bodyA->invI, iB = joint->inertiaScale * bodyB->invI;
+		//float iA = joint->inertiaScale * bodyA->invI, iB = joint->inertiaScale * bodyB->invI;
+		float iA = joint->invIA, iB = joint->invIB;
 
 #if S2_FRESH_PIVOT_MASS == 1
 		s2Mat22 K;
@@ -390,11 +391,11 @@ void s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
 		qB = s2IntegrateRot(qB, iB * s2Cross(rB, impulse));
 
 
-		//rA = s2RotateVector(qA, joint->localAnchorA);
-		//rB = s2RotateVector(qB, joint->localAnchorB);
-		//s2Vec2 C2 = s2Add(s2Add(s2Sub(dcB, dcA), s2Sub(rB, rA)), joint->centerDiff0);
-		//C2.x += 0.0f;
-		//(void)C2;
+		rA = s2RotateVector(qA, joint->localAnchorA);
+		rB = s2RotateVector(qB, joint->localAnchorB);
+		s2Vec2 C2 = s2Add(s2Add(s2Sub(dcB, dcA), s2Sub(rB, rA)), joint->centerDiff0);
+		C2.x += 0.0f;
+		(void)C2;
 	}
 
 	bodyA->deltaPosition = dcA;
@@ -453,7 +454,7 @@ void s2PrepareRevolute_Soft(s2Joint* base, s2StepContext* context, float h, floa
 	joint->pivotMass = s2GetInverse22(K);
 
 	{
-		const float zeta = 1.0f;
+		const float zeta = 10.0f;
 		float omega = 2.0f * s2_pi * hertz;
 		joint->biasCoefficient = omega / (2.0f * zeta + h * omega);
 		float c = h * omega * (2.0f * zeta + h * omega);

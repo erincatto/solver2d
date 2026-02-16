@@ -113,7 +113,7 @@ static void s2SolveContacts_TGS_Fixed(s2World* world, s2ContactConstraint* const
 			}
 			else if (useBias)
 			{
-				bias = S2_MAX(cp->biasCoefficient * s, -s2_maxBaumgarteVelocity);
+				bias = S2_MAX(cp->biasCoefficient * s, -0.5f * s2_maxBaumgarteVelocity);
 				massScale = cp->massCoefficient;
 				impulseScale = cp->impulseCoefficient;
 			}
@@ -214,7 +214,7 @@ void s2Solve_SoftStep(s2World* world, s2StepContext* context)
 	float inv_h = context->inv_h;
 
 	float contactHertz = S2_MIN(s2_contactHertz, 0.25f * inv_h);
-	float jointHertz = S2_MIN(s2_jointHertz, 0.125f * inv_h);
+	float jointHertz = S2_MIN(s2_jointHertz, 0.25f * inv_h);
 
 	// Loops
 	// body: 1 + 2 * substepCount
