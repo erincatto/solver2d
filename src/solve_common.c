@@ -130,7 +130,7 @@ void s2PrepareContacts_PGS(s2World* world, s2ContactConstraint* constraints, int
 			const s2ManifoldPoint* mp = manifold->points + j;
 			s2ContactConstraintPoint* cp = constraint->points + j;
 
-			if (warmStart)
+			if (warmStart && cp->separation <= 0.0f)
 			{
 				cp->normalImpulse = mp->normalImpulse;
 				cp->tangentImpulse = mp->tangentImpulse;
@@ -328,7 +328,6 @@ void s2WarmStartContacts(s2World* world, s2ContactConstraint* constraints, int c
 void s2SolveContact_NGS(s2World* world, s2ContactConstraint* constraints, int constraintCount)
 {
 	s2Body* bodies = world->bodies;
-	float slop = s2_linearSlop;
 
 	for (int i = 0; i < constraintCount; ++i)
 	{
@@ -353,6 +352,11 @@ void s2SolveContact_NGS(s2World* world, s2ContactConstraint* constraints, int co
 		for (int j = 0; j < pointCount; ++j)
 		{
 			s2ContactConstraintPoint* cp = constraint->points + j;
+			if (cp->separation > 0.0f)
+			{
+				// In PGS NGS there are no speculative contact points
+				continue;
+			}
 
 			s2Vec2 rA = s2RotateVector(qA, cp->localAnchorA);
 			s2Vec2 rB = s2RotateVector(qB, cp->localAnchorB);
@@ -363,7 +367,7 @@ void s2SolveContact_NGS(s2World* world, s2ContactConstraint* constraints, int co
 
 			// Prevent large corrections. Need to maintain a small overlap to avoid overshoot.
 			// This improves stacking stability significantly.
-			float C = S2_CLAMP(separation + slop, -s2_maxLinearCorrection, 0.0f);
+			float C = S2_CLAMP(s2_baumgarte * (separation + s2_linearSlop), -s2_maxLinearCorrection, 0.0f);
 
 			// Compute the effective mass.
 			float rnA = s2Cross(rA, normal);
@@ -371,7 +375,7 @@ void s2SolveContact_NGS(s2World* world, s2ContactConstraint* constraints, int co
 			float K = mA + mB + iA * rnA * rnA + iB * rnB * rnB;
 
 			// Compute normal impulse
-			float impulse = K > 0.0f ? -s2_baumgarte * C / K : 0.0f;
+			float impulse = K > 0.0f ? -C / K : 0.0f;
 
 			s2Vec2 P = s2MulSV(impulse, normal);
 

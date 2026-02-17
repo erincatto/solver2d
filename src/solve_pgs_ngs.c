@@ -1,11 +1,8 @@
 // SPDX-FileCopyrightText: 2024 Erin Catto
 // SPDX-License-Identifier: MIT
 
-#include "allocate.h"
-#include "array.h"
 #include "body.h"
 #include "contact.h"
-#include "core.h"
 #include "joint.h"
 #include "solvers.h"
 #include "stack_allocator.h"
@@ -42,39 +39,17 @@ static void s2SolveContacts_PGS(s2World* world, s2ContactConstraint* constraints
 		s2Vec2 tangent = s2CrossVS(normal, 1.0f);
 		float friction = constraint->friction;
 
+		// Box2D 2.4 solves friction first
 		for (int j = 0; j < pointCount; ++j)
 		{
 			s2ContactConstraintPoint* cp = constraint->points + j;
 
-			// static anchors
-			s2Vec2 rA = cp->rA0;
-			s2Vec2 rB = cp->rB0;
-
-			// Relative velocity at contact
-			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rB));
-			s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, rA));
-			float vn = s2Dot(s2Sub(vrB, vrA), normal);
-
-			// Compute normal impulse
-			float impulse = -cp->normalMass * (vn + cp->biasCoefficient * cp->separation * inv_dt);
-
-			// Clamp the accumulated impulse
-			float newImpulse = S2_MAX(cp->normalImpulse + impulse, 0.0f);
-			impulse = newImpulse - cp->normalImpulse;
-			cp->normalImpulse = newImpulse;
-
-			// Apply contact impulse
-			s2Vec2 P = s2MulSV(impulse, normal);
-			vA = s2MulSub(vA, mA, P);
-			wA -= iA * s2Cross(rA, P);
-
-			vB = s2MulAdd(vB, mB, P);
-			wB += iB * s2Cross(rB, P);
-		}
-
-		for (int j = 0; j < pointCount; ++j)
-		{
-			s2ContactConstraintPoint* cp = constraint->points + j;
+			// No speculative for PGS
+			if (cp->separation > 0.0f)
+			{
+				cp->tangentImpulse = 0.0f;
+				continue;
+			}
 
 			// static anchors
 			s2Vec2 rA = cp->rA0;
@@ -104,12 +79,72 @@ static void s2SolveContacts_PGS(s2World* world, s2ContactConstraint* constraints
 			wB += iB * s2Cross(cp->rB0, P);
 		}
 
+		for (int j = 0; j < pointCount; ++j)
+		{
+			s2ContactConstraintPoint* cp = constraint->points + j;
+
+			// No speculative for PGS
+			if (cp->separation > 0.0f)
+			{
+				cp->normalImpulse = 0.0f;
+				continue;
+			}
+
+			// static anchors
+			s2Vec2 rA = cp->rA0;
+			s2Vec2 rB = cp->rB0;
+
+			// Relative velocity at contact
+			s2Vec2 vrB = s2Add(vB, s2CrossSV(wB, rB));
+			s2Vec2 vrA = s2Add(vA, s2CrossSV(wA, rA));
+			float vn = s2Dot(s2Sub(vrB, vrA), normal);
+
+			// Compute normal impulse
+			float impulse = -cp->normalMass * vn;
+
+			// Clamp the accumulated impulse
+			float newImpulse = S2_MAX(cp->normalImpulse + impulse, 0.0f);
+			impulse = newImpulse - cp->normalImpulse;
+			cp->normalImpulse = newImpulse;
+
+			// Apply contact impulse
+			s2Vec2 P = s2MulSV(impulse, normal);
+			vA = s2MulSub(vA, mA, P);
+			wA -= iA * s2Cross(rA, P);
+
+			vB = s2MulAdd(vB, mB, P);
+			wB += iB * s2Cross(rB, P);
+		}
+
 		bodyA->linearVelocity = vA;
 		bodyA->angularVelocity = wA;
 		bodyB->linearVelocity = vB;
 		bodyB->angularVelocity = wB;
 	}
 }
+
+// Nonlinear Gauss-Seidel (NGS)
+// This is a technique for correcting constraint position errors using pseudo velocities
+// that don't affect kinetic energy. At least not directly.
+//
+// This is similar to position based dynamics (PBD) except the position corrections
+// don't feed into the body velocity. This is very nice because large position errors
+// don't lead to large velocities.
+//
+// Unfortunately NGS can converge slowly and may conflict with velocity constraints leading
+// to instability. The lack of velocity based position correction is a nice property but
+// it also leads to slower convergence than PBD. By driving velocity, PBD is somewhat like
+// successive over-relaxation.
+//
+// PGS-NGS is like applying two separate optimizers to the same problem, but
+// they may have different gradients and this can lead to instability.
+//
+// NGS by itself can have poor convergence for large systems when there is large constraint error.
+// Large constraint errors can lead to large pseudo-torques and high non-linearity.
+// I've experimented with using inertia scaling to act as a pre-conditioner when position error is large.
+// However, it still has the two-optimizer problem and can still become unstable.
+//
+// I have not found any effective way to improve the convergence of NGS.
 
 void s2Solve_PGS_NGS(s2World* world, s2StepContext* context)
 {

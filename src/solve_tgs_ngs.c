@@ -200,7 +200,7 @@ static void s2SolveContacts_TGS(s2World* world, s2ContactConstraint* constraints
 	}
 }
 
-// TGS_NGS does substepping of rigid contacts with speculation.
+// TGS_NGS does sub-stepping of rigid contacts with speculation.
 // Each substep includes a single PGS iteration on velocities and
 // a single NGS iteration on positions using pseudo velocities.
 // TGS_NGS suffers from excessive and inaccurate warm starting, which leads to overly bouncy collisions.

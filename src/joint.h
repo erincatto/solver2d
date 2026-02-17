@@ -77,6 +77,8 @@ typedef struct s2RevoluteJoint
 	float massCoefficient;
 	float impulseCoefficient;
 	float axialMass;
+
+	float inertiaScale;
 } s2RevoluteJoint;
 
 /// The base joint class. Joints are used to constraint two bodies together in

@@ -4,7 +4,6 @@
 #include "allocate.h"
 #include "body.h"
 #include "contact.h"
-#include "core.h"
 #include "joint.h"
 #include "solvers.h"
 #include "stack_allocator.h"
@@ -12,8 +11,15 @@
 
 #include <stdbool.h>
 
+// The Jacobi solver solves constraints independently. Then resulting impulses are apply to the velocities.
+// This has quite poor behavior but has the benefit of being easy to make parallel. There has been some effort
+// to improve the behavior. See:
+// http://www.richardtonge.com/papers/Tonge-2012-MassSplittingForJitterFreeParallelRigidBodySimulation-preprint.pdf
+// https://github.com/michalev-k/solver2d
+
 // This uses fixed anchors
-static void s2SolveContacts_PGS_Soft(s2World* world, s2ContactConstraint* constraints, int constraintCount, float inv_h, bool useBias)
+static void s2SolveContacts_Jacobi_Soft(s2World* world, s2ContactConstraint* constraints, int constraintCount, float inv_h,
+									 bool useBias)
 {
 	s2Body* bodies = world->bodies;
 
@@ -53,11 +59,11 @@ static void s2SolveContacts_PGS_Soft(s2World* world, s2ContactConstraint* constr
 			}
 			else if (useBias)
 			{
-				bias = S2_MAX(cp->biasCoefficient * cp->separation, -0.5f * s2_maxBaumgarteVelocity);
+				bias = S2_MAX(cp->biasCoefficient * cp->separation, -s2_maxBaumgarteVelocity);
 				massScale = cp->massCoefficient;
 				impulseScale = cp->impulseCoefficient;
 			}
-			
+
 			// static anchors
 			s2Vec2 rA = cp->rA0;
 			s2Vec2 rB = cp->rB0;
@@ -117,14 +123,15 @@ static void s2SolveContacts_PGS_Soft(s2World* world, s2ContactConstraint* constr
 			wB += iB * s2Cross(rB, P);
 		}
 
-		bodyA->linearVelocity = vA;
-		bodyA->angularVelocity = wA;
-		bodyB->linearVelocity = vB;
-		bodyB->angularVelocity = wB;
+		bodyA->dv = s2Add(bodyA->dv, s2Sub(vA, bodyA->linearVelocity));
+		bodyA->dw += wA - bodyA->angularVelocity;
+
+		bodyB->dv = s2Add(bodyB->dv, s2Sub(vB, bodyB->linearVelocity));
+		bodyB->dw += wB - bodyB->angularVelocity;
 	}
 }
 
-void s2Solve_PGS_Soft(s2World* world, s2StepContext* context)
+void s2Solve_Jacobi(s2World* world, s2StepContext* context)
 {
 	s2Contact* contacts = world->contacts;
 	int contactCapacity = world->contactPool.capacity;
@@ -162,14 +169,29 @@ void s2Solve_PGS_Soft(s2World* world, s2StepContext* context)
 	float contactHertz = S2_MIN(s2_contactHertz, 0.333f * inv_h);
 	float jointHertz = S2_MIN(s2_jointHertz, 0.5f * inv_h);
 
-	// Loops: body 3, constraint 2 + vel iter + pos iter
+	// Loops: body 2, constraint 2 + iterations
+
+	// Reset delta velocities for Jacobi
+	s2Body* bodies = world->bodies;
+	int bodyCapacity = world->bodyPool.capacity;
+	for (int i = 0; i < bodyCapacity; ++i)
+	{
+		s2Body* body = bodies + i;
+		if (s2IsFree(&body->object))
+		{
+			continue;
+		}
+
+		body->dv = s2Vec2_zero;
+		body->dw = 0.0f;
+	}
 
 	// body loop
 	s2IntegrateVelocities(world, h);
 
 	// constraint loop
 	s2PrepareContacts_Soft(world, constraints, constraintCount, context, h, contactHertz);
-	
+
 	if (context->warmStart)
 	{
 		s2WarmStartContacts(world, constraints, constraintCount);
@@ -193,7 +215,7 @@ void s2Solve_PGS_Soft(s2World* world, s2StepContext* context)
 
 	// constraint loop * velocityIterations
 	bool useBias = true;
-	for (int iter = 0; iter < velocityIterations; ++iter)
+	for (int iteration = 0; iteration < velocityIterations; ++iteration)
 	{
 		for (int i = 0; i < jointCapacity; ++i)
 		{
@@ -206,7 +228,21 @@ void s2Solve_PGS_Soft(s2World* world, s2StepContext* context)
 			s2SolveJoint_Soft(joint, context, h, inv_h, useBias);
 		}
 
-		s2SolveContacts_PGS_Soft(world, constraints, constraintCount, inv_h, useBias);
+		s2SolveContacts_Jacobi_Soft(world, constraints, constraintCount, inv_h, useBias);
+
+		for (int i = 0; i < bodyCapacity; ++i)
+		{
+			s2Body* body = bodies + i;
+			if (s2IsFree(&body->object))
+			{
+				continue;
+			}
+
+			body->linearVelocity = s2Add(body->linearVelocity, body->dv);
+			body->angularVelocity += body->dw;
+			body->dv = s2Vec2_zero;
+			body->dw = 0.0f;
+		}
 	}
 
 	// Update positions from velocity
@@ -216,7 +252,7 @@ void s2Solve_PGS_Soft(s2World* world, s2StepContext* context)
 	// Relax
 	// constraint loop * positionIterations
 	useBias = false;
-	for (int iter = 0; iter < positionIterations; ++iter)
+	for (int iteration = 0; iteration < positionIterations; ++iteration)
 	{
 		for (int i = 0; i < jointCapacity; ++i)
 		{
@@ -229,7 +265,21 @@ void s2Solve_PGS_Soft(s2World* world, s2StepContext* context)
 			s2SolveJoint_Soft(joint, context, h, inv_h, useBias);
 		}
 
-		s2SolveContacts_PGS_Soft(world, constraints, constraintCount, inv_h, useBias);
+		s2SolveContacts_Jacobi_Soft(world, constraints, constraintCount, inv_h, useBias);
+
+		for (int i = 0; i < bodyCapacity; ++i)
+		{
+			s2Body* body = bodies + i;
+			if (s2IsFree(&body->object))
+			{
+				continue;
+			}
+
+			body->linearVelocity = s2Add(body->linearVelocity, body->dv);
+			body->angularVelocity += body->dw;
+			body->dv = s2Vec2_zero;
+			body->dw = 0.0f;
+		}
 	}
 
 	// body loop

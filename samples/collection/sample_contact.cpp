@@ -201,25 +201,20 @@ public:
 			g_camera.m_zoom = 1.0f;
 		}
 
-		float extent = 1.0f;
 
 		s2BodyDef bodyDef = s2_defaultBodyDef;
 		s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
 
-		float groundWidth = 66.0f * extent;
 		s2ShapeDef shapeDef = s2_defaultShapeDef;
 		shapeDef.density = 1.0f;
 
-		s2Segment segment = {{-0.5f * 2.0f * groundWidth, 0.0f}, {0.5f * 2.0f * groundWidth, 0.0f}};
+		s2Segment segment = {{-20.0f, 0.0f}, {20.0f, 0.0f}};
 		s2CreateSegmentShape(groundId, &shapeDef, &segment);
 
-		bodyDef.type = s2_dynamicBody;
-
-		s2Vec2 points[3] = {{-0.5f * extent, 0.0f}, {0.5f * extent, 0.0f}, {0.0f, 1.0f * extent}};
-		s2Hull hull = s2ComputeHull(points, 3);
-		s2Polygon smallTriangle = s2MakePolygon(&hull);
+		float extent = 1.0f;
 		s2Polygon smallBox = s2MakeBox(0.5f * extent, 0.5f * extent);
 		s2Polygon bigBox = s2MakeBox(10.0f * extent, 10.0f * extent);
+		bodyDef.type = s2_dynamicBody;
 
 		{
 			bodyDef.position = {-9.0f * extent, 0.5f * extent};
@@ -246,7 +241,7 @@ public:
 	}
 };
 
-static int sampleHighMassRatio2 = RegisterSample("Contact", "HighMassRatio2", HighMassRatio2::Create);
+static int sampleHighMassRatio2 = RegisterSample("Contact", "High Mass Ratio 2", HighMassRatio2::Create);
 
 // Big box on small boxes with thick ground
 class HighMassRatio3 : public Sample
@@ -301,7 +296,7 @@ public:
 	}
 };
 
-static int sampleHighMassRatio3 = RegisterSample("Contact", "HighMassRatio3", HighMassRatio3::Create);
+static int sampleHighMassRatio3 = RegisterSample("Contact", "High Mass Ratio 3", HighMassRatio3::Create);
 
 class FrictionRamp : public Sample
 {
@@ -479,7 +474,7 @@ public:
 			bodyDef.type = s2_dynamicBody;
 
 			float shift = (i % 2 == 0 ? -offset : offset);
-			bodyDef.position = {shift, 0.5f + 1.0f * i};
+			bodyDef.position = {shift, 0.55f + 1.1f * i};
 			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
 
 			if (shapeType == e_circleShape)
@@ -538,15 +533,16 @@ public:
 		float h = 0.5f;
 		s2Polygon box = s2MakeSquare(h);
 
-		float shift = 1.0f * h;
+		float shiftX = 1.0f * h;
+		float shiftY = 1.0f * h;
 
 		for (int i = 0; i < baseCount; ++i)
 		{
-			float y = (2.0f * i + 1.0f) * shift;
+			float y = (2.0f * i + 1.0f) * shiftY;
 
 			for (int j = i; j < baseCount; ++j)
 			{
-				float x = (i + 1.0f) * shift + 2.0f * (j - i) * shift - h * baseCount;
+				float x = (i + 1.0f) * shiftX + 2.0f * (j - i) * shiftX - h * baseCount;
 
 				bodyDef.position = {x, y};
 
@@ -965,3 +961,50 @@ public:
 };
 
 static int sampleCardHouse = RegisterSample("Contact", "Card House", CardHouse::Create);
+
+class CircleStack : public Sample
+{
+public:
+	CircleStack(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		if (settings.restart == false)
+		{
+			g_camera.m_center = {0.0f, 8.0f};
+			g_camera.m_zoom = 0.6f;
+		}
+
+		// Create ground
+		{
+			s2BodyDef bodyDef = s2_defaultBodyDef;
+			s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
+
+			s2Segment segment = {{-40.0f, 0.0f}, {40.0f, 0.0f}};
+			s2ShapeDef shapeDef = s2_defaultShapeDef;
+			s2CreateSegmentShape(groundId, &shapeDef, &segment);
+		}
+
+		s2ShapeDef shapeDef = s2_defaultShapeDef;
+		s2BodyDef bodyDef = s2_defaultBodyDef;
+		bodyDef.type = s2_dynamicBody;
+
+		// Create vertical stack of circles above the box
+		s2Circle circle = {s2Vec2_zero, 1.0f};
+
+		int circleCount = 10;
+
+		for (int i = 0; i < circleCount; ++i)
+		{
+			bodyDef.position.y = 4.0f + 3.0f * i;
+			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+			s2CreateCircleShape(bodyId, &shapeDef, &circle);
+		}
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new CircleStack(settings, solverType);
+	}
+};
+
+static int sampleCircleStack = RegisterSample("Contact", "Circle Stack", CircleStack::Create);

@@ -201,10 +201,15 @@ void s2World_Step(s2WorldId worldId, float timeStep, int velIters, int posIters,
 	context.bodies = world->bodies;
 	context.bodyCapacity = world->bodyPool.capacity;
 
-	if (timeStep > 0.0f)
+	//if (timeStep > 0.0f)
 	{
 		switch (world->solverType)
 		{
+			case s2_solverJacobi:
+				//context.iterations += 4;
+				s2Solve_Jacobi(world, &context);
+				break;
+
 			case s2_solverPGS:
 				//context.iterations += 4;
 				s2Solve_PGS(world, &context);

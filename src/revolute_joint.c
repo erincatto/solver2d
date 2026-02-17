@@ -44,11 +44,11 @@ void s2PrepareRevolute(s2Joint* base, s2StepContext* context, bool warmStart)
 	s2RevoluteJoint* joint = &base->revoluteJoint;
 	joint->localAnchorA = s2Sub(base->localOriginAnchorA, bodyA->localCenter);
 	joint->invMassA = bodyA->invMass;
-	joint->invIA = bodyA->invI;
+	joint->invIA = joint->inertiaScale * bodyA->invI;
 
 	joint->localAnchorB = s2Sub(base->localOriginAnchorB, bodyB->localCenter);
 	joint->invMassB = bodyB->invMass;
-	joint->invIB = bodyB->invI;
+	joint->invIB = joint->inertiaScale * bodyB->invI;
 
 	joint->centerDiff0 = s2Sub(bodyB->position, bodyA->position);
 
@@ -223,6 +223,66 @@ void s2SolveRevolute(s2Joint* base, s2StepContext* context, float h)
 		s2Vec2 rA = s2RotateVector(qA, joint->localAnchorA);
 		s2Vec2 rB = s2RotateVector(qB, joint->localAnchorB);
 
+#if 0
+		// geometric stiffness
+		// J = [-I -r1_skew I r2_skew ]
+		// JT * lambda = [-lambda;
+		// dJT/dx * lambda = -skew(lambda) * skew(r)
+		//
+		float kA = fabsf(s2Cross(joint->impulse, rA));
+		float kB = fabsf(s2Cross(joint->impulse, rB));
+
+		//float iAt = 1.0f / (1.0f / iA + h * kA);
+		//float iBt = 1.0f / (1.0f / iB + h * kB);
+		float iAt = iA;
+		float iBt = iB;
+
+		if (h * kA * iA > 4.0f)
+		{
+			iAt = 1.0f / (1.0f / iA + 0.5f * (h * kA - 4.0f / iA) );
+		}
+
+		if (h * kB * iB > 4.0f)
+		{
+			iBt = 1.0f / (1.0f / iB + 0.5f * (h * kB - 4.0f / iB) );
+		}
+
+		if (iAt > iA)
+		{
+			iAt += 0.0f;
+		}
+
+		if (iBt > iB)
+		{
+			iBt += 0.0f;
+		}
+
+		s2Mat22 K;
+		K.cx.x = mA + mB + rA.y * rA.y * iAt + rB.y * rB.y * iBt;
+		K.cy.x = -rA.y * rA.x * iAt - rB.y * rB.x * iBt;
+		K.cx.y = K.cy.x;
+		K.cy.y = mA + mB + rA.x * rA.x * iAt + rB.x * rB.x * iBt;
+		joint->pivotMass = s2GetInverse22(K);
+#elif 0
+		// Use a common point even when stretched.
+		s2Vec2 cA = s2Add(bodyA->position, bodyA->deltaPosition);
+		s2Vec2 cB = s2Add(bodyB->position, bodyB->deltaPosition);
+		s2Vec2 pA = s2Add(cA, rA);
+		s2Vec2 pB = s2Add(cB, rB);
+		s2Vec2 p = s2Lerp(pA, pB, 0.5f);
+		s2Vec2 rA0 = rA;
+		s2Vec2 rB0 = rB;
+		rA = s2Sub(p, cA);
+		rB = s2Sub(p, cB);
+
+		s2Mat22 K;
+		K.cx.x = mA + mB + rA.y * rA.y * iA + rB.y * rB.y * iB;
+		K.cy.x = -rA.y * rA.x * iA - rB.y * rB.x * iB;
+		K.cx.y = K.cy.x;
+		K.cy.y = mA + mB + rA.x * rA.x * iA + rB.x * rB.x * iB;
+		joint->pivotMass = s2GetInverse22(K);
+#endif
+
 		s2Vec2 Cdot = s2Sub(s2Add(vB, s2CrossSV(wB, rB)), s2Add(vA, s2CrossSV(wA, rA)));
 		s2Vec2 impulse = s2MulMV(joint->pivotMass, s2Neg(Cdot));
 
@@ -286,15 +346,48 @@ void s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
 	}
 
 	// Solve point-to-point constraint.
+	for (int i = 0; i < 1; ++i)
 	{
 		s2Vec2 rA = s2RotateVector(qA, joint->localAnchorA);
 		s2Vec2 rB = s2RotateVector(qB, joint->localAnchorB);
 
 		s2Vec2 C = s2Add(s2Add(s2Sub(dcB, dcA), s2Sub(rB, rA)), joint->centerDiff0);
 
+		//float largeTol = 100.0f * s2_linearSlop;
+		//joint->largeError = C.x < -largeTol | largeTol < C.x | C.y < -largeTol | largeTol < C.y;
+		//if (joint->largeError)
+		//{
+		//	bodyA->largeError = true;
+		//	bodyB->largeError = true;
+		//}
+
+		//float lengthC = s2Length(C);
+		//float threshold = 50.0f * s2_linearSlop;
+		//float inertiaScale = 1.0f;
+		//if (lengthC > threshold)
+		//{
+		//	float s = threshold / lengthC;
+		//	joint->impulse.x *= powf(s, 0.25f);
+		//	joint->impulse.y *= powf(s, 0.25f);
+		//	inertiaScale = s * s;
+		//}
+
+		// smoother
+		//joint->inertiaScale = 0.9f * joint->inertiaScale + 0.1f * inertiaScale;
+
+		//joint->impulse.x *= powf(joint->inertiaScale, 0.25f);
+		//joint->impulse.y *= powf(joint->inertiaScale, 0.25f);
+
+		//float tol = 0.5f * s2_linearSlop;
+		//if (i > 0 & -tol < C.x & C.x < tol & -tol < C.y & C.y < tol)
+		//{
+		//	break;
+		//}
+
 		float mA = joint->invMassA, mB = joint->invMassB;
+		//float iA = joint->inertiaScale * bodyA->invI, iB = joint->inertiaScale * bodyB->invI;
 		float iA = joint->invIA, iB = joint->invIB;
-		
+
 #if S2_FRESH_PIVOT_MASS == 1
 		s2Mat22 K;
 		K.cx.x = mA + mB + iA * rA.y * rA.y + iB * rB.y * rB.y;
@@ -311,6 +404,12 @@ void s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
 
 		dcB = s2MulAdd(dcB, mB, impulse);
 		qB = s2IntegrateRot(qB, iB * s2Cross(rB, impulse));
+
+		rA = s2RotateVector(qA, joint->localAnchorA);
+		rB = s2RotateVector(qB, joint->localAnchorB);
+		s2Vec2 C2 = s2Add(s2Add(s2Sub(dcB, dcA), s2Sub(rB, rA)), joint->centerDiff0);
+		C2.x += 0.0f;
+		(void)C2;
 	}
 
 	bodyA->deltaPosition = dcA;
@@ -365,11 +464,11 @@ void s2PrepareRevolute_Soft(s2Joint* base, s2StepContext* context, float h, floa
 	K.cy.x = -rA.y * rA.x * iA - rB.y * rB.x * iB;
 	K.cx.y = K.cy.x;
 	K.cy.y = mA + mB + rA.x * rA.x * iA + rB.x * rB.x * iB;
-	
+
 	joint->pivotMass = s2GetInverse22(K);
 
 	{
-		const float zeta = 1.0f;
+		const float zeta = 10.0f;
 		float omega = 2.0f * s2_pi * hertz;
 		joint->biasCoefficient = omega / (2.0f * zeta + h * omega);
 		float c = h * omega * (2.0f * zeta + h * omega);
@@ -527,7 +626,7 @@ void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float 
 			massScale = joint->massCoefficient;
 			impulseScale = joint->impulseCoefficient;
 		}
-		
+
 #if S2_FRESH_PIVOT_MASS == 1
 		s2Mat22 K;
 		K.cx.x = mA + mB + rA.y * rA.y * iA + rB.y * rB.y * iB;
@@ -608,7 +707,7 @@ void s2SolveRevolute_Baumgarte(s2Joint* base, s2StepContext* context, float h, f
 			{
 				bias = s2_baumgarte * inv_h * C;
 			}
-			
+
 			float Cdot = wB - wA;
 			float impulse = -joint->axialMass * (Cdot + bias);
 			float oldImpulse = joint->lowerImpulse;
@@ -662,7 +761,7 @@ void s2SolveRevolute_Baumgarte(s2Joint* base, s2StepContext* context, float h, f
 
 		s2Vec2 separation = s2Add(s2Add(s2Sub(dcB, dcA), s2Sub(rB, rA)), joint->centerDiff0);
 		s2Vec2 bias = s2MulSV(s2_baumgarte * inv_h, separation);
-		
+
 #if S2_FRESH_PIVOT_MASS == 1
 		s2Mat22 K;
 		K.cx.x = mA + mB + rA.y * rA.y * iA + rB.y * rB.y * iB;
@@ -728,7 +827,7 @@ void s2SolveRevolute_XPBD(s2Joint* base, s2StepContext* context, float inv_h)
 	S2_ASSERT(base->type == s2_revoluteJoint);
 
 	// joint grid sample blows up (more quickly) without compliance
-	//float compliance = 0.00001f * inv_h * inv_h;
+	// float compliance = 0.00001f * inv_h * inv_h;
 	float compliance = 0.0f;
 
 	s2RevoluteJoint* joint = &base->revoluteJoint;
@@ -770,7 +869,7 @@ void s2SolveRevolute_XPBD(s2Joint* base, s2StepContext* context, float inv_h)
 
 		assert(kA + kB > 0.0f);
 
-		//float lambda = -c / (kA + kB);
+		// float lambda = -c / (kA + kB);
 		float lambda = -c / (kA + kB + compliance);
 
 		s2Vec2 p = s2MulSV(lambda, n);

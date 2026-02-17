@@ -962,8 +962,7 @@ static void s2ValidateMetrics(const s2DynamicTree* tree, int32_t index)
 
 	int32_t height1 = tree->nodes[child1].height;
 	int32_t height2 = tree->nodes[child2].height;
-	int32_t height;
-	height = 1 + S2_MAX(height1, height2);
+	int32_t height = 1 + S2_MAX(height1, height2);
 	S2_ASSERT(node->height == height);
 
 	// s2Box aabb = s2AABB_Union(tree->nodes[child1].aabb, tree->nodes[child2].aabb);
