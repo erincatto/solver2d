@@ -263,9 +263,24 @@ void s2SolveRevolute(s2Joint* base, s2StepContext* context, float h)
 		K.cx.y = K.cy.x;
 		K.cy.y = mA + mB + rA.x * rA.x * iAt + rB.x * rB.x * iBt;
 		joint->pivotMass = s2GetInverse22(K);
-#else
-		float iAt = iA;
-		float iBt = iB;
+#elif 0
+		// Use a common point even when stretched.
+		s2Vec2 cA = s2Add(bodyA->position, bodyA->deltaPosition);
+		s2Vec2 cB = s2Add(bodyB->position, bodyB->deltaPosition);
+		s2Vec2 pA = s2Add(cA, rA);
+		s2Vec2 pB = s2Add(cB, rB);
+		s2Vec2 p = s2Lerp(pA, pB, 0.5f);
+		s2Vec2 rA0 = rA;
+		s2Vec2 rB0 = rB;
+		rA = s2Sub(p, cA);
+		rB = s2Sub(p, cB);
+
+		s2Mat22 K;
+		K.cx.x = mA + mB + rA.y * rA.y * iA + rB.y * rB.y * iB;
+		K.cy.x = -rA.y * rA.x * iA - rB.y * rB.x * iB;
+		K.cx.y = K.cy.x;
+		K.cy.y = mA + mB + rA.x * rA.x * iA + rB.x * rB.x * iB;
+		joint->pivotMass = s2GetInverse22(K);
 #endif
 
 		s2Vec2 Cdot = s2Sub(s2Add(vB, s2CrossSV(wB, rB)), s2Add(vA, s2CrossSV(wA, rA)));
@@ -389,7 +404,6 @@ void s2SolveRevolutePosition(s2Joint* base, s2StepContext* context)
 
 		dcB = s2MulAdd(dcB, mB, impulse);
 		qB = s2IntegrateRot(qB, iB * s2Cross(rB, impulse));
-
 
 		rA = s2RotateVector(qA, joint->localAnchorA);
 		rB = s2RotateVector(qB, joint->localAnchorB);

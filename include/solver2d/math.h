@@ -208,12 +208,19 @@ static inline s2Rot s2NormalizeRot(s2Rot q)
 
 static inline s2Rot s2IntegrateRot(s2Rot q1, float omegah)
 {
+#if 0
+	// Exact
+	float a = atan2f(q1.s, q1.c);
+	s2Rot q2 = s2MakeRot(a + omegah);
+	return q2;
+#else
 	// ds/dt = omega * cos(t)
 	// dc/dt = -omega * sin(t)
 	// s2 = s1 + omega * h * c1
 	// c2 = c1 - omega * h * s1
 	s2Rot q2 = {q1.s + omegah * q1.c, q1.c - omegah * q1.s};
 	return s2NormalizeRot(q2);
+#endif
 
 	// quaternion multiplication
 	// q1 * q2 = {cross(q1.v, q2.v) + q2.v * q1.s + q1.v * q2.s, q1.s * q2.s - dot(q1.v, q2.v)}

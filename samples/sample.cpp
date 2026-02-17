@@ -16,15 +16,13 @@
 
 Sample::Sample(const Settings& settings, s2SolverType solverType)
 {
-	s2Vec2 gravity = {0.0f, -10.0f};
-
 	s2WorldDef worldDef = s2DefaultWorldDef();
 	worldDef.solverType = solverType;
+	m_worldId = s2CreateWorld(&worldDef);
 
 	m_solverType = solverType;
-	m_worldId = s2CreateWorld(&worldDef);
 	m_mouseJointId = s2_nullJointId;
-
+	m_groundBodyId = s2_nullBodyId;
 	m_stepCount = 0;
 }
 

@@ -67,7 +67,6 @@ class Sample
 	s2WorldId m_worldId;
 	s2JointId m_mouseJointId;
 	int m_stepCount;
-	int m_textIncrement;
 };
 
 typedef Sample* SampleCreateFcn(const Settings& settings, s2SolverType solverType);

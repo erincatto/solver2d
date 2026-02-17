@@ -785,19 +785,12 @@ int main(int, char**)
 
 		s_settings.timeStep = s_settings.hertz > 0.0f ? 1.0f / s_settings.hertz : float(0.0f);
 
-		if (s_settings.pause)
+		if (s_settings.pause && s_settings.singleStep == false)
 		{
-			//if (s_settings.singleStep)
-			//{
-			//	s_settings.singleStep = false;
-			//}
-			//else
-			{
-				s_settings.timeStep = 0.0f;
-			}
+			s_settings.timeStep = 0.0f;
 
-			//g_draw.DrawString(5, s_settings.textLine, "****PAUSED****");
-			//s_settings.textLine += s_settings.textIncrement;
+			g_draw.DrawString(5, s_settings.textLine, "****PAUSED****");
+			s_settings.textLine += s_settings.textIncrement;
 		}
 
 		g_draw.m_debugDraw.drawShapes = s_settings.drawShapes;

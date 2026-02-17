@@ -210,7 +210,7 @@ void s2Solve_Jacobi(s2World* world, s2StepContext* context)
 
 	// constraint loop * velocityIterations
 	bool useBias = true;
-	for (int iter = 0; iter < velocityIterations; ++iter)
+	for (int iteration = 0; iteration < velocityIterations; ++iteration)
 	{
 		for (int i = 0; i < jointCapacity; ++i)
 		{
@@ -247,7 +247,7 @@ void s2Solve_Jacobi(s2World* world, s2StepContext* context)
 	// Relax
 	// constraint loop * positionIterations
 	useBias = false;
-	for (int iter = 0; iter < positionIterations; ++iter)
+	for (int iteration = 0; iteration < positionIterations; ++iteration)
 	{
 		for (int i = 0; i < jointCapacity; ++i)
 		{
