@@ -4,13 +4,18 @@
 #include "allocate.h"
 #include "body.h"
 #include "contact.h"
-#include "core.h"
 #include "joint.h"
 #include "solvers.h"
 #include "stack_allocator.h"
 #include "world.h"
 
 #include <stdbool.h>
+
+// The Jacobi solver solves constraints independently. Then resulting impulses are apply to the velocities.
+// This has quite poor behavior but has the benefit of being easy to make parallel. There has been some effort
+// to improve the behavior. See:
+// http://www.richardtonge.com/papers/Tonge-2012-MassSplittingForJitterFreeParallelRigidBodySimulation-preprint.pdf
+// https://github.com/michalev-k/solver2d
 
 // This uses fixed anchors
 static void s2SolveContacts_Jacobi_Soft(s2World* world, s2ContactConstraint* constraints, int constraintCount, float inv_h,
