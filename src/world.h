@@ -41,6 +41,12 @@ typedef struct s2World
 
 	s2Vec2 gravity;
 	float restitutionThreshold;
+
+	// Soft Step joint stiffness. Soft Step D caps it at a fraction of the substep rate unless the fraction is zero.
+	// Soft Step keeps its own fixed cap.
+	float jointHertz;
+	float jointHertzCap;
+
 	uint16_t revision;
 } s2World;
 

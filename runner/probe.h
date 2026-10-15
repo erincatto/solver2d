@@ -23,6 +23,7 @@ typedef struct ProbeStep
 	float maxJointError;
 	float meanJointError;
 	float maxLimitError;
+	float maxWeldAngleError;
 	float kineticEnergy;
 	float potentialEnergy;
 	float maxSpeed;

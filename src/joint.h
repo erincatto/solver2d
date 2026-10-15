@@ -16,6 +16,7 @@ typedef enum s2JointType
 {
 	s2_revoluteJoint,
 	s2_mouseJoint,
+	s2_weldJoint,
 } s2JointType;
 
 typedef struct s2JointEdge
@@ -82,6 +83,28 @@ typedef struct s2RevoluteJoint
 	float inertiaScale;
 } s2RevoluteJoint;
 
+typedef struct s2WeldJoint
+{
+	// Solver shared
+	s2Vec2 linearImpulse;
+	float angularImpulse;
+	float referenceAngle;
+	bool enableDirect;
+
+	// Solver temp
+	s2Vec2 localAnchorA;
+	s2Vec2 localAnchorB;
+	s2Vec2 centerDiff0;
+	float invMassA;
+	float invMassB;
+	float invIA;
+	float invIB;
+	float axialMass;
+	float biasCoefficient;
+	float massCoefficient;
+	float impulseCoefficient;
+} s2WeldJoint;
+
 /// The base joint class. Joints are used to constraint two bodies together in
 /// various fashions. Some joints also feature limits and motors.
 typedef struct s2Joint
@@ -97,6 +120,7 @@ typedef struct s2Joint
 	{
 		s2MouseJoint mouseJoint;
 		s2RevoluteJoint revoluteJoint;
+		s2WeldJoint weldJoint;
 	};
 
 	bool collideConnected;

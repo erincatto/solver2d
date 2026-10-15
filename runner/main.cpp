@@ -30,6 +30,8 @@ struct Options
 	bool solvers[s2_solverTypeCount] = {};
 	int stepCount = 600;
 	float hertz = 60.0f;
+	float jointHertz = 60.0f;
+	float jointHertzCap = 0.25f;
 	int primaryIterations = 4;
 	int secondaryIterations = 2;
 	bool warmStart = true;
@@ -83,6 +85,8 @@ static void PrintUsage()
 	printf("  -solvers=<a,b,...>    solver names or all (default all)\n");
 	printf("  -steps=<n>            steps to run (default 600)\n");
 	printf("  -hertz=<f>            step rate (default 60)\n");
+	printf("  -joint_hertz=<f>      Soft Step joint stiffness (default 60)\n");
+	printf("  -joint_cap=<f>        Soft Step D joint hertz cap as a fraction of the substep rate, 0 for none (default 0.25)\n");
 	printf("  -iters=<n>            primary iterations, substeps for substepping solvers (default 4)\n");
 	printf("  -extra=<n>            secondary iterations, relax or position (default 2)\n");
 	printf("  -nowarm               disable warm starting\n");
@@ -253,6 +257,14 @@ static bool ParseArgs(int argc, char** argv, Options& options)
 		{
 			options.hertz = (float)atof(value);
 		}
+		else if (strncmp(arg, "-joint_hertz=", 13) == 0)
+		{
+			options.jointHertz = (float)atof(value);
+		}
+		else if (strncmp(arg, "-joint_cap=", 11) == 0)
+		{
+			options.jointHertzCap = (float)atof(value);
+		}
 		else if (strncmp(arg, "-iters=", 7) == 0)
 		{
 			options.primaryIterations = atoi(value);
@@ -285,7 +297,8 @@ static bool ParseArgs(int argc, char** argv, Options& options)
 		ParseSolvers("all", options.solvers);
 	}
 
-	if (options.samples.empty() || options.stepCount <= 0 || options.hertz <= 0.0f)
+	if (options.samples.empty() || options.stepCount <= 0 || options.hertz <= 0.0f || options.jointHertz <= 0.0f ||
+		options.jointHertzCap < 0.0f)
 	{
 		return false;
 	}
@@ -312,6 +325,8 @@ static bool RunSolver(const Options& options, int sampleIndex, s2SolverType solv
 	Settings settings;
 	settings.hertz = options.hertz;
 	settings.timeStep = 1.0f / options.hertz;
+	settings.jointHertz = options.jointHertz;
+	settings.jointHertzCap = options.jointHertzCap;
 	settings.primaryIterations = options.primaryIterations;
 	settings.secondaryIterations = options.secondaryIterations;
 	settings.enableWarmStarting = options.warmStart;
@@ -345,7 +360,8 @@ static bool RunSolver(const Options& options, int sampleIndex, s2SolverType solv
 	}
 
 	fprintf(stepFile, "step,time,ms,bodies,contacts,points,max_penetration,mean_penetration,normal_impulse,joints,"
-					  "max_joint_error,mean_joint_error,max_limit_error,kinetic,potential,energy,max_speed,max_angular_speed\n");
+					  "max_joint_error,mean_joint_error,max_limit_error,kinetic,potential,energy,max_speed,max_angular_speed,"
+					  "max_weld_angle_error\n");
 
 	Sample* sample = g_sampleEntries[sampleIndex].createFcn(settings, solverType);
 	Probe* probe = CreateProbe();
@@ -369,10 +385,10 @@ static bool RunSolver(const Options& options, int sampleIndex, s2SolverType solv
 		float time = step * settings.timeStep;
 		float energy = s.kineticEnergy + s.potentialEnergy;
 
-		fprintf(stepFile, "%d,%.6g,%.4f,%d,%d,%d,%.6g,%.6g,%.6g,%d,%.6g,%.6g,%.6g,%.8g,%.8g,%.8g,%.6g,%.6g\n", step, time, ms,
+		fprintf(stepFile, "%d,%.6g,%.4f,%d,%d,%d,%.6g,%.6g,%.6g,%d,%.6g,%.6g,%.6g,%.8g,%.8g,%.8g,%.6g,%.6g,%.6g\n", step, time, ms,
 				s.bodyCount, s.contactCount, s.pointCount, s.maxPenetration, s.meanPenetration, s.normalImpulse, s.jointCount,
 				s.maxJointError, s.meanJointError, s.maxLimitError, s.kineticEnergy, s.potentialEnergy, energy, s.maxSpeed,
-				s.maxAngularSpeed);
+				s.maxAngularSpeed, s.maxWeldAngleError);
 
 		if (bodyFile != nullptr)
 		{
@@ -440,10 +456,11 @@ int main(int argc, char** argv)
 	}
 
 	fprintf(summaryFile, "sample,solver,steps,hertz,iters,extra,warm_start,max_penetration,final_penetration,max_joint_error,"
-						 "final_joint_error,max_limit_error,initial_energy,final_energy,final_kinetic,total_ms\n");
+						 "final_joint_error,max_limit_error,initial_energy,final_energy,final_kinetic,total_ms,joint_hertz,joint_cap\n");
 
-	printf("steps=%d hertz=%g iters=%d extra=%d warm=%d out=%s\n", options.stepCount, options.hertz, options.primaryIterations,
-		   options.secondaryIterations, options.warmStart ? 1 : 0, outDir.string().c_str());
+	printf("steps=%d hertz=%g iters=%d extra=%d warm=%d joint_hertz=%g joint_cap=%g out=%s\n", options.stepCount, options.hertz,
+		   options.primaryIterations, options.secondaryIterations, options.warmStart ? 1 : 0, options.jointHertz,
+		   options.jointHertzCap, outDir.string().c_str());
 
 	int failures = 0;
 	for (int sampleIndex : options.samples)
@@ -473,10 +490,11 @@ int main(int argc, char** argv)
 			printf("  %-14s %10.4g %10.4g %10.4g %10.4g %12.6g %12.6g %9.1f\n", s_solverNames[i], r.maxPenetration,
 				   r.finalPenetration, r.maxJointError, r.finalJointError, r.initialEnergy, r.finalEnergy, r.totalMs);
 
-			fprintf(summaryFile, "\"%s\",%s,%d,%g,%d,%d,%d,%.6g,%.6g,%.6g,%.6g,%.6g,%.8g,%.8g,%.8g,%.3f\n", full.c_str(),
+			fprintf(summaryFile, "\"%s\",%s,%d,%g,%d,%d,%d,%.6g,%.6g,%.6g,%.6g,%.6g,%.8g,%.8g,%.8g,%.3f,%g,%g\n", full.c_str(),
 					s_solverNames[i], options.stepCount, options.hertz, options.primaryIterations, options.secondaryIterations,
 					options.warmStart ? 1 : 0, r.maxPenetration, r.finalPenetration, r.maxJointError, r.finalJointError,
-					r.maxLimitError, r.initialEnergy, r.finalEnergy, r.finalKinetic, r.totalMs);
+					r.maxLimitError, r.initialEnergy, r.finalEnergy, r.finalKinetic, r.totalMs, options.jointHertz,
+					options.jointHertzCap);
 		}
 	}
 

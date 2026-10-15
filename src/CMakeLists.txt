@@ -47,6 +47,7 @@ set(S2D_SOURCE_FILES
 	stack_allocator.h
 	table.c
 	table.h
+	weld_joint.c
 	world.c
 	world.h
 )

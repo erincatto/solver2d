@@ -25,6 +25,11 @@ void s2DestroyWorld(s2WorldId worldId);
 void s2World_Step(s2WorldId worldId, float timeStep, int32_t velIters, int32_t posIters, bool warmStart);
 void s2World_Draw(s2WorldId worldId, s2DebugDraw* debugDraw);
 
+/// Joint stiffness for the Soft Step solvers. Soft Step always caps it at a quarter of the substep rate.
+/// @param hertz joint stiffness in cycles per second
+/// @param capFraction Soft Step D caps the stiffness at this fraction of the substep rate, zero for no cap
+void s2World_SetJointHertz(s2WorldId worldId, float hertz, float capFraction);
+
 struct s2Statistics s2World_GetStatistics(s2WorldId worldId);
 
 s2BodyId s2CreateBody(s2WorldId worldId, const s2BodyDef* def);
@@ -54,6 +59,7 @@ bool s2Shape_TestPoint(s2ShapeId shapeId, s2Vec2 point);
 
 s2JointId s2CreateMouseJoint(s2WorldId worldId, const s2MouseJointDef* def);
 s2JointId s2CreateRevoluteJoint(s2WorldId worldId, const s2RevoluteJointDef* def);
+s2JointId s2CreateWeldJoint(s2WorldId worldId, const s2WeldJointDef* def);
 void s2DestroyJoint(s2JointId jointId);
 
 void s2MouseJoint_SetTarget(s2JointId jointId, s2Vec2 target);

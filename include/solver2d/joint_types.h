@@ -101,3 +101,43 @@ static inline struct s2RevoluteJointDef s2DefaultRevoluteJointDef(void)
 	def.enableDirect = false;
 	return def;
 }
+
+/// A weld joint holds two bodies together with a fixed relative position and angle. There is no spring.
+/// It is as stiff as each solver's joint formulation allows.
+typedef struct s2WeldJointDef
+{
+	/// The first attached body.
+	s2BodyId bodyIdA;
+
+	/// The second attached body.
+	s2BodyId bodyIdB;
+
+	/// The local anchor point relative to bodyA's origin.
+	s2Vec2 localAnchorA;
+
+	/// The local anchor point relative to bodyB's origin.
+	s2Vec2 localAnchorB;
+
+	/// The bodyB angle minus bodyA angle in the reference state (radians).
+	float referenceAngle;
+
+	/// Set this flag to true if the attached bodies should collide.
+	bool collideConnected;
+
+	/// Solve together with other opted in joints sharing a body, by a direct solver.
+	/// Only used by solvers that support it.
+	bool enableDirect;
+} s2WeldJointDef;
+
+static inline struct s2WeldJointDef s2DefaultWeldJointDef(void)
+{
+	s2WeldJointDef def = {0};
+	def.bodyIdA = s2_nullBodyId;
+	def.bodyIdB = s2_nullBodyId;
+	def.localAnchorA = S2_LITERAL(s2Vec2){0.0f, 0.0f};
+	def.localAnchorB = S2_LITERAL(s2Vec2){0.0f, 0.0f};
+	def.referenceAngle = 0.0f;
+	def.collideConnected = false;
+	def.enableDirect = false;
+	return def;
+}

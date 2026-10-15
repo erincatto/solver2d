@@ -214,7 +214,8 @@ void s2Solve_SoftStep(s2World* world, s2StepContext* context)
 	float inv_h = context->inv_h;
 
 	float contactHertz = S2_MIN(s2_contactHertz, 0.25f * inv_h);
-	float jointHertz = S2_MIN(s2_jointHertz, 0.25f * inv_h);
+	// Gauss-Seidel joint chains go unstable above about a third of the substep rate, see extras/sc_stability.jl
+	float jointHertz = S2_MIN(world->jointHertz, 0.25f * inv_h);
 
 	// Loops
 	// body: 1 + 2 * substepCount

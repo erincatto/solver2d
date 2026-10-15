@@ -96,6 +96,8 @@ s2WorldId s2CreateWorld(const s2WorldDef* def)
 
 	world->gravity = (s2Vec2){0.0f, -10.0f};
 	world->restitutionThreshold = 1.0f;
+	world->jointHertz = s2_jointHertz;
+	world->jointHertzCap = 0.25f;
 
 	id.revision = world->revision;
 
@@ -373,6 +375,14 @@ static void s2DrawShape(s2DebugDraw* draw, s2Shape* shape, s2Transform transform
 		default:
 			break;
 	}
+}
+
+void s2World_SetJointHertz(s2WorldId worldId, float hertz, float capFraction)
+{
+	S2_ASSERT(hertz > 0.0f && capFraction >= 0.0f);
+	s2World* world = s2GetWorldFromId(worldId);
+	world->jointHertz = hertz;
+	world->jointHertzCap = capFraction;
 }
 
 void s2World_Draw(s2WorldId worldId, s2DebugDraw* draw)

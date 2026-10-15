@@ -18,6 +18,8 @@ struct Settings
 	int primaryIterations = 4;
 	int secondaryIterations = 2;
 	int multiSteps = 1;
+	float jointHertz = 60.0f;
+	float jointHertzCap = 0.25f;
 	int textLine = 0;
 	int textIncrement = 18;
 	bool enabledSolvers[s2_solverTypeCount] = {};

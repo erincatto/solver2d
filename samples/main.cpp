@@ -411,6 +411,8 @@ static void UpdateUI(s2Color* solverColors)
 			ImGui::SliderInt("Extra Iters", &s_settings.secondaryIterations, 0, 50);
 			ImGui::SliderInt("Multi-Steps", &s_settings.multiSteps, 1, 200);
 			ImGui::SliderFloat("Hertz", &s_settings.hertz, 5.0f, 480.0f, "%.0f Hz");
+			ImGui::SliderFloat("Joint Hertz", &s_settings.jointHertz, 10.0f, 10000.0f, "%.0f Hz", ImGuiSliderFlags_Logarithmic);
+			ImGui::SliderFloat("Joint Cap D", &s_settings.jointHertzCap, 0.0f, 1.0f, "%.2f");
 			ImGui::Checkbox("Warm Starting", &s_settings.enableWarmStarting);
 			ImGui::PopItemWidth();
 

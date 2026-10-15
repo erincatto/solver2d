@@ -574,3 +574,145 @@ public:
 };
 
 static int samplePendulum = RegisterSample("Joints", "Pendulum", Pendulum::Create);
+
+// The cantilever sags with an iterative solver even though the weld joints are as stiff as possible
+class Cantilever : public Sample
+{
+public:
+	enum
+	{
+		e_count = 8
+	};
+
+	Cantilever(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		if (settings.restart == false)
+		{
+			g_camera.m_center = {0.0f, 0.0f};
+			g_camera.m_zoom = 0.35f;
+		}
+
+		s2BodyId groundId = s2_nullBodyId;
+		{
+			s2BodyDef bodyDef = s2_defaultBodyDef;
+			groundId = s2CreateBody(m_worldId, &bodyDef);
+		}
+
+		float hx = 0.5f;
+		s2Capsule capsule = {{-hx, 0.0f}, {hx, 0.0f}, 0.125f};
+		s2ShapeDef shapeDef = s2_defaultShapeDef;
+		shapeDef.density = 20.0f;
+
+		s2WeldJointDef jointDef = s2DefaultWeldJointDef();
+		jointDef.enableDirect = true;
+
+		s2BodyDef bodyDef = s2_defaultBodyDef;
+		bodyDef.type = s2_dynamicBody;
+
+		s2BodyId prevBodyId = groundId;
+		for (int i = 0; i < e_count; ++i)
+		{
+			bodyDef.position = {(1.0f + 2.0f * i) * hx, 0.0f};
+			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+			s2CreateCapsuleShape(bodyId, &shapeDef, &capsule);
+
+			s2Vec2 pivot = {(2.0f * i) * hx, 0.0f};
+			jointDef.bodyIdA = prevBodyId;
+			jointDef.bodyIdB = bodyId;
+			jointDef.localAnchorA = s2Body_GetLocalPoint(prevBodyId, pivot);
+			jointDef.localAnchorB = s2Body_GetLocalPoint(bodyId, pivot);
+			s2CreateWeldJoint(m_worldId, &jointDef);
+
+			prevBodyId = bodyId;
+		}
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new Cantilever(settings, solverType);
+	}
+};
+
+static int sampleCantilever = RegisterSample("Joints", "Cantilever", Cantilever::Create);
+
+// Four rotors welded to a hub without gravity. This configuration has stability problems in Box2D.
+class UnstableWindmill : public Sample
+{
+public:
+	UnstableWindmill(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		if (settings.restart == false)
+		{
+			g_camera.m_center = {10.0f, 10.0f};
+			g_camera.m_zoom = 0.8f;
+		}
+
+		{
+			s2BodyDef bodyDef = s2_defaultBodyDef;
+			s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
+
+			s2ShapeDef shapeDef = s2_defaultShapeDef;
+			s2Segment segment = {{-100.0f, -10.0f}, {100.0f, -10.0f}};
+			s2CreateSegmentShape(groundId, &shapeDef, &segment);
+		}
+
+		s2BodyDef bodyDef = s2_defaultBodyDef;
+		bodyDef.type = s2_dynamicBody;
+		bodyDef.gravityScale = 0.0f;
+
+		s2ShapeDef shapeDef = s2_defaultShapeDef;
+		shapeDef.friction = 0.1f;
+
+		// Spin as a rigid body. At rest nothing excites the instability.
+		s2Vec2 hubPosition = {10.0f, 10.0f};
+		float spin = 1.0f;
+		bodyDef.angularVelocity = spin;
+
+		bodyDef.position = hubPosition;
+		s2BodyId hubId = s2CreateBody(m_worldId, &bodyDef);
+		s2Circle circle = {{0.0f, 0.0f}, 5.0f};
+		s2CreateCircleShape(hubId, &shapeDef, &circle);
+
+		s2WeldJointDef jointDef = s2DefaultWeldJointDef();
+		jointDef.bodyIdA = hubId;
+		jointDef.enableDirect = true;
+
+		struct Rotor
+		{
+			s2Vec2 position;
+			s2Vec2 extent;
+			s2Vec2 anchorA;
+			s2Vec2 anchorB;
+		};
+
+		Rotor rotors[4] = {
+			{{10.0f, 0.0f}, {4.0f, 5.0f}, {0.0f, -5.0f}, {0.0f, 5.0f}},
+			{{20.0f, 10.0f}, {5.0f, 4.0f}, {5.0f, 0.0f}, {-5.0f, 0.0f}},
+			{{10.0f, 20.0f}, {4.0f, 5.0f}, {0.0f, 5.0f}, {0.0f, -5.0f}},
+			{{0.0f, 10.0f}, {5.0f, 4.0f}, {-5.0f, 0.0f}, {5.0f, 0.0f}},
+		};
+
+		for (int i = 0; i < 4; ++i)
+		{
+			bodyDef.position = rotors[i].position;
+			bodyDef.linearVelocity = s2CrossSV(spin, s2Sub(rotors[i].position, hubPosition));
+			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+			s2Polygon box = s2MakeBox(rotors[i].extent.x, rotors[i].extent.y);
+			s2CreatePolygonShape(bodyId, &shapeDef, &box);
+
+			jointDef.bodyIdB = bodyId;
+			jointDef.localAnchorA = rotors[i].anchorA;
+			jointDef.localAnchorB = rotors[i].anchorB;
+			s2CreateWeldJoint(m_worldId, &jointDef);
+		}
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new UnstableWindmill(settings, solverType);
+	}
+};
+
+static int sampleUnstableWindmill = RegisterSample("Joints", "Unstable Windmill", UnstableWindmill::Create);

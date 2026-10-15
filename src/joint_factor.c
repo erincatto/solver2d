@@ -20,9 +20,9 @@ void s2CreateJointFactor(s2World* world, s2JointFactor* factor, int jointCount)
 	*factor = (s2JointFactor){0};
 	factor->jointCount = jointCount;
 	factor->jointIndices = s2AllocateStackItem(stack, count * sizeof(int), "joint indices");
-	factor->rows = s2AllocateStackItem(stack, count * sizeof(s2PointRows), "joint rows");
+	factor->rows = s2AllocateStackItem(stack, count * sizeof(s2JointRows), "joint rows");
 	factor->compliance = s2AllocateStackItem(stack, count * sizeof(float), "joint compliance");
-	factor->rhs = s2AllocateStackItem(stack, count * sizeof(s2Vec2), "joint rhs");
+	factor->rhs = s2AllocateStackItem(stack, count * sizeof(s2JointVector), "joint rhs");
 
 	for (int i = 0; i < jointCount; ++i)
 	{
@@ -114,6 +114,7 @@ void s2OrderJointFactor(s2World* world, s2JointFactor* factor)
 
 	factor->order = s2AllocateStackItem(stack, count * sizeof(int), "joint order");
 	factor->position = s2AllocateStackItem(stack, count * sizeof(int), "joint position");
+	factor->rowStart = s2AllocateStackItem(stack, (jointCount + 1) * sizeof(int), "joint row start");
 
 	factor->jointMap = s2AllocateStackItem(stack, jointCapacity * sizeof(int), "joint map");
 	for (int i = 0; i < jointCapacity; ++i)
@@ -178,8 +179,16 @@ void s2OrderJointFactor(s2World* world, s2JointFactor* factor)
 		s2OrderJoints(jointCount, adjacencyStart, adjacency, factor->order, factor->position);
 	}
 
+	int rowCount = 0;
+	for (int p = 0; p < jointCount; ++p)
+	{
+		factor->rowStart[p] = rowCount;
+		rowCount += factor->rows[factor->order[p]].rowCount;
+	}
+	factor->rowStart[jointCount] = rowCount;
+	factor->rowCount = rowCount;
+
 	// Fill stays inside the envelope, so it is fixed by the ordering
-	int rowCount = 2 * jointCount;
 	factor->first = s2AllocateStackItem(stack, S2_MAX(1, rowCount) * sizeof(int), "joint first");
 	factor->offset = s2AllocateStackItem(stack, (rowCount + 1) * sizeof(int), "joint offset");
 
@@ -193,12 +202,12 @@ void s2OrderJointFactor(s2World* world, s2JointFactor* factor)
 			firstBlock = S2_MIN(firstBlock, factor->position[adjacency[k]]);
 		}
 
-		for (int r = 0; r < 2; ++r)
+		int firstRow = factor->rowStart[firstBlock];
+		for (int row = factor->rowStart[p]; row < factor->rowStart[p + 1]; ++row)
 		{
-			int row = 2 * p + r;
-			factor->first[row] = 2 * firstBlock;
+			factor->first[row] = firstRow;
 			factor->offset[row] = size;
-			size += row - 2 * firstBlock + 1;
+			size += row - firstRow + 1;
 		}
 	}
 	factor->offset[rowCount] = size;
@@ -222,6 +231,7 @@ void s2DestroyJointFactor(s2World* world, s2JointFactor* factor)
 		s2FreeStackItem(stack, factor->adjacency);
 		s2FreeStackItem(stack, factor->adjacencyStart);
 		s2FreeStackItem(stack, factor->jointMap);
+		s2FreeStackItem(stack, factor->rowStart);
 		s2FreeStackItem(stack, factor->position);
 		s2FreeStackItem(stack, factor->order);
 	}
@@ -233,9 +243,31 @@ void s2DestroyJointFactor(s2World* world, s2JointFactor* factor)
 	*factor = (s2JointFactor){0};
 }
 
-void s2ComputeJointBlock(s2World* world, const s2PointRows* p, const s2PointRows* q, float K[2][2])
+// Jacobian of one row on one body. The sign is -1 for body A and 1 for body B.
+static void s2GetRowJacobian(s2Vec2 r, float sign, int row, s2Vec2* linear, float* angular)
 {
-	K[0][0] = K[0][1] = K[1][0] = K[1][1] = 0.0f;
+	if (row == 2)
+	{
+		*linear = s2Vec2_zero;
+		*angular = sign;
+		return;
+	}
+
+	// Angular Jacobian of the x and y rows is the perp of the anchor
+	s2Vec2 perp = s2LeftPerp(r);
+	*linear = row == 0 ? (s2Vec2){sign, 0.0f} : (s2Vec2){0.0f, sign};
+	*angular = sign * (row == 0 ? perp.x : perp.y);
+}
+
+void s2ComputeJointBlock(s2World* world, const s2JointRows* p, const s2JointRows* q, float K[3][3])
+{
+	for (int r = 0; r < 3; ++r)
+	{
+		for (int c = 0; c < 3; ++c)
+		{
+			K[r][c] = 0.0f;
+		}
+	}
 
 	int indicesP[2] = {p->indexA, p->indexB};
 	int indicesQ[2] = {q->indexA, q->indexB};
@@ -255,16 +287,22 @@ void s2ComputeJointBlock(s2World* world, const s2PointRows* p, const s2PointRows
 			s2Body* body = world->bodies + indicesP[a];
 			float m = body->invMass;
 			float i = body->invI;
-			float s = signs[a] * signs[b];
 
-			// Angular Jacobian of the x and y rows is the perp of the anchor
-			s2Vec2 cp = s2LeftPerp(anchorsP[a]);
-			s2Vec2 cq = s2LeftPerp(anchorsQ[b]);
+			for (int r = 0; r < p->rowCount; ++r)
+			{
+				s2Vec2 linearP;
+				float angularP;
+				s2GetRowJacobian(anchorsP[a], signs[a], r, &linearP, &angularP);
 
-			K[0][0] += s * (m + i * cp.x * cq.x);
-			K[0][1] += s * (i * cp.x * cq.y);
-			K[1][0] += s * (i * cp.y * cq.x);
-			K[1][1] += s * (m + i * cp.y * cq.y);
+				for (int c = 0; c < q->rowCount; ++c)
+				{
+					s2Vec2 linearQ;
+					float angularQ;
+					s2GetRowJacobian(anchorsQ[b], signs[b], c, &linearQ, &angularQ);
+
+					K[r][c] += m * s2Dot(linearP, linearQ) + i * angularP * angularQ;
+				}
+			}
 		}
 	}
 }
@@ -278,7 +316,7 @@ static inline float* s2EnvelopeEntry(s2JointFactor* factor, int row, int column)
 void s2FactorJoints(s2World* world, s2JointFactor* factor, float regularization)
 {
 	int jointCount = factor->jointCount;
-	int rowCount = 2 * jointCount;
+	int rowCount = factor->rowCount;
 	const int* order = factor->order;
 	const int* position = factor->position;
 	const int* adjacencyStart = factor->adjacencyStart;
@@ -293,14 +331,19 @@ void s2FactorJoints(s2World* world, s2JointFactor* factor, float regularization)
 	for (int p = 0; p < jointCount; ++p)
 	{
 		int node = order[p];
-		const s2PointRows* rowsP = factor->rows + node;
+		const s2JointRows* rowsP = factor->rows + node;
+		int startP = factor->rowStart[p];
 
-		float K[2][2];
+		float K[3][3];
 		s2ComputeJointBlock(world, rowsP, rowsP, K);
 		float diagonalScale = 1.0f + factor->compliance[node];
-		*s2EnvelopeEntry(factor, 2 * p, 2 * p) = diagonalScale * K[0][0];
-		*s2EnvelopeEntry(factor, 2 * p + 1, 2 * p) = diagonalScale * K[1][0];
-		*s2EnvelopeEntry(factor, 2 * p + 1, 2 * p + 1) = diagonalScale * K[1][1];
+		for (int r = 0; r < rowsP->rowCount; ++r)
+		{
+			for (int c = 0; c <= r; ++c)
+			{
+				*s2EnvelopeEntry(factor, startP + r, startP + c) = diagonalScale * K[r][c];
+			}
+		}
 
 		for (int k = adjacencyStart[node]; k < adjacencyStart[node + 1]; ++k)
 		{
@@ -310,12 +353,14 @@ void s2FactorJoints(s2World* world, s2JointFactor* factor, float regularization)
 				continue;
 			}
 
-			s2ComputeJointBlock(world, rowsP, factor->rows + adjacency[k], K);
-			for (int r = 0; r < 2; ++r)
+			const s2JointRows* rowsQ = factor->rows + adjacency[k];
+			int startQ = factor->rowStart[q];
+			s2ComputeJointBlock(world, rowsP, rowsQ, K);
+			for (int r = 0; r < rowsP->rowCount; ++r)
 			{
-				for (int c = 0; c < 2; ++c)
+				for (int c = 0; c < rowsQ->rowCount; ++c)
 				{
-					*s2EnvelopeEntry(factor, 2 * p + r, 2 * q + c) = K[r][c];
+					*s2EnvelopeEntry(factor, startP + r, startQ + c) = K[r][c];
 				}
 			}
 		}
@@ -370,14 +415,21 @@ void s2FactorJoints(s2World* world, s2JointFactor* factor, float regularization)
 void s2SolveJointFactor(s2JointFactor* factor)
 {
 	int jointCount = factor->jointCount;
-	int rowCount = 2 * jointCount;
+	int rowCount = factor->rowCount;
 	float* x = factor->work;
+	const float* scale = factor->scale;
 
 	for (int p = 0; p < jointCount; ++p)
 	{
-		s2Vec2 b = factor->rhs[factor->order[p]];
-		x[2 * p] = factor->scale[2 * p] * b.x;
-		x[2 * p + 1] = factor->scale[2 * p + 1] * b.y;
+		int node = factor->order[p];
+		int start = factor->rowStart[p];
+		s2JointVector b = factor->rhs[node];
+		x[start] = scale[start] * b.linear.x;
+		x[start + 1] = scale[start + 1] * b.linear.y;
+		if (factor->rows[node].rowCount == 3)
+		{
+			x[start + 2] = scale[start + 2] * b.angular;
+		}
 	}
 
 	for (int i = 0; i < rowCount; ++i)
@@ -405,6 +457,10 @@ void s2SolveJointFactor(s2JointFactor* factor)
 
 	for (int p = 0; p < jointCount; ++p)
 	{
-		factor->rhs[factor->order[p]] = (s2Vec2){factor->scale[2 * p] * x[2 * p], factor->scale[2 * p + 1] * x[2 * p + 1]};
+		int node = factor->order[p];
+		int start = factor->rowStart[p];
+		s2JointVector* solution = factor->rhs + node;
+		solution->linear = (s2Vec2){scale[start] * x[start], scale[start + 1] * x[start + 1]};
+		solution->angular = factor->rows[node].rowCount == 3 ? scale[start + 2] * x[start + 2] : 0.0f;
 	}
 }

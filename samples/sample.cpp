@@ -127,6 +127,8 @@ void Sample::Step(Settings& settings, s2Color bodyColor)
 	bodyColor.a = 0.6f;
 	g_draw.m_debugDraw.dynamicBodyColor = bodyColor;
 
+	s2World_SetJointHertz(m_worldId, settings.jointHertz, settings.jointHertzCap);
+
 	if (settings.pause == false || settings.singleStep == true)
 	{
 		for (int i = 0; i < settings.multiSteps; ++i)

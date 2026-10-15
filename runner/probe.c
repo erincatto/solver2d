@@ -159,7 +159,7 @@ ProbeStep Probe_Measure(const Probe* probe, s2WorldId worldId)
 	for (int i = 0; i < jointCapacity; ++i)
 	{
 		s2Joint* joint = world->joints + i;
-		if (s2IsFree(&joint->object) || joint->type != s2_revoluteJoint)
+		if (s2IsFree(&joint->object) || (joint->type != s2_revoluteJoint && joint->type != s2_weldJoint))
 		{
 			continue;
 		}
@@ -174,6 +174,13 @@ ProbeStep Probe_Measure(const Probe* probe, s2WorldId worldId)
 		result.jointCount += 1;
 		jointErrorSum += error;
 		result.maxJointError = error > result.maxJointError ? error : result.maxJointError;
+
+		if (joint->type == s2_weldJoint)
+		{
+			float angleError = S2_ABS(s2RelativeAngle(bodyB->rot, bodyA->rot) - joint->weldJoint.referenceAngle);
+			result.maxWeldAngleError = angleError > result.maxWeldAngleError ? angleError : result.maxWeldAngleError;
+			continue;
+		}
 
 		const s2RevoluteJoint* revolute = &joint->revoluteJoint;
 		if (revolute->enableLimit)

@@ -7,33 +7,44 @@
 
 typedef struct s2World s2World;
 
-// Point rows of a revolute joint
+// Equality rows of a revolute or weld joint. Rows 0 and 1 are the point constraint, row 2 is the weld angle.
 // Cdot = vB + cross(wB, rB) - vA - cross(wA, rA)
-typedef struct s2PointRows
+// Cdot = wB - wA
+typedef struct s2JointRows
 {
 	int indexA;
 	int indexB;
 	s2Vec2 rA;
 	s2Vec2 rB;
-} s2PointRows;
+	int rowCount;
+} s2JointRows;
 
-// Direct solver for the coupled point rows of many joints, J M^-1 J^T with two rows per joint.
+// One value per row, the angular value only for welds
+typedef struct s2JointVector
+{
+	s2Vec2 linear;
+	float angular;
+} s2JointVector;
+
+// Direct solver for the coupled equality rows of many joints, J M^-1 J^T.
 // Envelope Cholesky in reverse Cuthill-McKee order. Joints are adjacent when they share a dynamic body.
 // Per joint arrays are indexed in the order the caller lists the joints.
 typedef struct s2JointFactor
 {
 	int jointCount;
+	int rowCount;
 
-	// Filled by the caller. The joint indices before ordering, the rows and compliance before factoring,
-	// the right hand side before solving. The solve overwrites the right hand side with the solution.
+	// Filled by the caller. The joint indices and rows before ordering, the anchors and compliance before
+	// factoring, the right hand side before solving. The solve overwrites the right hand side with the solution.
 	int* jointIndices;
-	s2PointRows* rows;
+	s2JointRows* rows;
 	float* compliance;
-	s2Vec2* rhs;
+	s2JointVector* rhs;
 
-	// Row pair p belongs to joint order[p]
+	// Joint order[p] owns the rows starting at rowStart[p]
 	int* order;
 	int* position;
+	int* rowStart;
 
 	int* jointMap;
 	int* adjacencyStart;
@@ -49,7 +60,7 @@ typedef struct s2JointFactor
 
 void s2CreateJointFactor(s2World* world, s2JointFactor* factor, int jointCount);
 
-// Builds the joint graph and its ordering. Needs the joint indices.
+// Builds the joint graph and its ordering. Needs the joint indices and the row counts.
 void s2OrderJointFactor(s2World* world, s2JointFactor* factor);
 
 // Each joint's own block is scaled by one plus its compliance. Regularization is added to the unit diagonal
@@ -60,5 +71,5 @@ void s2SolveJointFactor(s2JointFactor* factor);
 
 void s2DestroyJointFactor(s2World* world, s2JointFactor* factor);
 
-// Delassus block coupling the point rows of joints p and q through their shared bodies
-void s2ComputeJointBlock(s2World* world, const s2PointRows* p, const s2PointRows* q, float K[2][2]);
+// Delassus block coupling the rows of joints p and q through their shared bodies
+void s2ComputeJointBlock(s2World* world, const s2JointRows* p, const s2JointRows* q, float K[3][3]);

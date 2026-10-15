@@ -223,6 +223,37 @@ s2JointId s2CreateRevoluteJoint(s2WorldId worldId, const s2RevoluteJointDef* def
 	return jointId;
 }
 
+s2JointId s2CreateWeldJoint(s2WorldId worldId, const s2WeldJointDef* def)
+{
+	s2World* world = s2GetWorldFromId(worldId);
+
+	S2_ASSERT(s2IsBodyIdValid(world, def->bodyIdA));
+	S2_ASSERT(s2IsBodyIdValid(world, def->bodyIdB));
+
+	s2Body* bodyA = world->bodies + def->bodyIdA.index;
+	s2Body* bodyB = world->bodies + def->bodyIdB.index;
+
+	s2Joint* joint = s2CreateJoint(world, bodyA, bodyB);
+
+	joint->type = s2_weldJoint;
+	joint->drawSize = 1.0f;
+	joint->localOriginAnchorA = def->localAnchorA;
+	joint->localOriginAnchorB = def->localAnchorB;
+
+	joint->weldJoint = (s2WeldJoint){0};
+	joint->weldJoint.referenceAngle = def->referenceAngle;
+	joint->weldJoint.enableDirect = def->enableDirect;
+
+	if (def->collideConnected == false)
+	{
+		s2DestroyContactsBetweenBodies(world, bodyA, bodyB);
+	}
+
+	s2JointId jointId = {joint->object.index, world->index, joint->object.revision};
+
+	return jointId;
+}
+
 void s2DestroyJoint(s2JointId jointId)
 {
 	s2World* world = s2GetWorldFromIndex(jointId.world);
@@ -291,6 +322,7 @@ void s2DestroyJoint(s2JointId jointId)
 
 extern void s2PrepareMouse(s2Joint* base, s2StepContext* context);
 extern void s2PrepareRevolute(s2Joint* base, s2StepContext* context, bool warmStart);
+extern void s2PrepareWeld(s2Joint* base, s2StepContext* context, bool warmStart);
 
 void s2PrepareJoint(s2Joint* joint, s2StepContext* context, bool warmStart)
 {
@@ -304,6 +336,10 @@ void s2PrepareJoint(s2Joint* joint, s2StepContext* context, bool warmStart)
 			s2PrepareRevolute(joint, context, warmStart);
 			break;
 
+		case s2_weldJoint:
+			s2PrepareWeld(joint, context, warmStart);
+			break;
+
 		default:
 			S2_ASSERT(false);
 	}
@@ -311,6 +347,7 @@ void s2PrepareJoint(s2Joint* joint, s2StepContext* context, bool warmStart)
 
 extern void s2WarmStartMouse(s2Joint* base, s2StepContext* context);
 extern void s2WarmStartRevolute(s2Joint* base, s2StepContext* context);
+extern void s2WarmStartWeld(s2Joint* base, s2StepContext* context);
 
 void s2WarmStartJoint(s2Joint* joint, s2StepContext* context)
 {
@@ -324,6 +361,10 @@ void s2WarmStartJoint(s2Joint* joint, s2StepContext* context)
 			s2WarmStartRevolute(joint, context);
 			break;
 
+		case s2_weldJoint:
+			s2WarmStartWeld(joint, context);
+			break;
+
 		default:
 			S2_ASSERT(false);
 	}
@@ -331,6 +372,7 @@ void s2WarmStartJoint(s2Joint* joint, s2StepContext* context)
 
 extern void s2SolveMouse(s2Joint* base, s2StepContext* context);
 extern void s2SolveRevolute(s2Joint* base, s2StepContext* context, float h);
+extern void s2SolveWeld(s2Joint* base, s2StepContext* context);
 
 void s2SolveJoint(s2Joint* joint, s2StepContext* context, float h)
 {
@@ -344,12 +386,17 @@ void s2SolveJoint(s2Joint* joint, s2StepContext* context, float h)
 			s2SolveRevolute(joint, context, h);
 			break;
 
+		case s2_weldJoint:
+			s2SolveWeld(joint, context);
+			break;
+
 		default:
 			S2_ASSERT(false);
 	}
 }
 
 extern void s2SolveRevolutePosition(s2Joint* base, s2StepContext* context);
+extern void s2SolveWeldPosition(s2Joint* base, s2StepContext* context);
 
 void s2SolveJointPosition(s2Joint* joint, s2StepContext* context)
 {
@@ -359,6 +406,10 @@ void s2SolveJointPosition(s2Joint* joint, s2StepContext* context)
 			s2SolveRevolutePosition(joint, context);
 			break;
 
+		case s2_weldJoint:
+			s2SolveWeldPosition(joint, context);
+			break;
+
 		default:
 			break;
 	}
@@ -366,6 +417,7 @@ void s2SolveJointPosition(s2Joint* joint, s2StepContext* context)
 
 //extern void s2PrepareMouse_Soft(s2Joint* base, s2StepContext* context);
 extern void s2PrepareRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float hertz, bool warmStart);
+extern void s2PrepareWeld_Soft(s2Joint* base, s2StepContext* context, float h, float hertz, bool warmStart);
 
 void s2PrepareJoint_Soft(s2Joint* joint, s2StepContext* context, float h, float hertz, bool warmStart)
 {
@@ -379,12 +431,17 @@ void s2PrepareJoint_Soft(s2Joint* joint, s2StepContext* context, float h, float 
 			s2PrepareRevolute_Soft(joint, context, h, hertz, warmStart);
 			break;
 
+		case s2_weldJoint:
+			s2PrepareWeld_Soft(joint, context, h, hertz, warmStart);
+			break;
+
 		default:
 			S2_ASSERT(false);
 	}
 }
 
 extern void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float inv_h, bool useBias);
+extern void s2SolveWeld_Soft(s2Joint* base, s2StepContext* context, bool useBias);
 
 void s2SolveJoint_Soft(s2Joint* joint, s2StepContext* context, float h, float inv_h, bool useBias)
 {
@@ -401,12 +458,17 @@ void s2SolveJoint_Soft(s2Joint* joint, s2StepContext* context, float h, float in
 			s2SolveRevolute_Soft(joint, context, h, inv_h, useBias);
 			break;
 
+		case s2_weldJoint:
+			s2SolveWeld_Soft(joint, context, useBias);
+			break;
+
 		default:
 			S2_ASSERT(false);
 	}
 }
 
 extern void s2SolveRevolute_Baumgarte(s2Joint* base, s2StepContext* context, float h, float inv_h, bool useBias);
+extern void s2SolveWeld_Baumgarte(s2Joint* base, s2StepContext* context, float inv_h, bool useBias);
 
 void s2SolveJoint_Baumgarte(s2Joint* joint, s2StepContext* context, float h, float inv_h, bool useBias)
 {
@@ -420,6 +482,10 @@ void s2SolveJoint_Baumgarte(s2Joint* joint, s2StepContext* context, float h, flo
 			s2SolveRevolute_Baumgarte(joint, context, h, inv_h, useBias);
 			break;
 
+		case s2_weldJoint:
+			s2SolveWeld_Baumgarte(joint, context, inv_h, useBias);
+			break;
+
 		default:
 			S2_ASSERT(false);
 	}
@@ -427,6 +493,7 @@ void s2SolveJoint_Baumgarte(s2Joint* joint, s2StepContext* context, float h, flo
 
 //extern void s2PrepareMouse_XPBD(s2Joint* base, s2StepContext* context);
 extern void s2PrepareRevolute_XPBD(s2Joint* base, s2StepContext* context);
+extern void s2PrepareWeld_XPBD(s2Joint* base, s2StepContext* context);
 
 void s2PrepareJoint_XPBD(s2Joint* joint, s2StepContext* context)
 {
@@ -440,6 +507,10 @@ void s2PrepareJoint_XPBD(s2Joint* joint, s2StepContext* context)
 			s2PrepareRevolute_XPBD(joint, context);
 			break;
 
+		case s2_weldJoint:
+			s2PrepareWeld_XPBD(joint, context);
+			break;
+
 		default:
 			S2_ASSERT(false);
 	}
@@ -447,6 +518,7 @@ void s2PrepareJoint_XPBD(s2Joint* joint, s2StepContext* context)
 
 //extern void s2SolveMouse_XPBD(s2Joint* base, s2StepContext* context);
 extern void s2SolveRevolute_XPBD(s2Joint* base, s2StepContext* context, float inv_h);
+extern void s2SolveWeld_XPBD(s2Joint* base, s2StepContext* context);
 
 void s2SolveJoint_XPBD(s2Joint* joint, s2StepContext* context, float inv_h)
 {
@@ -458,6 +530,10 @@ void s2SolveJoint_XPBD(s2Joint* joint, s2StepContext* context, float inv_h)
 
 		case s2_revoluteJoint:
 			s2SolveRevolute_XPBD(joint, context, inv_h);
+			break;
+
+		case s2_weldJoint:
+			s2SolveWeld_XPBD(joint, context);
 			break;
 
 		default:
