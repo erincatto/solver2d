@@ -58,6 +58,7 @@ typedef struct s2RevoluteJoint
 	float maxMotorTorque;
 	float motorSpeed;
 	bool enableLimit;
+	bool enableDirect;
 	float referenceAngle;
 	float lowerAngle;
 	float upperAngle;
@@ -110,6 +111,7 @@ void s2SolveJoint(s2Joint* joint, s2StepContext* context, float h);
 
 void s2PrepareJoint_Soft(s2Joint* joint, s2StepContext* context, float h, float hertz, bool warmStart);
 void s2SolveJoint_Soft(s2Joint* joint, s2StepContext* context, float h, float inv_h, bool useBias);
+void s2SolveRevoluteAxial_Soft(s2Joint* base, s2StepContext* context, float h, float inv_h, bool useBias);
 
 void s2SolveJoint_Baumgarte(s2Joint* joint, s2StepContext* context, float h, float inv_h, bool useBias);
 

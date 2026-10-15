@@ -13,7 +13,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-static void s2WarmStartContacts_Fixed(s2World* world, s2ContactConstraint* constraints, int constraintCount)
+void s2WarmStartContacts_Fixed(s2World* world, s2ContactConstraint* constraints, int constraintCount)
 {
 	s2Body* bodies = world->bodies;
 
@@ -63,8 +63,8 @@ static void s2WarmStartContacts_Fixed(s2World* world, s2ContactConstraint* const
 }
 
 // Uses fixed contact offsets which may be better for fast moving wheels
-static void s2SolveContacts_TGS_Fixed(s2World* world, s2ContactConstraint* constraints, int constraintCount, float inv_h,
-											  bool useBias)
+void s2SolveContacts_TGS_Fixed(s2World* world, s2ContactConstraint* constraints, int constraintCount, float inv_h,
+								bool useBias)
 {
 	s2Body* bodies = world->bodies;
 

@@ -76,6 +76,10 @@ typedef struct s2RevoluteJointDef
 
 	/// Set this flag to true if the attached bodies should collide.
 	bool collideConnected;
+
+	/// Solve the point constraint together with other opted in joints sharing a body, by a direct solver.
+	/// Only used by solvers that support it.
+	bool enableDirect;
 } s2RevoluteJointDef;
 
 static inline struct s2RevoluteJointDef s2DefaultRevoluteJointDef(void)
@@ -94,5 +98,6 @@ static inline struct s2RevoluteJointDef s2DefaultRevoluteJointDef(void)
 	def.enableMotor = false;
 	def.drawSize = 1.0f;
 	def.collideConnected = false;
+	def.enableDirect = false;
 	return def;
 }

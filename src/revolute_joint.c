@@ -516,7 +516,8 @@ void s2PrepareRevolute_Soft(s2Joint* base, s2StepContext* context, float h, floa
 	}
 }
 
-void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float inv_h, bool useBias)
+// Motor and limits only
+void s2SolveRevoluteAxial_Soft(s2Joint* base, s2StepContext* context, float h, float inv_h, bool useBias)
 {
 	S2_ASSERT(base->type == s2_revoluteJoint);
 
@@ -525,12 +526,9 @@ void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float 
 	s2Body* bodyA = context->bodies + base->edges[0].bodyIndex;
 	s2Body* bodyB = context->bodies + base->edges[1].bodyIndex;
 
-	s2Vec2 vA = bodyA->linearVelocity;
 	float wA = bodyA->angularVelocity;
-	s2Vec2 vB = bodyB->linearVelocity;
 	float wB = bodyB->angularVelocity;
 
-	float mA = joint->invMassA, mB = joint->invMassB;
 	float iA = joint->invIA, iB = joint->invIB;
 
 	bool fixedRotation = (iA + iB == 0.0f);
@@ -612,6 +610,29 @@ void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float 
 			wB -= iB * impulse;
 		}
 	}
+
+	bodyA->angularVelocity = wA;
+	bodyB->angularVelocity = wB;
+}
+
+void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float inv_h, bool useBias)
+{
+	S2_ASSERT(base->type == s2_revoluteJoint);
+
+	s2SolveRevoluteAxial_Soft(base, context, h, inv_h, useBias);
+
+	s2RevoluteJoint* joint = &base->revoluteJoint;
+
+	s2Body* bodyA = context->bodies + base->edges[0].bodyIndex;
+	s2Body* bodyB = context->bodies + base->edges[1].bodyIndex;
+
+	s2Vec2 vA = bodyA->linearVelocity;
+	float wA = bodyA->angularVelocity;
+	s2Vec2 vB = bodyB->linearVelocity;
+	float wB = bodyB->angularVelocity;
+
+	float mA = joint->invMassA, mB = joint->invMassB;
+	float iA = joint->invIA, iB = joint->invIB;
 
 	// Solve point-to-point constraint
 	{

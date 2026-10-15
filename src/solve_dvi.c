@@ -5,6 +5,7 @@
 #include "contact.h"
 #include "core.h"
 #include "joint.h"
+#include "joint_factor.h"
 #include "solvers.h"
 #include "stack_allocator.h"
 #include "world.h"
@@ -74,17 +75,6 @@ typedef struct s2DVIJoint
 	// 1 at the lower limit, -1 at the upper limit, 0 within limits
 	float limitSide;
 } s2DVIJoint;
-
-// Cholesky factor stored by rows from the first nonzero column to the diagonal. Fill-in stays inside this
-// envelope, so ordering for a small envelope keeps the factorization sparse.
-typedef struct s2Envelope
-{
-	int rowCount;
-	int* first;
-	int* offset;
-	float* values;
-	float* scale;
-} s2Envelope;
 
 static void s2PrepareContacts_DVI(s2World* world, s2DVIContact* constraints, int constraintCount, float inv_h,
 								  bool warmStart)
@@ -301,274 +291,16 @@ static void s2WarmStart_DVI(s2World* world, s2DVIContact* contacts, int contactC
 	}
 }
 
-// Reverse Cuthill-McKee ordering of the joint graph for a small envelope.
-// From George and Liu, Computer Solution of Large Sparse Positive Definite Systems, 1981.
-static void s2OrderJoints(int count, const int* adjacencyStart, const int* adjacency, int* order, int* position)
-{
-	for (int i = 0; i < count; ++i)
-	{
-		position[i] = -1;
-	}
-
-	int orderedCount = 0;
-	while (orderedCount < count)
-	{
-		// Start each connected component from a node of minimum degree
-		int start = -1;
-		int startDegree = INT32_MAX;
-		for (int i = 0; i < count; ++i)
-		{
-			int degree = adjacencyStart[i + 1] - adjacencyStart[i];
-			if (position[i] == -1 && degree < startDegree)
-			{
-				start = i;
-				startDegree = degree;
-			}
-		}
-
-		position[start] = orderedCount;
-		order[orderedCount++] = start;
-
-		int head = orderedCount - 1;
-		while (head < orderedCount)
-		{
-			int node = order[head++];
-			int levelStart = orderedCount;
-
-			for (int k = adjacencyStart[node]; k < adjacencyStart[node + 1]; ++k)
-			{
-				int other = adjacency[k];
-				if (position[other] == -1)
-				{
-					position[other] = orderedCount;
-					order[orderedCount++] = other;
-				}
-			}
-
-			// Visit new neighbors by increasing degree
-			for (int k = levelStart + 1; k < orderedCount; ++k)
-			{
-				int node1 = order[k];
-				int degree1 = adjacencyStart[node1 + 1] - adjacencyStart[node1];
-				int m = k;
-				while (m > levelStart && adjacencyStart[order[m - 1] + 1] - adjacencyStart[order[m - 1]] > degree1)
-				{
-					order[m] = order[m - 1];
-					m -= 1;
-				}
-				order[m] = node1;
-			}
-		}
-	}
-
-	for (int i = 0; i < count / 2; ++i)
-	{
-		int temp = order[i];
-		order[i] = order[count - 1 - i];
-		order[count - 1 - i] = temp;
-	}
-
-	for (int i = 0; i < count; ++i)
-	{
-		position[order[i]] = i;
-	}
-}
-
-// Delassus block J M^-1 J^T coupling the point rows of joints p and q through their shared dynamic bodies
-static void s2ComputeJointBlock(s2World* world, const s2DVIJoint* p, const s2DVIJoint* q, float K[2][2])
-{
-	K[0][0] = K[0][1] = K[1][0] = K[1][1] = 0.0f;
-
-	int indicesP[2] = {p->indexA, p->indexB};
-	int indicesQ[2] = {q->indexA, q->indexB};
-	s2Vec2 anchorsP[2] = {p->rA, p->rB};
-	s2Vec2 anchorsQ[2] = {q->rA, q->rB};
-	float signs[2] = {-1.0f, 1.0f};
-
-	for (int a = 0; a < 2; ++a)
-	{
-		for (int b = 0; b < 2; ++b)
-		{
-			if (indicesP[a] != indicesQ[b])
-			{
-				continue;
-			}
-
-			s2Body* body = world->bodies + indicesP[a];
-			float m = body->invMass;
-			float i = body->invI;
-			float s = signs[a] * signs[b];
-
-			// Angular Jacobian of the x and y rows is the perp of the anchor
-			s2Vec2 cp = s2LeftPerp(anchorsP[a]);
-			s2Vec2 cq = s2LeftPerp(anchorsQ[b]);
-
-			K[0][0] += s * (m + i * cp.x * cq.x);
-			K[0][1] += s * (i * cp.x * cq.y);
-			K[1][0] += s * (i * cp.y * cq.x);
-			K[1][1] += s * (m + i * cp.y * cq.y);
-		}
-	}
-}
-
-static inline float* s2EnvelopeEntry(s2Envelope* envelope, int row, int column)
-{
-	S2_ASSERT(envelope->first[row] <= column && column <= row);
-	return envelope->values + envelope->offset[row] + column - envelope->first[row];
-}
-
-// Row oriented Cholesky. Entries left of the envelope are zero in both the matrix and the factor.
-static void s2FactorEnvelope(s2Envelope* envelope)
-{
-	int n = envelope->rowCount;
-	for (int i = 0; i < n; ++i)
-	{
-		int firstI = envelope->first[i];
-		float* rowI = envelope->values + envelope->offset[i] - firstI;
-
-		for (int j = firstI; j <= i; ++j)
-		{
-			int firstJ = envelope->first[j];
-			float* rowJ = envelope->values + envelope->offset[j] - firstJ;
-
-			float sum = rowI[j];
-			for (int k = S2_MAX(firstI, firstJ); k < j; ++k)
-			{
-				sum -= rowI[k] * rowJ[k];
-			}
-
-			if (j < i)
-			{
-				rowI[j] = sum / rowJ[j];
-			}
-			else
-			{
-				// Roundoff on redundant loops can leave a nonpositive pivot
-				rowI[i] = sqrtf(S2_MAX(sum, S2_DVI_JOINT_REGULARIZATION));
-			}
-		}
-	}
-}
-
-static void s2SolveEnvelope(const s2Envelope* envelope, float* x)
-{
-	int n = envelope->rowCount;
-
-	for (int i = 0; i < n; ++i)
-	{
-		int firstI = envelope->first[i];
-		const float* rowI = envelope->values + envelope->offset[i] - firstI;
-		float sum = x[i];
-		for (int k = firstI; k < i; ++k)
-		{
-			sum -= rowI[k] * x[k];
-		}
-		x[i] = sum / rowI[i];
-	}
-
-	for (int i = n - 1; i >= 0; --i)
-	{
-		int firstI = envelope->first[i];
-		const float* rowI = envelope->values + envelope->offset[i] - firstI;
-		x[i] /= rowI[i];
-		for (int k = firstI; k < i; ++k)
-		{
-			x[k] -= rowI[k] * x[i];
-		}
-	}
-}
-
-// Assemble and factor the joint point block in envelope form. Rows 2p and 2p+1 belong to the joint at position p.
-static void s2BuildJointFactor(s2World* world, const s2DVIJoint* joints, const int* adjacencyStart, const int* adjacency,
-							   const int* order, const int* position, s2Envelope* envelope)
-{
-	int jointCount = envelope->rowCount / 2;
-
-	int size = 0;
-	for (int p = 0; p < jointCount; ++p)
-	{
-		int node = order[p];
-		int firstBlock = p;
-		for (int k = adjacencyStart[node]; k < adjacencyStart[node + 1]; ++k)
-		{
-			firstBlock = S2_MIN(firstBlock, position[adjacency[k]]);
-		}
-
-		for (int r = 0; r < 2; ++r)
-		{
-			int row = 2 * p + r;
-			envelope->first[row] = 2 * firstBlock;
-			envelope->offset[row] = size;
-			size += row - 2 * firstBlock + 1;
-		}
-	}
-	envelope->offset[envelope->rowCount] = size;
-
-	envelope->values = s2AllocateStackItem(world->stackAllocator, size * sizeof(float), "dvi envelope");
-	for (int i = 0; i < size; ++i)
-	{
-		envelope->values[i] = 0.0f;
-	}
-
-	for (int p = 0; p < jointCount; ++p)
-	{
-		int node = order[p];
-		const s2DVIJoint* jointP = joints + node;
-
-		float K[2][2];
-		s2ComputeJointBlock(world, jointP, jointP, K);
-		*s2EnvelopeEntry(envelope, 2 * p, 2 * p) = K[0][0];
-		*s2EnvelopeEntry(envelope, 2 * p + 1, 2 * p) = K[1][0];
-		*s2EnvelopeEntry(envelope, 2 * p + 1, 2 * p + 1) = K[1][1];
-
-		for (int k = adjacencyStart[node]; k < adjacencyStart[node + 1]; ++k)
-		{
-			int q = position[adjacency[k]];
-			if (q >= p)
-			{
-				continue;
-			}
-
-			s2ComputeJointBlock(world, jointP, joints + adjacency[k], K);
-			for (int r = 0; r < 2; ++r)
-			{
-				for (int c = 0; c < 2; ++c)
-				{
-					*s2EnvelopeEntry(envelope, 2 * p + r, 2 * q + c) = K[r][c];
-				}
-			}
-		}
-	}
-
-	// Symmetric scaling to a unit diagonal preserves float precision across mass ratios
-	for (int i = 0; i < envelope->rowCount; ++i)
-	{
-		envelope->scale[i] = 1.0f / sqrtf(S2_ABS(*s2EnvelopeEntry(envelope, i, i)) + FLT_EPSILON);
-	}
-
-	for (int i = 0; i < envelope->rowCount; ++i)
-	{
-		for (int j = envelope->first[i]; j <= i; ++j)
-		{
-			*s2EnvelopeEntry(envelope, i, j) *= envelope->scale[i] * envelope->scale[j];
-		}
-		*s2EnvelopeEntry(envelope, i, i) += S2_DVI_JOINT_REGULARIZATION;
-	}
-
-	s2FactorEnvelope(envelope);
-}
-
 // Solve the joint block given the current inequality impulses. Matrix free this is the impulse that zeroes the
 // current biased joint velocity, which matches Kamino's D_bb * lambda_b = -(v_f + D_bu * lambda_u).
-static void s2SolveJointBlock(s2World* world, s2DVIJoint* joints, const int* order, const s2Envelope* envelope,
-							  float* rhs)
+static void s2SolveJointBlock(s2World* world, s2DVIJoint* joints, s2JointFactor* factor)
 {
 	s2Body* bodies = world->bodies;
-	int jointCount = envelope->rowCount / 2;
+	int jointCount = factor->jointCount;
 
-	for (int p = 0; p < jointCount; ++p)
+	for (int i = 0; i < jointCount; ++i)
 	{
-		const s2DVIJoint* dj = joints + order[p];
+		const s2DVIJoint* dj = joints + i;
 		s2Body* bodyA = bodies + dj->indexA;
 		s2Body* bodyB = bodies + dj->indexB;
 
@@ -576,16 +308,15 @@ static void s2SolveJointBlock(s2World* world, s2DVIJoint* joints, const int* ord
 		s2Vec2 vrB = s2Add(bodyB->linearVelocity, s2CrossSV(bodyB->angularVelocity, dj->rB));
 		s2Vec2 Cdot = s2Add(s2Sub(vrB, vrA), dj->bias);
 
-		rhs[2 * p] = -envelope->scale[2 * p] * Cdot.x;
-		rhs[2 * p + 1] = -envelope->scale[2 * p + 1] * Cdot.y;
+		factor->rhs[i] = s2Neg(Cdot);
 	}
 
-	s2SolveEnvelope(envelope, rhs);
+	s2SolveJointFactor(factor);
 
 	for (int p = 0; p < jointCount; ++p)
 	{
-		s2DVIJoint* dj = joints + order[p];
-		s2Vec2 impulse = {envelope->scale[2 * p] * rhs[2 * p], envelope->scale[2 * p + 1] * rhs[2 * p + 1]};
+		s2DVIJoint* dj = joints + factor->order[p];
+		s2Vec2 impulse = factor->rhs[factor->order[p]];
 
 		s2RevoluteJoint* joint = &dj->joint->revoluteJoint;
 		joint->impulse = s2Add(joint->impulse, impulse);
@@ -761,13 +492,10 @@ void s2Solve_DVI(s2World* world, s2StepContext* context)
 	}
 
 	s2DVIJoint* joints = s2AllocateStackItem(stack, jointCapacity * sizeof(s2DVIJoint), "dvi joints");
-	int* jointMap = s2AllocateStackItem(stack, jointCapacity * sizeof(int), "dvi joint map");
 	int jointCount = 0;
 	bool hasInequalities = contactCount > 0;
 	for (int i = 0; i < jointCapacity; ++i)
 	{
-		jointMap[i] = S2_NULL_INDEX;
-
 		s2Joint* joint = worldJoints + i;
 		if (s2IsFree(&joint->object))
 		{
@@ -796,7 +524,6 @@ void s2Solve_DVI(s2World* world, s2StepContext* context)
 		s2PrepareRevolute_DVI(world, dj, inv_h, warmStart);
 		hasInequalities = hasInequalities || joint->revoluteJoint.enableMotor || dj->limitSide != 0.0f;
 
-		jointMap[i] = jointCount;
 		jointCount += 1;
 	}
 
@@ -815,67 +542,20 @@ void s2Solve_DVI(s2World* world, s2StepContext* context)
 		}
 	}
 
-	// Joints are adjacent when they share a dynamic body
-	int* adjacencyStart = s2AllocateStackItem(stack, (jointCount + 1) * sizeof(int), "dvi adjacency start");
-	int adjacencyCapacity = 0;
+	s2JointFactor factor;
+	s2CreateJointFactor(world, &factor, jointCount);
 	for (int i = 0; i < jointCount; ++i)
 	{
-		adjacencyStart[i] = adjacencyCapacity;
-		s2Body* bodyA = bodies + joints[i].indexA;
-		s2Body* bodyB = bodies + joints[i].indexB;
-		adjacencyCapacity += bodyA->type == s2_dynamicBody ? bodyA->jointCount : 0;
-		adjacencyCapacity += bodyB->type == s2_dynamicBody ? bodyB->jointCount : 0;
+		const s2DVIJoint* dj = joints + i;
+		factor.jointIndices[i] = dj->joint->object.index;
+		factor.rows[i] = (s2PointRows){dj->indexA, dj->indexB, dj->rA, dj->rB};
 	}
-	adjacencyStart[jointCount] = adjacencyCapacity;
-
-	int* adjacency = s2AllocateStackItem(stack, S2_MAX(1, adjacencyCapacity) * sizeof(int), "dvi adjacency");
-	int adjacencyCount = 0;
-	for (int i = 0; i < jointCount; ++i)
-	{
-		int capacity = adjacencyStart[i + 1];
-		adjacencyStart[i] = adjacencyCount;
-
-		int indices[2] = {joints[i].indexA, joints[i].indexB};
-		for (int side = 0; side < 2; ++side)
-		{
-			s2Body* body = bodies + indices[side];
-			if (body->type != s2_dynamicBody)
-			{
-				continue;
-			}
-
-			int jointKey = body->jointList;
-			while (jointKey != S2_NULL_INDEX)
-			{
-				int jointIndex = jointKey >> 1;
-				int other = jointMap[jointIndex];
-				if (other != S2_NULL_INDEX && other != i)
-				{
-					S2_ASSERT(adjacencyCount < capacity);
-					adjacency[adjacencyCount++] = other;
-				}
-				jointKey = worldJoints[jointIndex].edges[jointKey & 1].nextKey;
-			}
-		}
-	}
-	adjacencyStart[jointCount] = adjacencyCount;
-
-	int* order = s2AllocateStackItem(stack, S2_MAX(1, jointCount) * sizeof(int), "dvi order");
-	int* position = s2AllocateStackItem(stack, S2_MAX(1, jointCount) * sizeof(int), "dvi position");
-
-	int rowCount = 2 * jointCount;
-	s2Envelope envelope = {0};
-	envelope.rowCount = rowCount;
-	envelope.first = s2AllocateStackItem(stack, S2_MAX(1, rowCount) * sizeof(int), "dvi first");
-	envelope.offset = s2AllocateStackItem(stack, (rowCount + 1) * sizeof(int), "dvi offset");
-	envelope.scale = s2AllocateStackItem(stack, S2_MAX(1, rowCount) * sizeof(float), "dvi scale");
-	float* rhs = s2AllocateStackItem(stack, S2_MAX(1, rowCount) * sizeof(float), "dvi rhs");
+	s2OrderJointFactor(world, &factor);
 
 	if (jointCount > 0)
 	{
-		s2OrderJoints(jointCount, adjacencyStart, adjacency, order, position);
-		s2BuildJointFactor(world, joints, adjacencyStart, adjacency, order, position, &envelope);
-		s2SolveJointBlock(world, joints, order, &envelope, rhs);
+		s2FactorJoints(world, &factor, S2_DVI_JOINT_REGULARIZATION);
+		s2SolveJointBlock(world, joints, &factor);
 
 		if (hasInequalities)
 		{
@@ -886,7 +566,7 @@ void s2Solve_DVI(s2World* world, s2StepContext* context)
 					s2SolveInequalities(world, context, joints, jointCount, contacts, contactCount, true, sweep % 2 == 1);
 				}
 
-				s2SolveJointBlock(world, joints, order, &envelope, rhs);
+				s2SolveJointBlock(world, joints, &factor);
 			}
 		}
 	}
@@ -917,19 +597,7 @@ void s2Solve_DVI(s2World* world, s2StepContext* context)
 		}
 	}
 
-	if (envelope.values != NULL)
-	{
-		s2FreeStackItem(stack, envelope.values);
-	}
-	s2FreeStackItem(stack, rhs);
-	s2FreeStackItem(stack, envelope.scale);
-	s2FreeStackItem(stack, envelope.offset);
-	s2FreeStackItem(stack, envelope.first);
-	s2FreeStackItem(stack, position);
-	s2FreeStackItem(stack, order);
-	s2FreeStackItem(stack, adjacency);
-	s2FreeStackItem(stack, adjacencyStart);
-	s2FreeStackItem(stack, jointMap);
+	s2DestroyJointFactor(world, &factor);
 	s2FreeStackItem(stack, joints);
 	s2FreeStackItem(stack, contacts);
 }

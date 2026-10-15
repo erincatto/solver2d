@@ -66,6 +66,11 @@ void s2WarmStartContacts(s2World* world, s2ContactConstraint* constraints, int c
 void s2SolveContact_NGS(s2World* world, s2ContactConstraint* constraints, int constraintCount);
 void s2StoreContactImpulses(s2ContactConstraint* constraints, int constraintCount);
 
+// soft step
+void s2WarmStartContacts_Fixed(s2World* world, s2ContactConstraint* constraints, int constraintCount);
+void s2SolveContacts_TGS_Fixed(s2World* world, s2ContactConstraint* constraints, int constraintCount, float inv_h,
+								bool useBias);
+
 // many solvers
 void s2Solve_Jacobi(s2World* world, s2StepContext* stepContext);
 void s2Solve_PGS(s2World* world, s2StepContext* stepContext);
@@ -77,4 +82,5 @@ void s2Solve_TGS_Sticky(s2World* world, s2StepContext* stepContext);
 void s2Solve_TGS_NGS(s2World* world, s2StepContext* stepContext);
 void s2Solve_XPBD(s2World* world, s2StepContext* stepContext);
 void s2Solve_SoftStep(s2World* world, s2StepContext* stepContext);
+void s2Solve_SoftStepD(s2World* world, s2StepContext* stepContext);
 void s2Solve_DVI(s2World* world, s2StepContext* stepContext);

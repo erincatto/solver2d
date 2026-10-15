@@ -85,6 +85,7 @@ typedef enum s2SolverType
 	s2_solverTGS_NGS,
 	s2_solverXPBD,
 	s2_solverDVI,
+	s2_solverSoftStepD,
 	s2_solverTypeCount,
 } s2SolverType;
 

@@ -527,3 +527,50 @@ public:
 };
 
 static int sampleStretchedChain = RegisterSample("Joints", "Stretched Chain", StretchedChain::Create);
+
+// A single joint, where Soft Step D should match Soft Step to roundoff
+class Pendulum : public Sample
+{
+public:
+	Pendulum(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		if (settings.restart == false)
+		{
+			g_camera.m_center = {0.0f, 6.0f};
+			g_camera.m_zoom = 0.5f;
+		}
+
+		s2BodyId groundId = s2_nullBodyId;
+		{
+			s2BodyDef bodyDef = s2_defaultBodyDef;
+			groundId = s2CreateBody(m_worldId, &bodyDef);
+		}
+
+		float hx = 2.0f;
+		s2Polygon box = s2MakeBox(hx, 0.25f);
+		s2ShapeDef shapeDef = s2_defaultShapeDef;
+
+		s2BodyDef bodyDef = s2_defaultBodyDef;
+		bodyDef.type = s2_dynamicBody;
+		bodyDef.position = {hx, 10.0f};
+		s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+		s2CreatePolygonShape(bodyId, &shapeDef, &box);
+
+		s2Vec2 pivot = {0.0f, 10.0f};
+		s2RevoluteJointDef jointDef = s2DefaultRevoluteJointDef();
+		jointDef.bodyIdA = groundId;
+		jointDef.bodyIdB = bodyId;
+		jointDef.localAnchorA = s2Body_GetLocalPoint(groundId, pivot);
+		jointDef.localAnchorB = s2Body_GetLocalPoint(bodyId, pivot);
+		jointDef.enableDirect = true;
+		s2CreateRevoluteJoint(m_worldId, &jointDef);
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new Pendulum(settings, solverType);
+	}
+};
+
+static int samplePendulum = RegisterSample("Joints", "Pendulum", Pendulum::Create);

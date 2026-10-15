@@ -19,7 +19,7 @@
 #include <vector>
 
 static const char* s_solverNames[s2_solverTypeCount] = {
-	"jacobi", "pgs", "pgs_ngs", "pgs_ngs_block", "pgs_soft", "soft_step", "tgs_sticky", "tgs_soft", "tgs_ngs", "xpbd", "dvi",
+	"jacobi", "pgs", "pgs_ngs", "pgs_ngs_block", "pgs_soft", "soft_step", "tgs_sticky", "tgs_soft", "tgs_ngs", "xpbd", "dvi", "soft_step_d",
 };
 
 static_assert(S2_ARRAY_COUNT(s_solverNames) == s2_solverTypeCount);
