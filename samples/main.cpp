@@ -466,6 +466,11 @@ static void UpdateUI(s2Color* solverColors)
 			ImGui::Checkbox("XPBD", &s_settings.enabledSolvers[s2_solverXPBD]);
 			ImGui::PopStyleColor();
 
+			c = solverColors[s2_solverDVI];
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{c.r, c.g, c.b, c.a});
+			ImGui::Checkbox("DVI", &s_settings.enabledSolvers[s2_solverDVI]);
+			ImGui::PopStyleColor();
+
 
 			ImGui::Separator();
 
@@ -698,6 +703,7 @@ int main(int, char**)
 		s2MakeColor(s2_colorYellow2, colorAlpha),
 		s2MakeColor(s2_colorOrchid, colorAlpha),
 		s2MakeColor(s2_colorSpringGreen, colorAlpha),
+		s2MakeColor(s2_colorGold, colorAlpha),
 			};
 
 	static_assert(S2_ARRAY_COUNT(solverColors) == s2_solverTypeCount);

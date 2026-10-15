@@ -284,7 +284,18 @@ void s2SolveRevolute(s2Joint* base, s2StepContext* context, float h)
 #endif
 
 		s2Vec2 Cdot = s2Sub(s2Add(vB, s2CrossSV(wB, rB)), s2Add(vA, s2CrossSV(wA, rA)));
+
+#if S2_FRESH_PIVOT_MASS == 1
+		// Substepping rotates the anchors after prepare. A stale mass with large rotations overshoots and diverges.
+		s2Mat22 K;
+		K.cx.x = mA + mB + rA.y * rA.y * iA + rB.y * rB.y * iB;
+		K.cy.x = -rA.y * rA.x * iA - rB.y * rB.x * iB;
+		K.cx.y = K.cy.x;
+		K.cy.y = mA + mB + rA.x * rA.x * iA + rB.x * rB.x * iB;
+		s2Vec2 impulse = s2Solve22(K, s2Neg(Cdot));
+#else
 		s2Vec2 impulse = s2MulMV(joint->pivotMass, s2Neg(Cdot));
+#endif
 
 		joint->impulse.x += impulse.x;
 		joint->impulse.y += impulse.y;
@@ -592,7 +603,7 @@ void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float 
 			}
 
 			float Cdot = wA - wB;
-			float impulse = -joint->axialMass * massScale * (Cdot + bias) - impulseScale * joint->lowerImpulse;
+			float impulse = -joint->axialMass * massScale * (Cdot + bias) - impulseScale * joint->upperImpulse;
 			float oldImpulse = joint->upperImpulse;
 			joint->upperImpulse = S2_MAX(joint->upperImpulse + impulse, 0.0f);
 			impulse = joint->upperImpulse - oldImpulse;

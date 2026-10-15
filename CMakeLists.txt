@@ -24,6 +24,7 @@ endif()
 
 add_subdirectory(src)
 add_subdirectory(samples)
+add_subdirectory(runner)
 
 # default startup project for Visual Studio
 if (MSVC)

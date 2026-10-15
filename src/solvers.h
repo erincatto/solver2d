@@ -77,3 +77,4 @@ void s2Solve_TGS_Sticky(s2World* world, s2StepContext* stepContext);
 void s2Solve_TGS_NGS(s2World* world, s2StepContext* stepContext);
 void s2Solve_XPBD(s2World* world, s2StepContext* stepContext);
 void s2Solve_SoftStep(s2World* world, s2StepContext* stepContext);
+void s2Solve_DVI(s2World* world, s2StepContext* stepContext);

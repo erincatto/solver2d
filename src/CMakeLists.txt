@@ -28,6 +28,7 @@ set(S2D_SOURCE_FILES
 	shape.c
 	shape.h
 	solve_common.c
+	solve_dvi.c
 	solve_jacobi.c
 	solve_pgs.c
 	solve_pgs_ngs.c

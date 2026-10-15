@@ -16,6 +16,11 @@
 
 #include <stdbool.h>
 
+// NGS moves positions without touching velocity, so every pass can add energy. Running joint NGS on every
+// substep pumps energy into stretched joint networks until they explode. 0 runs NGS on every substep.
+#define S2_JOINT_NGS_LAST_SUBSTEP 1
+#define S2_CONTACT_NGS_LAST_SUBSTEP 1
+
 static void s2PrepareContacts(s2World* world, s2ContactConstraint* constraints, int constraintCount, bool warmStart)
 {
 	s2Body* bodies = world->bodies;
@@ -201,8 +206,9 @@ static void s2SolveContacts_TGS(s2World* world, s2ContactConstraint* constraints
 }
 
 // TGS_NGS does sub-stepping of rigid contacts with speculation.
-// Each substep includes a single PGS iteration on velocities and
-// a single NGS iteration on positions using pseudo velocities.
+// Each substep includes a single PGS iteration on velocities and an optional relax
+// iteration. A single NGS iteration on positions using pseudo velocities runs on the
+// last substep or on every substep, depending on the defines above.
 // TGS_NGS suffers from excessive and inaccurate warm starting, which leads to overly bouncy collisions.
 void s2Solve_TGS_NGS(s2World* world, s2StepContext* context)
 {
@@ -236,7 +242,7 @@ void s2Solve_TGS_NGS(s2World* world, s2StepContext* context)
 
 	// Loops
 	// body: 1 + 2 * substepCount
-	// constraint: 2 + 2 * substepCount
+	// constraint: 2 + substepCount, plus substepCount with relax, plus 1 or substepCount for NGS
 
 	// constraint loop
 	s2PrepareContacts(world, constraints, constraintCount, context->warmStart);
@@ -290,21 +296,47 @@ void s2Solve_TGS_NGS(s2World* world, s2StepContext* context)
 		}
 
 		s2SolveContacts_TGS(world, constraints, constraintCount, inv_h);
-		
+
 		s2IntegratePositions(world, h);
 
-		for (int i = 0; i < jointCapacity; ++i)
+		// Relax with a second sweep after integrating positions. One sweep per substep leaves the normal
+		// impulses unconverged, so the friction limit fluctuates under load and tall stacks slip and collapse.
+		if (context->extraIterations > 0)
 		{
-			s2Joint* joint = joints + i;
-			if (s2IsFree(&joint->object))
+			for (int i = 0; i < jointCapacity; ++i)
 			{
-				continue;
+				s2Joint* joint = joints + i;
+				if (s2IsFree(&joint->object))
+				{
+					continue;
+				}
+
+				s2SolveJoint(joint, context, h);
 			}
 
-			s2SolveJointPosition(joint, context);
+			s2SolveContacts_TGS(world, constraints, constraintCount, inv_h);
 		}
 
-		s2SolveContact_NGS(world, constraints, constraintCount);
+		bool lastSubstep = substep == substepCount - 1;
+
+		if (S2_JOINT_NGS_LAST_SUBSTEP == 0 || lastSubstep)
+		{
+			for (int i = 0; i < jointCapacity; ++i)
+			{
+				s2Joint* joint = joints + i;
+				if (s2IsFree(&joint->object))
+				{
+					continue;
+				}
+
+				s2SolveJointPosition(joint, context);
+			}
+		}
+
+		if (S2_CONTACT_NGS_LAST_SUBSTEP == 0 || lastSubstep)
+		{
+			s2SolveContact_NGS(world, constraints, constraintCount);
+		}
 	}
 
 	// body loop
