@@ -98,6 +98,15 @@ s2WorldId s2CreateWorld(const s2WorldDef* def)
 	world->restitutionThreshold = 1.0f;
 	world->jointHertz = s2_jointHertz;
 	world->jointHertzCap = 0.25f;
+	world->enableDirectRelax = true;
+
+	// The direct solve is stable far above the Gauss-Seidel chain limit. Tension in a taut chain still grows with
+	// stiffness, and this keeps a 2x margin on Bridge at 4 substeps.
+	if (world->solverType == s2_solverSoftStepD)
+	{
+		world->jointHertz = 480.0f;
+		world->jointHertzCap = 2.0f;
+	}
 
 	id.revision = world->revision;
 
@@ -190,7 +199,8 @@ void s2World_Step(s2WorldId worldId, float timeStep, int velIters, int posIters,
 		type == s2_solverTGS_Sticky ||
 		type == s2_solverTGS_NGS ||
 		type == s2_solverSoftStep ||
-		type == s2_solverSoftStepD)
+		type == s2_solverSoftStepD ||
+		type == s2_solverSoftStepSeed)
 	{
 		context.h = context.dt / context.iterations;
 		context.inv_h = context.inv_dt * context.iterations;
@@ -260,6 +270,10 @@ void s2World_Step(s2WorldId worldId, float timeStep, int velIters, int posIters,
 
 			case s2_solverSoftStepD:
 				s2Solve_SoftStepD(world, &context);
+				break;
+
+			case s2_solverSoftStepSeed:
+				s2Solve_SoftStepSeed(world, &context);
 				break;
 
 			default:
@@ -383,6 +397,26 @@ void s2World_SetJointHertz(s2WorldId worldId, float hertz, float capFraction)
 	s2World* world = s2GetWorldFromId(worldId);
 	world->jointHertz = hertz;
 	world->jointHertzCap = capFraction;
+}
+
+void s2World_SetJointCRIterations(s2WorldId worldId, int iterations)
+{
+	S2_ASSERT(iterations >= 0);
+	s2World* world = s2GetWorldFromId(worldId);
+	world->jointCRIterations = iterations;
+}
+
+void s2World_SetJointSeedMode(s2WorldId worldId, s2SeedMode mode)
+{
+	S2_ASSERT(0 <= mode && mode < s2_seedModeCount);
+	s2World* world = s2GetWorldFromId(worldId);
+	world->jointSeedMode = mode;
+}
+
+void s2World_EnableDirectRelax(s2WorldId worldId, bool flag)
+{
+	s2World* world = s2GetWorldFromId(worldId);
+	world->enableDirectRelax = flag;
 }
 
 void s2World_Draw(s2WorldId worldId, s2DebugDraw* draw)

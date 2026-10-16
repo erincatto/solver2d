@@ -391,7 +391,7 @@ static void ScrollCallback(GLFWwindow* window, double dx, double dy)
 
 static void UpdateUI(s2Color* solverColors)
 {
-	float menuWidth = 200.0f;
+	float menuWidth = 300.0f;
 	if (g_draw.m_showUI == false)
 	{
 		return;
@@ -412,7 +412,15 @@ static void UpdateUI(s2Color* solverColors)
 			ImGui::SliderInt("Multi-Steps", &s_settings.multiSteps, 1, 200);
 			ImGui::SliderFloat("Hertz", &s_settings.hertz, 5.0f, 480.0f, "%.0f Hz");
 			ImGui::SliderFloat("Joint Hertz", &s_settings.jointHertz, 10.0f, 10000.0f, "%.0f Hz", ImGuiSliderFlags_Logarithmic);
-			ImGui::SliderFloat("Joint Cap D", &s_settings.jointHertzCap, 0.0f, 1.0f, "%.2f");
+			ImGui::SliderFloat("Joint Hertz D", &s_settings.jointHertzD, 10.0f, 10000.0f, "%.0f Hz", ImGuiSliderFlags_Logarithmic);
+			ImGui::SliderFloat("Joint Cap D", &s_settings.jointHertzCapD, 0.0f, 4.0f, "%.2f");
+			ImGui::SliderInt("CR Iters D", &s_settings.jointCRIterationsD, 0, 200, s_settings.jointCRIterationsD == 0 ? "exact" : "%d");
+			ImGui::Checkbox("Direct Relax D", &s_settings.directRelaxD);
+			ImGui::SliderFloat("Joint Hertz Seed", &s_settings.jointHertzSeed, 10.0f, 10000.0f, "%.0f Hz", ImGuiSliderFlags_Logarithmic);
+			ImGui::SliderFloat("Joint Cap Seed", &s_settings.jointHertzCapSeed, 0.0f, 4.0f, "%.2f");
+			const char* seedModes[] = {"First substep", "Every substep", "Whole step"};
+			static_assert(IM_ARRAYSIZE(seedModes) == s2_seedModeCount);
+			ImGui::Combo("Seed", &s_settings.seedMode, seedModes, IM_ARRAYSIZE(seedModes));
 			ImGui::Checkbox("Warm Starting", &s_settings.enableWarmStarting);
 			ImGui::PopItemWidth();
 
@@ -476,6 +484,11 @@ static void UpdateUI(s2Color* solverColors)
 			c = solverColors[s2_solverSoftStepD];
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{c.r, c.g, c.b, c.a});
 			ImGui::Checkbox("Soft Step D", &s_settings.enabledSolvers[s2_solverSoftStepD]);
+			ImGui::PopStyleColor();
+
+			c = solverColors[s2_solverSoftStepSeed];
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{c.r, c.g, c.b, c.a});
+			ImGui::Checkbox("Soft Step Seed", &s_settings.enabledSolvers[s2_solverSoftStepSeed]);
 			ImGui::PopStyleColor();
 
 
@@ -712,6 +725,7 @@ int main(int, char**)
 		s2MakeColor(s2_colorSpringGreen, colorAlpha),
 		s2MakeColor(s2_colorGold, colorAlpha),
 		s2MakeColor(s2_colorOrangeRed, colorAlpha),
+		s2MakeColor(s2_colorHotPink, colorAlpha),
 			};
 
 	static_assert(S2_ARRAY_COUNT(solverColors) == s2_solverTypeCount);

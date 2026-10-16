@@ -19,6 +19,10 @@ set(S2D_SOURCE_FILES
 	hull.c
 	joint.c
 	joint.h
+	joint_cr.c
+	joint_cr.h
+	joint_direct.c
+	joint_direct.h
 	joint_factor.c
 	joint_factor.h
 	manifold.c
@@ -26,6 +30,7 @@ set(S2D_SOURCE_FILES
 	mouse_joint.c
 	pool.c
 	pool.h
+	prismatic_joint.c
 	revolute_joint.c
 	shape.c
 	shape.h
@@ -38,6 +43,7 @@ set(S2D_SOURCE_FILES
 	solve_pgs_soft.c
 	solve_soft_step.c
 	solve_soft_step_d.c
+	solve_soft_step_seed.c
 	solve_tgs_ngs.c
 	solve_tgs_soft.c
 	solve_tgs_sticky.c

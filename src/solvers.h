@@ -83,4 +83,5 @@ void s2Solve_TGS_NGS(s2World* world, s2StepContext* stepContext);
 void s2Solve_XPBD(s2World* world, s2StepContext* stepContext);
 void s2Solve_SoftStep(s2World* world, s2StepContext* stepContext);
 void s2Solve_SoftStepD(s2World* world, s2StepContext* stepContext);
+void s2Solve_SoftStepSeed(s2World* world, s2StepContext* stepContext);
 void s2Solve_DVI(s2World* world, s2StepContext* stepContext);

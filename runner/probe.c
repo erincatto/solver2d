@@ -159,7 +159,7 @@ ProbeStep Probe_Measure(const Probe* probe, s2WorldId worldId)
 	for (int i = 0; i < jointCapacity; ++i)
 	{
 		s2Joint* joint = world->joints + i;
-		if (s2IsFree(&joint->object) || (joint->type != s2_revoluteJoint && joint->type != s2_weldJoint))
+		if (s2IsFree(&joint->object) || joint->type == s2_mouseJoint)
 		{
 			continue;
 		}
@@ -171,14 +171,49 @@ ProbeStep Probe_Measure(const Probe* probe, s2WorldId worldId)
 		s2Vec2 pB = s2TransformPoint(S2_TRANSFORM(bodyB), joint->localOriginAnchorB);
 		float error = s2Distance(pA, pB);
 
+		if (joint->type == s2_prismaticJoint)
+		{
+			s2Vec2 axis = s2RotateVector(bodyA->rot, joint->prismaticJoint.localAxisA);
+			error = S2_ABS(s2Cross(axis, s2Sub(pB, pA)));
+		}
+
 		result.jointCount += 1;
 		jointErrorSum += error;
 		result.maxJointError = error > result.maxJointError ? error : result.maxJointError;
 
-		if (joint->type == s2_weldJoint)
+		if (joint->type == s2_weldJoint || joint->type == s2_prismaticJoint)
 		{
-			float angleError = S2_ABS(s2RelativeAngle(bodyB->rot, bodyA->rot) - joint->weldJoint.referenceAngle);
-			result.maxWeldAngleError = angleError > result.maxWeldAngleError ? angleError : result.maxWeldAngleError;
+			float referenceAngle =
+				joint->type == s2_weldJoint ? joint->weldJoint.referenceAngle : joint->prismaticJoint.referenceAngle;
+			float angleError = S2_ABS(s2RelativeAngle(bodyB->rot, bodyA->rot) - referenceAngle);
+			result.maxAngleError = angleError > result.maxAngleError ? angleError : result.maxAngleError;
+		}
+
+		if (joint->type == s2_prismaticJoint)
+		{
+			const s2PrismaticJoint* prismatic = &joint->prismaticJoint;
+			if (prismatic->enableLimit)
+			{
+				s2Vec2 axis = s2RotateVector(bodyA->rot, prismatic->localAxisA);
+				float translation = s2Dot(axis, s2Sub(pB, pA));
+				float limitError = 0.0f;
+				if (translation < prismatic->lowerTranslation)
+				{
+					limitError = prismatic->lowerTranslation - translation;
+				}
+				else if (translation > prismatic->upperTranslation)
+				{
+					limitError = translation - prismatic->upperTranslation;
+				}
+
+				result.maxLimitError = limitError > result.maxLimitError ? limitError : result.maxLimitError;
+			}
+
+			continue;
+		}
+
+		if (joint->type != s2_revoluteJoint)
+		{
 			continue;
 		}
 
@@ -205,7 +240,29 @@ ProbeStep Probe_Measure(const Probe* probe, s2WorldId worldId)
 		result.meanJointError = jointErrorSum / result.jointCount;
 	}
 
+	const s2JointCRStats* soft = &world->softCRStats;
+	result.crSoftSolves = soft->solveCount;
+	result.crSoftIterations1 = soft->iterations1;
+	result.crSoftIterations2 = soft->iterations2;
+	result.crSoftError8 = soft->error8;
+	result.crSoftError32 = soft->error32;
+	result.crSoftExactResidual = soft->exactResidual;
+
+	const s2JointCRStats* relax = &world->relaxCRStats;
+	result.crRelaxSolves = relax->solveCount;
+	result.crRelaxIterations1 = relax->iterations1;
+	result.crRelaxIterations2 = relax->iterations2;
+	result.crRelaxError8 = relax->error8;
+	result.crRelaxError32 = relax->error32;
+	result.crRelaxExactResidual = relax->exactResidual;
+
 	return result;
+}
+
+void Probe_EnableJointCR(s2WorldId worldId)
+{
+	s2World* world = s2GetWorldFromId(worldId);
+	world->measureJointCR = true;
 }
 
 int Probe_GetBodies(s2WorldId worldId, ProbeBody* bodies, int capacity)

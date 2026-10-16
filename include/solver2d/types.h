@@ -86,8 +86,24 @@ typedef enum s2SolverType
 	s2_solverXPBD,
 	s2_solverDVI,
 	s2_solverSoftStepD,
+	s2_solverSoftStepSeed,
 	s2_solverTypeCount,
 } s2SolverType;
+
+/// When Soft Step Seed runs the exact joint solve that feeds its warm start
+typedef enum s2SeedMode
+{
+	/// Before the first substep of each step
+	s2_seedFirstSubstep,
+
+	/// Before every substep
+	s2_seedEverySubstep,
+
+	/// Once over the whole step, divided among the substeps
+	s2_seedWholeStep,
+
+	s2_seedModeCount,
+} s2SeedMode;
 
 typedef struct s2WorldDef
 {

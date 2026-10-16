@@ -127,7 +127,21 @@ void Sample::Step(Settings& settings, s2Color bodyColor)
 	bodyColor.a = 0.6f;
 	g_draw.m_debugDraw.dynamicBodyColor = bodyColor;
 
-	s2World_SetJointHertz(m_worldId, settings.jointHertz, settings.jointHertzCap);
+	if (m_solverType == s2_solverSoftStepD)
+	{
+		s2World_SetJointHertz(m_worldId, settings.jointHertzD, settings.jointHertzCapD);
+		s2World_SetJointCRIterations(m_worldId, settings.jointCRIterationsD);
+		s2World_EnableDirectRelax(m_worldId, settings.directRelaxD);
+	}
+	else if (m_solverType == s2_solverSoftStepSeed)
+	{
+		s2World_SetJointHertz(m_worldId, settings.jointHertzSeed, settings.jointHertzCapSeed);
+		s2World_SetJointSeedMode(m_worldId, s2SeedMode(settings.seedMode));
+	}
+	else
+	{
+		s2World_SetJointHertz(m_worldId, settings.jointHertz, 0.25f);
+	}
 
 	if (settings.pause == false || settings.singleStep == true)
 	{

@@ -376,8 +376,10 @@ public:
 
 		float rad = 0.4f;
 #ifdef NDEBUG
-		int numi = 100;
-		int numk = 100;
+		//int numi = 100;
+		//int numk = 100;
+		int numi = 20;
+		int numk = 20;
 #else
 		int numi = 1;
 		int numk = 20;
@@ -581,7 +583,7 @@ class Cantilever : public Sample
 public:
 	enum
 	{
-		e_count = 8
+		e_count = 16
 	};
 
 	Cantilever(const Settings& settings, s2SolverType solverType)
@@ -590,7 +592,7 @@ public:
 		if (settings.restart == false)
 		{
 			g_camera.m_center = {0.0f, 0.0f};
-			g_camera.m_zoom = 0.35f;
+			g_camera.m_zoom = 0.25f;
 		}
 
 		s2BodyId groundId = s2_nullBodyId;
@@ -716,3 +718,124 @@ public:
 };
 
 static int sampleUnstableWindmill = RegisterSample("Joints", "Unstable Windmill", UnstableWindmill::Create);
+
+// A stack of boxes, each sliding on the one below. Drag the boxes to distort the stack. In Box2D this checks
+// prismatic joint stability when highly distorted, with a joint stiffness of 240 Hz.
+class MultiplePrismatic : public Sample
+{
+public:
+	MultiplePrismatic(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		if (settings.restart == false)
+		{
+			g_camera.m_center = {0.0f, 8.0f};
+			g_camera.m_zoom = 0.5f;
+		}
+
+		s2BodyId groundId = s2_nullBodyId;
+		{
+			s2BodyDef bodyDef = s2_defaultBodyDef;
+			groundId = s2CreateBody(m_worldId, &bodyDef);
+		}
+
+		s2ShapeDef shapeDef = s2_defaultShapeDef;
+		s2Polygon box = s2MakeBox(0.5f, 0.5f);
+
+		s2PrismaticJointDef jointDef = s2DefaultPrismaticJointDef();
+		jointDef.bodyIdA = groundId;
+		jointDef.localAnchorA = {0.0f, 0.0f};
+		jointDef.localAnchorB = {0.0f, -0.6f};
+		jointDef.lowerTranslation = -6.0f;
+		jointDef.upperTranslation = 6.0f;
+		jointDef.enableLimit = true;
+		jointDef.enableDirect = true;
+
+		s2BodyDef bodyDef = s2_defaultBodyDef;
+		bodyDef.type = s2_dynamicBody;
+
+		for (int i = 0; i < 6; ++i)
+		{
+			bodyDef.position = {0.0f, 0.6f + 1.2f * i};
+			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+			s2CreatePolygonShape(bodyId, &shapeDef, &box);
+
+			jointDef.bodyIdB = bodyId;
+			s2CreatePrismaticJoint(m_worldId, &jointDef);
+
+			jointDef.bodyIdA = bodyId;
+			jointDef.localAnchorA = {0.0f, 0.6f};
+		}
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new MultiplePrismatic(settings, solverType);
+	}
+};
+
+static int sampleMultiplePrismatic = RegisterSample("Joints", "Multiple Prismatic", MultiplePrismatic::Create);
+
+// A light circle between two heavy circles on prismatic joints with a stiff spring, 400:1 in mass and 160000:1 in
+// rotational inertia. Box2D diverges here unless the middle circle is larger.
+class UnstablePrismatic : public Sample
+{
+public:
+	UnstablePrismatic(const Settings& settings, s2SolverType solverType)
+		: Sample(settings, solverType)
+	{
+		if (settings.restart == false)
+		{
+			g_camera.m_center = {0.0f, 2.5f};
+			g_camera.m_zoom = 0.3f;
+		}
+
+		{
+			s2BodyDef bodyDef = s2_defaultBodyDef;
+			s2BodyId groundId = s2CreateBody(m_worldId, &bodyDef);
+
+			s2ShapeDef shapeDef = s2_defaultShapeDef;
+			s2Segment segment = {{-100.0f, 0.0f}, {100.0f, 0.0f}};
+			s2CreateSegmentShape(groundId, &shapeDef, &segment);
+		}
+
+		s2BodyDef bodyDef = s2_defaultBodyDef;
+		bodyDef.type = s2_dynamicBody;
+		s2ShapeDef shapeDef = s2_defaultShapeDef;
+
+		bodyDef.position = {0.0f, 3.0f};
+		s2BodyId centerId = s2CreateBody(m_worldId, &bodyDef);
+
+		s2Circle circle = {{0.0f, 0.0f}, 0.1f};
+		s2CreateCircleShape(centerId, &shapeDef, &circle);
+
+		s2PrismaticJointDef jointDef = s2DefaultPrismaticJointDef();
+		jointDef.bodyIdA = centerId;
+		jointDef.enableSpring = true;
+		jointDef.hertz = 10.0f;
+		jointDef.dampingRatio = 2.0f;
+		jointDef.enableDirect = true;
+
+		float offsets[2] = {-3.5f, 3.5f};
+		float targets[2] = {-3.0f, 3.0f};
+		for (int i = 0; i < 2; ++i)
+		{
+			bodyDef.position = {offsets[i], 3.0f};
+			s2BodyId bodyId = s2CreateBody(m_worldId, &bodyDef);
+			circle.radius = 2.0f;
+			s2CreateCircleShape(bodyId, &shapeDef, &circle);
+
+			jointDef.bodyIdB = bodyId;
+			jointDef.targetTranslation = targets[i];
+			s2CreatePrismaticJoint(m_worldId, &jointDef);
+		}
+	}
+
+	static Sample* Create(const Settings& settings, s2SolverType solverType)
+	{
+		return new UnstablePrismatic(settings, solverType);
+	}
+};
+
+static int sampleUnstablePrismaticJoints =
+	RegisterSample("Joints", "Unstable Prismatic", UnstablePrismatic::Create);

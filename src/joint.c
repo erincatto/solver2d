@@ -78,6 +78,20 @@ void s2AngularStiffness(float* stiffness, float* damping, float frequencyHertz, 
 	*damping = 2.0f * I * dampingRatio * omega;
 }
 
+s2Softness s2MakeSoft(float hertz, float zeta, float h)
+{
+	if (hertz == 0.0f)
+	{
+		return (s2Softness){0.0f, 0.0f, 0.0f};
+	}
+
+	float omega = 2.0f * s2_pi * hertz;
+	float a1 = 2.0f * zeta + h * omega;
+	float a2 = h * omega * a1;
+	float a3 = 1.0f / (1.0f + a2);
+	return (s2Softness){omega / a1, a2 * a3, a3};
+}
+
 static s2Joint* s2CreateJoint(s2World* world, s2Body* bodyA, s2Body* bodyB)
 {
 	s2Joint* joint = (s2Joint*)s2AllocObject(&world->jointPool);
@@ -254,6 +268,45 @@ s2JointId s2CreateWeldJoint(s2WorldId worldId, const s2WeldJointDef* def)
 	return jointId;
 }
 
+s2JointId s2CreatePrismaticJoint(s2WorldId worldId, const s2PrismaticJointDef* def)
+{
+	s2World* world = s2GetWorldFromId(worldId);
+
+	S2_ASSERT(s2IsBodyIdValid(world, def->bodyIdA));
+	S2_ASSERT(s2IsBodyIdValid(world, def->bodyIdB));
+
+	s2Body* bodyA = world->bodies + def->bodyIdA.index;
+	s2Body* bodyB = world->bodies + def->bodyIdB.index;
+
+	s2Joint* joint = s2CreateJoint(world, bodyA, bodyB);
+
+	joint->type = s2_prismaticJoint;
+	joint->drawSize = def->drawSize;
+	joint->localOriginAnchorA = def->localAnchorA;
+	joint->localOriginAnchorB = def->localAnchorB;
+
+	joint->prismaticJoint = (s2PrismaticJoint){0};
+	joint->prismaticJoint.localAxisA = s2Normalize(def->localAxisA);
+	joint->prismaticJoint.referenceAngle = def->referenceAngle;
+	joint->prismaticJoint.enableSpring = def->enableSpring;
+	joint->prismaticJoint.hertz = def->hertz;
+	joint->prismaticJoint.dampingRatio = def->dampingRatio;
+	joint->prismaticJoint.targetTranslation = def->targetTranslation;
+	joint->prismaticJoint.enableLimit = def->enableLimit;
+	joint->prismaticJoint.lowerTranslation = S2_MIN(def->lowerTranslation, def->upperTranslation);
+	joint->prismaticJoint.upperTranslation = S2_MAX(def->lowerTranslation, def->upperTranslation);
+	joint->prismaticJoint.enableDirect = def->enableDirect;
+
+	if (def->collideConnected == false)
+	{
+		s2DestroyContactsBetweenBodies(world, bodyA, bodyB);
+	}
+
+	s2JointId jointId = {joint->object.index, world->index, joint->object.revision};
+
+	return jointId;
+}
+
 void s2DestroyJoint(s2JointId jointId)
 {
 	s2World* world = s2GetWorldFromIndex(jointId.world);
@@ -323,6 +376,7 @@ void s2DestroyJoint(s2JointId jointId)
 extern void s2PrepareMouse(s2Joint* base, s2StepContext* context);
 extern void s2PrepareRevolute(s2Joint* base, s2StepContext* context, bool warmStart);
 extern void s2PrepareWeld(s2Joint* base, s2StepContext* context, bool warmStart);
+extern void s2PreparePrismatic(s2Joint* base, s2StepContext* context, bool warmStart);
 
 void s2PrepareJoint(s2Joint* joint, s2StepContext* context, bool warmStart)
 {
@@ -340,6 +394,10 @@ void s2PrepareJoint(s2Joint* joint, s2StepContext* context, bool warmStart)
 			s2PrepareWeld(joint, context, warmStart);
 			break;
 
+		case s2_prismaticJoint:
+			s2PreparePrismatic(joint, context, warmStart);
+			break;
+
 		default:
 			S2_ASSERT(false);
 	}
@@ -348,6 +406,7 @@ void s2PrepareJoint(s2Joint* joint, s2StepContext* context, bool warmStart)
 extern void s2WarmStartMouse(s2Joint* base, s2StepContext* context);
 extern void s2WarmStartRevolute(s2Joint* base, s2StepContext* context);
 extern void s2WarmStartWeld(s2Joint* base, s2StepContext* context);
+extern void s2WarmStartPrismatic(s2Joint* base, s2StepContext* context);
 
 void s2WarmStartJoint(s2Joint* joint, s2StepContext* context)
 {
@@ -365,6 +424,10 @@ void s2WarmStartJoint(s2Joint* joint, s2StepContext* context)
 			s2WarmStartWeld(joint, context);
 			break;
 
+		case s2_prismaticJoint:
+			s2WarmStartPrismatic(joint, context);
+			break;
+
 		default:
 			S2_ASSERT(false);
 	}
@@ -373,6 +436,7 @@ void s2WarmStartJoint(s2Joint* joint, s2StepContext* context)
 extern void s2SolveMouse(s2Joint* base, s2StepContext* context);
 extern void s2SolveRevolute(s2Joint* base, s2StepContext* context, float h);
 extern void s2SolveWeld(s2Joint* base, s2StepContext* context);
+extern void s2SolvePrismatic(s2Joint* base, s2StepContext* context, float h);
 
 void s2SolveJoint(s2Joint* joint, s2StepContext* context, float h)
 {
@@ -390,6 +454,10 @@ void s2SolveJoint(s2Joint* joint, s2StepContext* context, float h)
 			s2SolveWeld(joint, context);
 			break;
 
+		case s2_prismaticJoint:
+			s2SolvePrismatic(joint, context, h);
+			break;
+
 		default:
 			S2_ASSERT(false);
 	}
@@ -397,6 +465,7 @@ void s2SolveJoint(s2Joint* joint, s2StepContext* context, float h)
 
 extern void s2SolveRevolutePosition(s2Joint* base, s2StepContext* context);
 extern void s2SolveWeldPosition(s2Joint* base, s2StepContext* context);
+extern void s2SolvePrismaticPosition(s2Joint* base, s2StepContext* context);
 
 void s2SolveJointPosition(s2Joint* joint, s2StepContext* context)
 {
@@ -410,6 +479,10 @@ void s2SolveJointPosition(s2Joint* joint, s2StepContext* context)
 			s2SolveWeldPosition(joint, context);
 			break;
 
+		case s2_prismaticJoint:
+			s2SolvePrismaticPosition(joint, context);
+			break;
+
 		default:
 			break;
 	}
@@ -418,6 +491,7 @@ void s2SolveJointPosition(s2Joint* joint, s2StepContext* context)
 //extern void s2PrepareMouse_Soft(s2Joint* base, s2StepContext* context);
 extern void s2PrepareRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float hertz, bool warmStart);
 extern void s2PrepareWeld_Soft(s2Joint* base, s2StepContext* context, float h, float hertz, bool warmStart);
+extern void s2PreparePrismatic_Soft(s2Joint* base, s2StepContext* context, float h, float hertz, bool warmStart);
 
 void s2PrepareJoint_Soft(s2Joint* joint, s2StepContext* context, float h, float hertz, bool warmStart)
 {
@@ -435,6 +509,10 @@ void s2PrepareJoint_Soft(s2Joint* joint, s2StepContext* context, float h, float 
 			s2PrepareWeld_Soft(joint, context, h, hertz, warmStart);
 			break;
 
+		case s2_prismaticJoint:
+			s2PreparePrismatic_Soft(joint, context, h, hertz, warmStart);
+			break;
+
 		default:
 			S2_ASSERT(false);
 	}
@@ -442,6 +520,7 @@ void s2PrepareJoint_Soft(s2Joint* joint, s2StepContext* context, float h, float 
 
 extern void s2SolveRevolute_Soft(s2Joint* base, s2StepContext* context, float h, float inv_h, bool useBias);
 extern void s2SolveWeld_Soft(s2Joint* base, s2StepContext* context, bool useBias);
+extern void s2SolvePrismatic_Soft(s2Joint* base, s2StepContext* context, float inv_h, bool useBias);
 
 void s2SolveJoint_Soft(s2Joint* joint, s2StepContext* context, float h, float inv_h, bool useBias)
 {
@@ -462,6 +541,10 @@ void s2SolveJoint_Soft(s2Joint* joint, s2StepContext* context, float h, float in
 			s2SolveWeld_Soft(joint, context, useBias);
 			break;
 
+		case s2_prismaticJoint:
+			s2SolvePrismatic_Soft(joint, context, inv_h, useBias);
+			break;
+
 		default:
 			S2_ASSERT(false);
 	}
@@ -469,6 +552,7 @@ void s2SolveJoint_Soft(s2Joint* joint, s2StepContext* context, float h, float in
 
 extern void s2SolveRevolute_Baumgarte(s2Joint* base, s2StepContext* context, float h, float inv_h, bool useBias);
 extern void s2SolveWeld_Baumgarte(s2Joint* base, s2StepContext* context, float inv_h, bool useBias);
+extern void s2SolvePrismatic_Baumgarte(s2Joint* base, s2StepContext* context, float inv_h, bool useBias);
 
 void s2SolveJoint_Baumgarte(s2Joint* joint, s2StepContext* context, float h, float inv_h, bool useBias)
 {
@@ -486,6 +570,10 @@ void s2SolveJoint_Baumgarte(s2Joint* joint, s2StepContext* context, float h, flo
 			s2SolveWeld_Baumgarte(joint, context, inv_h, useBias);
 			break;
 
+		case s2_prismaticJoint:
+			s2SolvePrismatic_Baumgarte(joint, context, inv_h, useBias);
+			break;
+
 		default:
 			S2_ASSERT(false);
 	}
@@ -494,6 +582,7 @@ void s2SolveJoint_Baumgarte(s2Joint* joint, s2StepContext* context, float h, flo
 //extern void s2PrepareMouse_XPBD(s2Joint* base, s2StepContext* context);
 extern void s2PrepareRevolute_XPBD(s2Joint* base, s2StepContext* context);
 extern void s2PrepareWeld_XPBD(s2Joint* base, s2StepContext* context);
+extern void s2PreparePrismatic_XPBD(s2Joint* base, s2StepContext* context);
 
 void s2PrepareJoint_XPBD(s2Joint* joint, s2StepContext* context)
 {
@@ -511,6 +600,10 @@ void s2PrepareJoint_XPBD(s2Joint* joint, s2StepContext* context)
 			s2PrepareWeld_XPBD(joint, context);
 			break;
 
+		case s2_prismaticJoint:
+			s2PreparePrismatic_XPBD(joint, context);
+			break;
+
 		default:
 			S2_ASSERT(false);
 	}
@@ -519,6 +612,7 @@ void s2PrepareJoint_XPBD(s2Joint* joint, s2StepContext* context)
 //extern void s2SolveMouse_XPBD(s2Joint* base, s2StepContext* context);
 extern void s2SolveRevolute_XPBD(s2Joint* base, s2StepContext* context, float inv_h);
 extern void s2SolveWeld_XPBD(s2Joint* base, s2StepContext* context);
+extern void s2SolvePrismatic_XPBD(s2Joint* base, s2StepContext* context, float inv_h);
 
 void s2SolveJoint_XPBD(s2Joint* joint, s2StepContext* context, float inv_h)
 {
@@ -536,12 +630,27 @@ void s2SolveJoint_XPBD(s2Joint* joint, s2StepContext* context, float inv_h)
 			s2SolveWeld_XPBD(joint, context);
 			break;
 
+		case s2_prismaticJoint:
+			s2SolvePrismatic_XPBD(joint, context, inv_h);
+			break;
+
 		default:
 			S2_ASSERT(false);
 	}
 }
 
+extern void s2SolvePrismaticVelocity_XPBD(s2Joint* base, s2StepContext* context, float h);
+
+void s2SolveJointVelocity_XPBD(s2Joint* joint, s2StepContext* context, float h)
+{
+	if (joint->type == s2_prismaticJoint)
+	{
+		s2SolvePrismaticVelocity_XPBD(joint, context, h);
+	}
+}
+
 extern void s2DrawRevolute(s2DebugDraw* draw, s2Joint* base, s2Body* bodyA, s2Body* bodyB);
+extern void s2DrawPrismatic(s2DebugDraw* draw, s2Joint* base, s2Body* bodyA, s2Body* bodyB);
 
 void s2DrawJoint(s2DebugDraw* draw, s2World* world, s2Joint* joint)
 {
@@ -572,6 +681,10 @@ void s2DrawJoint(s2DebugDraw* draw, s2World* world, s2Joint* joint)
 
 		case s2_revoluteJoint:
 			s2DrawRevolute(draw, joint, bodyA, bodyB);
+			break;
+
+		case s2_prismaticJoint:
+			s2DrawPrismatic(draw, joint, bodyA, bodyB);
 			break;
 
 		default:

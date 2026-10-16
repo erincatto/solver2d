@@ -26,9 +26,20 @@ void s2World_Step(s2WorldId worldId, float timeStep, int32_t velIters, int32_t p
 void s2World_Draw(s2WorldId worldId, s2DebugDraw* debugDraw);
 
 /// Joint stiffness for the Soft Step solvers. Soft Step always caps it at a quarter of the substep rate.
+/// The default is 60 Hz, or 480 Hz with a cap fraction of 2 for Soft Step D.
 /// @param hertz joint stiffness in cycles per second
 /// @param capFraction Soft Step D caps the stiffness at this fraction of the substep rate, zero for no cap
 void s2World_SetJointHertz(s2WorldId worldId, float hertz, float capFraction);
+
+/// Soft Step D solves its direct joints with conjugate residual instead of the exact factorization.
+/// @param iterations conjugate residual iterations per solve, zero for the exact factorization (default)
+void s2World_SetJointCRIterations(s2WorldId worldId, int iterations);
+
+/// When Soft Step Seed runs its exact joint solve. The default is before the first substep.
+void s2World_SetJointSeedMode(s2WorldId worldId, s2SeedMode mode);
+
+/// Soft Step D relaxes its direct joints with the direct solve (default), or with Soft Step's Gauss-Seidel relax.
+void s2World_EnableDirectRelax(s2WorldId worldId, bool flag);
 
 struct s2Statistics s2World_GetStatistics(s2WorldId worldId);
 
@@ -60,6 +71,7 @@ bool s2Shape_TestPoint(s2ShapeId shapeId, s2Vec2 point);
 s2JointId s2CreateMouseJoint(s2WorldId worldId, const s2MouseJointDef* def);
 s2JointId s2CreateRevoluteJoint(s2WorldId worldId, const s2RevoluteJointDef* def);
 s2JointId s2CreateWeldJoint(s2WorldId worldId, const s2WeldJointDef* def);
+s2JointId s2CreatePrismaticJoint(s2WorldId worldId, const s2PrismaticJointDef* def);
 void s2DestroyJoint(s2JointId jointId);
 
 void s2MouseJoint_SetTarget(s2JointId jointId, s2Vec2 target);

@@ -20,14 +20,34 @@ typedef struct ProbeStep
 	float meanPenetration;
 	float normalImpulse;
 	int jointCount;
+
+	// Anchor separation, or the distance off the axis for prismatic joints
 	float maxJointError;
 	float meanJointError;
+
+	// Radians for revolute joints, meters for prismatic joints
 	float maxLimitError;
-	float maxWeldAngleError;
+
+	// Weld and prismatic joints
+	float maxAngleError;
 	float kineticEnergy;
 	float potentialEnergy;
 	float maxSpeed;
 	float maxAngularSpeed;
+
+	// Soft Step D conjugate residual against the exact joint solves of the step, biased and relax
+	int crSoftSolves;
+	int crSoftIterations1;
+	int crSoftIterations2;
+	float crSoftError8;
+	float crSoftError32;
+	float crSoftExactResidual;
+	int crRelaxSolves;
+	int crRelaxIterations1;
+	int crRelaxIterations2;
+	float crRelaxError8;
+	float crRelaxError32;
+	float crRelaxExactResidual;
 } ProbeStep;
 
 typedef struct ProbeBody
@@ -49,6 +69,9 @@ void Probe_Snapshot(Probe* probe, s2WorldId worldId);
 
 /// Measure the world state left by the step that followed the last snapshot.
 ProbeStep Probe_Measure(const Probe* probe, s2WorldId worldId);
+
+/// Have Soft Step D measure conjugate residual against its exact joint solves. Slow.
+void Probe_EnableJointCR(s2WorldId worldId);
 
 /// Gather dynamic bodies.
 /// @return the dynamic body count, which may exceed capacity

@@ -490,6 +490,17 @@ void s2Solve_XPBD(s2World* world, s2StepContext* context)
 
 		// Relax contact velocities
 		s2SolveContactVelocities_XPBD(world, constraints, constraintCount, h);
+
+		for (int i = 0; i < jointCapacity; ++i)
+		{
+			s2Joint* joint = joints + i;
+			if (s2IsFree(&joint->object))
+			{
+				continue;
+			}
+
+			s2SolveJointVelocity_XPBD(joint, context, h);
+		}
 	}
 
 	// Finalize body position

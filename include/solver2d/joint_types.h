@@ -141,3 +141,78 @@ static inline struct s2WeldJointDef s2DefaultWeldJointDef(void)
 	def.enableDirect = false;
 	return def;
 }
+
+/// A prismatic joint lets body B slide along an axis fixed in body A. Relative rotation is prevented.
+/// There is no motor.
+typedef struct s2PrismaticJointDef
+{
+	/// The first attached body.
+	s2BodyId bodyIdA;
+
+	/// The second attached body.
+	s2BodyId bodyIdB;
+
+	/// The local anchor point relative to bodyA's origin.
+	s2Vec2 localAnchorA;
+
+	/// The local anchor point relative to bodyB's origin.
+	s2Vec2 localAnchorB;
+
+	/// The local translation unit axis in bodyA.
+	s2Vec2 localAxisA;
+
+	/// The bodyB angle minus bodyA angle in the reference state (radians).
+	float referenceAngle;
+
+	/// Enable a linear spring along the prismatic joint axis.
+	bool enableSpring;
+
+	/// The spring stiffness Hertz, cycles per second.
+	float hertz;
+
+	/// The spring damping ratio, non-dimensional.
+	float dampingRatio;
+
+	/// The target translation for the joint in meters. The spring-damper will drive to this translation.
+	float targetTranslation;
+
+	/// Enable/disable the joint limit.
+	bool enableLimit;
+
+	/// The lower translation limit, usually in meters.
+	float lowerTranslation;
+
+	/// The upper translation limit, usually in meters.
+	float upperTranslation;
+
+	float drawSize;
+
+	/// Set this flag to true if the attached bodies should collide.
+	bool collideConnected;
+
+	/// Solve the perpendicular and angle constraints together with other opted in joints sharing a body, by a
+	/// direct solver. Only used by solvers that support it.
+	bool enableDirect;
+} s2PrismaticJointDef;
+
+static inline struct s2PrismaticJointDef s2DefaultPrismaticJointDef(void)
+{
+	s2PrismaticJointDef def = {0};
+	def.bodyIdA = s2_nullBodyId;
+	def.bodyIdB = s2_nullBodyId;
+	def.localAnchorA = S2_LITERAL(s2Vec2){0.0f, 0.0f};
+	def.localAnchorB = S2_LITERAL(s2Vec2){0.0f, 0.0f};
+	def.localAxisA = S2_LITERAL(s2Vec2){1.0f, 0.0f};
+	def.referenceAngle = 0.0f;
+	def.enableSpring = false;
+	def.hertz = 0.0f;
+	def.dampingRatio = 0.0f;
+	def.targetTranslation = 0.0f;
+	def.enableLimit = false;
+	def.lowerTranslation = 0.0f;
+	def.upperTranslation = 0.0f;
+	def.drawSize = 1.0f;
+	def.collideConnected = false;
+	def.enableDirect = false;
+	return def;
+}

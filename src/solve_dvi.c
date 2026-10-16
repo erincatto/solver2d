@@ -65,16 +65,11 @@ typedef struct s2DVIContact
 typedef struct s2DVIJoint
 {
 	s2Joint* joint;
-	int indexA;
-	int indexB;
-	s2Vec2 rA, rB;
-	s2Vec2 bias;
-	float angularBias;
+	s2JointRows rows;
+	float bias[3];
 	float axialMass;
 	float limitBias;
-
-	// Two point rows, plus the angle row for welds
-	int rowCount;
+	float springBias;
 
 	// 1 at the lower limit, -1 at the upper limit, 0 within limits
 	float limitSide;
@@ -187,34 +182,93 @@ static void s2PrepareContacts_DVI(s2World* world, s2DVIContact* constraints, int
 	}
 }
 
-static void s2PrepareJoint_DVI(s2World* world, s2DVIJoint* dj, float inv_h, bool warmStart)
+static void s2PrepareJoint_DVI(s2World* world, s2DVIJoint* dj, float h, float inv_h, bool warmStart)
 {
 	s2Joint* base = dj->joint;
+	s2GetJointRows(world, base, &dj->rows);
 
-	s2Body* bodyA = world->bodies + dj->indexA;
-	s2Body* bodyB = world->bodies + dj->indexB;
+	s2Body* bodyA = world->bodies + dj->rows.indexA;
+	s2Body* bodyB = world->bodies + dj->rows.indexB;
 
 	s2Rot qA = bodyA->rot;
 	s2Rot qB = bodyB->rot;
 
-	dj->rA = s2RotateVector(qA, s2Sub(base->localOriginAnchorA, bodyA->localCenter));
-	dj->rB = s2RotateVector(qB, s2Sub(base->localOriginAnchorB, bodyB->localCenter));
-
-	s2Vec2 separation = s2Sub(s2Add(bodyB->position, dj->rB), s2Add(bodyA->position, dj->rA));
-	dj->bias = s2MulSV(S2_DVI_JOINT_BAUMGARTE * inv_h, separation);
-
-	float k = bodyA->invI + bodyB->invI;
-	dj->axialMass = k > 0.0f ? 1.0f / k : 0.0f;
+	// The prismatic row anchor on A moves with the separation, so measure from the joint anchor
+	s2Vec2 rA = s2RotateVector(qA, s2Sub(base->localOriginAnchorA, bodyA->localCenter));
+	s2Vec2 separation = s2Sub(s2Add(bodyB->position, dj->rows.rB), s2Add(bodyA->position, rA));
+	float biasRate = S2_DVI_JOINT_BAUMGARTE * inv_h;
 
 	dj->limitSide = 0.0f;
 	dj->limitBias = 0.0f;
+	dj->bias[2] = 0.0f;
+
+	if (base->type == s2_prismaticJoint)
+	{
+		s2PrismaticJoint* joint = &base->prismaticJoint;
+		s2Vec2 perp = dj->rows.axes[0];
+		s2Vec2 axis = s2RightPerp(perp);
+		float angle = s2RelativeAngle(qB, qA) - joint->referenceAngle;
+		dj->bias[0] = biasRate * s2Dot(perp, separation);
+		dj->bias[1] = biasRate * angle;
+
+		float a1 = s2Cross(dj->rows.rA, axis);
+		float a2 = s2Cross(dj->rows.rB, axis);
+		float k = bodyA->invMass + bodyB->invMass + bodyA->invI * a1 * a1 + bodyB->invI * a2 * a2;
+		dj->axialMass = k > 0.0f ? 1.0f / k : 0.0f;
+
+		// The spring uses Box2D's soft formulation over the whole step
+		float translation = s2Dot(axis, separation);
+		joint->springSoftness = s2MakeSoft(joint->hertz, joint->dampingRatio, h);
+		dj->springBias = joint->springSoftness.biasRate * (translation - joint->targetTranslation);
+
+		if (joint->enableSpring == false || warmStart == false)
+		{
+			joint->springImpulse = 0.0f;
+		}
+
+		if (joint->enableLimit)
+		{
+			if (translation < joint->lowerTranslation)
+			{
+				dj->limitSide = 1.0f;
+				dj->limitBias = S2_DVI_LIMIT_BAUMGARTE * inv_h * (translation - joint->lowerTranslation);
+			}
+			else if (translation > joint->upperTranslation)
+			{
+				dj->limitSide = -1.0f;
+				dj->limitBias = S2_DVI_LIMIT_BAUMGARTE * inv_h * (joint->upperTranslation - translation);
+			}
+		}
+
+		if (warmStart == false)
+		{
+			joint->impulse = s2Vec2_zero;
+		}
+
+		if (dj->limitSide != 1.0f)
+		{
+			joint->lowerImpulse = 0.0f;
+		}
+
+		if (dj->limitSide != -1.0f)
+		{
+			joint->upperImpulse = 0.0f;
+		}
+
+		return;
+	}
+
+	dj->bias[0] = biasRate * separation.x;
+	dj->bias[1] = biasRate * separation.y;
+
+	float k = bodyA->invI + bodyB->invI;
+	dj->axialMass = k > 0.0f ? 1.0f / k : 0.0f;
 
 	if (base->type == s2_weldJoint)
 	{
 		s2WeldJoint* joint = &base->weldJoint;
 		float angle = s2RelativeAngle(qB, qA) - joint->referenceAngle;
-		dj->angularBias = S2_DVI_JOINT_BAUMGARTE * inv_h * angle;
-		dj->rowCount = 3;
+		dj->bias[2] = biasRate * angle;
 
 		if (warmStart == false)
 		{
@@ -227,8 +281,6 @@ static void s2PrepareJoint_DVI(s2World* world, s2DVIJoint* dj, float inv_h, bool
 
 	S2_ASSERT(base->type == s2_revoluteJoint);
 	s2RevoluteJoint* joint = &base->revoluteJoint;
-	dj->angularBias = 0.0f;
-	dj->rowCount = 2;
 
 	// Kamino only creates a limit row once the limit is violated
 	if (joint->enableLimit)
@@ -307,19 +359,31 @@ static void s2WarmStart_DVI(s2World* world, s2DVIContact* contacts, int contactC
 	for (int i = 0; i < jointCount; ++i)
 	{
 		s2DVIJoint* dj = joints + i;
-		s2Body* bodyA = bodies + dj->indexA;
-		s2Body* bodyB = bodies + dj->indexB;
+		const s2JointRows* rows = &dj->rows;
+		s2Body* bodyA = bodies + rows->indexA;
+		s2Body* bodyB = bodies + rows->indexB;
 
 		if (dj->joint->type == s2_weldJoint)
 		{
 			s2WeldJoint* joint = &dj->joint->weldJoint;
-			s2ApplyImpulse(bodyA, bodyB, dj->rA, dj->rB, joint->linearImpulse);
+			s2ApplyImpulse(bodyA, bodyB, rows->rA, rows->rB, joint->linearImpulse);
 			s2ApplyAngularImpulse(bodyA, bodyB, joint->angularImpulse);
 			continue;
 		}
 
+		if (dj->joint->type == s2_prismaticJoint)
+		{
+			// The spring and limits push along the axis at the anchors of the perpendicular row
+			s2PrismaticJoint* joint = &dj->joint->prismaticJoint;
+			float axialImpulse = joint->springImpulse + joint->lowerImpulse - joint->upperImpulse;
+			s2Vec2 P = s2Add(s2MulSV(joint->impulse.x, rows->axes[0]), s2MulSV(axialImpulse, s2RightPerp(rows->axes[0])));
+			s2ApplyImpulse(bodyA, bodyB, rows->rA, rows->rB, P);
+			s2ApplyAngularImpulse(bodyA, bodyB, joint->impulse.y);
+			continue;
+		}
+
 		s2RevoluteJoint* joint = &dj->joint->revoluteJoint;
-		s2ApplyImpulse(bodyA, bodyB, dj->rA, dj->rB, joint->impulse);
+		s2ApplyImpulse(bodyA, bodyB, rows->rA, rows->rB, joint->impulse);
 		s2ApplyAngularImpulse(bodyA, bodyB, joint->motorImpulse + joint->lowerImpulse - joint->upperImpulse);
 	}
 }
@@ -334,15 +398,20 @@ static void s2SolveJointBlock(s2World* world, s2DVIJoint* joints, s2JointFactor*
 	for (int i = 0; i < jointCount; ++i)
 	{
 		const s2DVIJoint* dj = joints + i;
-		s2Body* bodyA = bodies + dj->indexA;
-		s2Body* bodyB = bodies + dj->indexB;
+		const s2JointRows* rows = &dj->rows;
+		s2Body* bodyA = bodies + rows->indexA;
+		s2Body* bodyB = bodies + rows->indexB;
 
-		s2Vec2 vrA = s2Add(bodyA->linearVelocity, s2CrossSV(bodyA->angularVelocity, dj->rA));
-		s2Vec2 vrB = s2Add(bodyB->linearVelocity, s2CrossSV(bodyB->angularVelocity, dj->rB));
-		s2Vec2 Cdot = s2Add(s2Sub(vrB, vrA), dj->bias);
+		s2Vec2 vrA = s2Add(bodyA->linearVelocity, s2CrossSV(bodyA->angularVelocity, rows->rA));
+		s2Vec2 vrB = s2Add(bodyB->linearVelocity, s2CrossSV(bodyB->angularVelocity, rows->rB));
+		s2Vec2 dv = s2Sub(vrB, vrA);
+		float dw = bodyB->angularVelocity - bodyA->angularVelocity;
 
-		factor->rhs[i].linear = s2Neg(Cdot);
-		factor->rhs[i].angular = -(bodyB->angularVelocity - bodyA->angularVelocity + dj->angularBias);
+		for (int r = 0; r < rows->rowCount; ++r)
+		{
+			float Cdot = r < rows->pointCount ? s2Dot(rows->axes[r], dv) : dw;
+			factor->rhs[i].row[r] = -(Cdot + dj->bias[r]);
+		}
 	}
 
 	s2SolveJointFactor(factor);
@@ -350,28 +419,25 @@ static void s2SolveJointBlock(s2World* world, s2DVIJoint* joints, s2JointFactor*
 	for (int p = 0; p < jointCount; ++p)
 	{
 		s2DVIJoint* dj = joints + factor->order[p];
-		s2JointVector impulse = factor->rhs[factor->order[p]];
-		s2Body* bodyA = bodies + dj->indexA;
-		s2Body* bodyB = bodies + dj->indexB;
+		const s2JointRows* rows = &dj->rows;
+		const float* lambda = factor->rhs[factor->order[p]].row;
+		s2Body* bodyA = bodies + rows->indexA;
+		s2Body* bodyB = bodies + rows->indexB;
 
-		s2ApplyImpulse(bodyA, bodyB, dj->rA, dj->rB, impulse.linear);
+		s2ApplyImpulse(bodyA, bodyB, rows->rA, rows->rB, s2GetPointImpulse(rows, lambda));
+		s2ApplyAngularImpulse(bodyA, bodyB, s2GetAngleImpulse(rows, lambda));
 
-		if (dj->joint->type == s2_weldJoint)
+		float* impulses[3];
+		s2GetJointRowImpulses(dj->joint, impulses);
+		for (int r = 0; r < rows->rowCount; ++r)
 		{
-			s2WeldJoint* joint = &dj->joint->weldJoint;
-			joint->linearImpulse = s2Add(joint->linearImpulse, impulse.linear);
-			joint->angularImpulse += impulse.angular;
-			s2ApplyAngularImpulse(bodyA, bodyB, impulse.angular);
-		}
-		else
-		{
-			s2RevoluteJoint* joint = &dj->joint->revoluteJoint;
-			joint->impulse = s2Add(joint->impulse, impulse.linear);
+			*impulses[r] += lambda[r];
 		}
 	}
 }
 
-// Kamino's bounded rows are the motor and its limit rows only exist while violated
+// Kamino's bounded rows are the motor and its limit rows only exist while violated. The prismatic spring is a soft
+// row solved with them.
 static void s2SolveJointInequalities(s2World* world, s2DVIJoint* joints, int jointCount, float h)
 {
 	s2Body* bodies = world->bodies;
@@ -379,14 +445,56 @@ static void s2SolveJointInequalities(s2World* world, s2DVIJoint* joints, int joi
 	for (int i = 0; i < jointCount; ++i)
 	{
 		s2DVIJoint* dj = joints + i;
+		const s2JointRows* rows = &dj->rows;
+		s2Body* bodyA = bodies + rows->indexA;
+		s2Body* bodyB = bodies + rows->indexB;
+
+		if (dj->joint->type == s2_prismaticJoint)
+		{
+			s2PrismaticJoint* joint = &dj->joint->prismaticJoint;
+			s2Vec2 axis = s2RightPerp(rows->axes[0]);
+
+			if (joint->enableSpring)
+			{
+				s2Vec2 vrA = s2Add(bodyA->linearVelocity, s2CrossSV(bodyA->angularVelocity, rows->rA));
+				s2Vec2 vrB = s2Add(bodyB->linearVelocity, s2CrossSV(bodyB->angularVelocity, rows->rB));
+				float Cdot = s2Dot(axis, s2Sub(vrB, vrA));
+				s2Softness softness = joint->springSoftness;
+				float impulse = -softness.massScale * dj->axialMass * (Cdot + dj->springBias) -
+								softness.impulseScale * joint->springImpulse;
+				joint->springImpulse += impulse;
+				s2ApplyImpulse(bodyA, bodyB, rows->rA, rows->rB, s2MulSV(impulse, axis));
+			}
+
+			if (dj->limitSide != 0.0f)
+			{
+				s2Vec2 vrA = s2Add(bodyA->linearVelocity, s2CrossSV(bodyA->angularVelocity, rows->rA));
+				s2Vec2 vrB = s2Add(bodyB->linearVelocity, s2CrossSV(bodyB->angularVelocity, rows->rB));
+				float Cdot = s2Dot(axis, s2Sub(vrB, vrA));
+
+				if (dj->limitSide == 1.0f)
+				{
+					float oldImpulse = joint->lowerImpulse;
+					joint->lowerImpulse = S2_MAX(0.0f, oldImpulse - dj->axialMass * (Cdot + dj->limitBias));
+					s2ApplyImpulse(bodyA, bodyB, rows->rA, rows->rB, s2MulSV(joint->lowerImpulse - oldImpulse, axis));
+				}
+				else
+				{
+					float oldImpulse = joint->upperImpulse;
+					joint->upperImpulse = S2_MAX(0.0f, oldImpulse - dj->axialMass * (dj->limitBias - Cdot));
+					s2ApplyImpulse(bodyA, bodyB, rows->rA, rows->rB, s2MulSV(oldImpulse - joint->upperImpulse, axis));
+				}
+			}
+
+			continue;
+		}
+
 		if (dj->joint->type != s2_revoluteJoint)
 		{
 			continue;
 		}
 
 		s2RevoluteJoint* joint = &dj->joint->revoluteJoint;
-		s2Body* bodyA = bodies + dj->indexA;
-		s2Body* bodyB = bodies + dj->indexB;
 
 		if (joint->enableMotor)
 		{
@@ -570,12 +678,15 @@ void s2Solve_DVI(s2World* world, s2StepContext* context)
 
 		s2DVIJoint* dj = joints + jointCount;
 		dj->joint = joint;
-		dj->indexA = indexA;
-		dj->indexB = indexB;
-		s2PrepareJoint_DVI(world, dj, inv_h, warmStart);
+		s2PrepareJoint_DVI(world, dj, h, inv_h, warmStart);
+		hasInequalities = hasInequalities || dj->limitSide != 0.0f;
 		if (joint->type == s2_revoluteJoint)
 		{
-			hasInequalities = hasInequalities || joint->revoluteJoint.enableMotor || dj->limitSide != 0.0f;
+			hasInequalities = hasInequalities || joint->revoluteJoint.enableMotor;
+		}
+		else if (joint->type == s2_prismaticJoint)
+		{
+			hasInequalities = hasInequalities || joint->prismaticJoint.enableSpring;
 		}
 
 		jointCount += 1;
@@ -602,7 +713,7 @@ void s2Solve_DVI(s2World* world, s2StepContext* context)
 	{
 		const s2DVIJoint* dj = joints + i;
 		factor.jointIndices[i] = dj->joint->object.index;
-		factor.rows[i] = (s2JointRows){dj->indexA, dj->indexB, dj->rA, dj->rB, dj->rowCount};
+		factor.rows[i] = dj->rows;
 	}
 	s2OrderJointFactor(world, &factor);
 

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "broad_phase.h"
+#include "joint_cr.h"
 #include "pool.h"
 
 #include "solver2d/callbacks.h"
@@ -46,6 +47,20 @@ typedef struct s2World
 	// Soft Step keeps its own fixed cap.
 	float jointHertz;
 	float jointHertzCap;
+
+	// Soft Step D solves its joints with this many conjugate residual iterations instead of the factorization,
+	// zero for the factorization
+	int jointCRIterations;
+
+	s2SeedMode jointSeedMode;
+
+	// Soft Step D relaxes its direct joints with the direct solve, otherwise with Soft Step's Gauss-Seidel relax
+	bool enableDirectRelax;
+
+	// Soft Step D measures conjugate residual against its exact joint solves, per step
+	bool measureJointCR;
+	s2JointCRStats softCRStats;
+	s2JointCRStats relaxCRStats;
 
 	uint16_t revision;
 } s2World;

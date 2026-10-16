@@ -5,6 +5,8 @@
 #include "contact.h"
 #include "core.h"
 #include "joint.h"
+#include "joint_cr.h"
+#include "joint_direct.h"
 #include "joint_factor.h"
 #include "solvers.h"
 #include "stack_allocator.h"
@@ -12,17 +14,15 @@
 
 #include <stdbool.h>
 
-// Soft Step with the equality rows of revolute and weld joints solved together by a direct factorization. An
-// isolated revolute joint matches Soft Step. Joints sharing a body are solved exactly instead of by one Gauss-Seidel
-// pass.
-// Soft Step's per joint update dlambda = -m K^-1 (Cdot + b) - i lambda becomes, over all joints,
-// (D + G) dlambda = -(J v + b) - G lambda with D = J M^-1 J^T and compliance G = K / c per joint.
+// Soft Step with the equality rows of revolute, weld, and prismatic joints solved together by a direct
+// factorization. An isolated revolute joint matches Soft Step. Joints sharing a body are solved exactly instead of
+// by one Gauss-Seidel pass. See joint_direct.h for the coupled system.
 
 // Jacobian anchors follow the bodies each substep. With 0 they stay at the start of the step, as Soft Step
 // does for contacts. Both refactor before every direct solve for now.
 #define S2_SOFT_STEP_D_REFACTOR 1
 
-// Solve every revolute joint directly, ignoring the per joint opt in
+// Solve every revolute, weld, and prismatic joint directly, ignoring the per joint opt in
 #define S2_SOFT_STEP_D_ALL_DIRECT 1
 
 // Relax with the soft compliance kept on the left. Reuses the soft matrix but is inexact on long chains.
@@ -42,93 +42,10 @@ static float s2GetJointHertz(s2World* world, float inv_h)
 	return world->jointHertz;
 }
 
-// What the direct solve needs from a revolute or weld joint
-typedef struct s2DirectJoint
-{
-	s2Vec2 localAnchorA;
-	s2Vec2 localAnchorB;
-	s2Vec2 centerDiff0;
-	float referenceAngle;
-	float biasCoefficient;
-	float massCoefficient;
-	float impulseCoefficient;
-	s2Vec2* linearImpulse;
-
-	// Weld angle row, null for a revolute joint
-	float* angularImpulse;
-
-	// Revolute motor and limits, warm started with the direct rows
-	float axialImpulse;
-} s2DirectJoint;
-
-static s2DirectJoint s2GetDirectJoint(s2Joint* base)
-{
-	s2DirectJoint direct = {0};
-
-	if (base->type == s2_weldJoint)
-	{
-		s2WeldJoint* joint = &base->weldJoint;
-		direct.localAnchorA = joint->localAnchorA;
-		direct.localAnchorB = joint->localAnchorB;
-		direct.centerDiff0 = joint->centerDiff0;
-		direct.referenceAngle = joint->referenceAngle;
-		direct.biasCoefficient = joint->biasCoefficient;
-		direct.massCoefficient = joint->massCoefficient;
-		direct.impulseCoefficient = joint->impulseCoefficient;
-		direct.linearImpulse = &joint->linearImpulse;
-		direct.angularImpulse = &joint->angularImpulse;
-		return direct;
-	}
-
-	S2_ASSERT(base->type == s2_revoluteJoint);
-	s2RevoluteJoint* joint = &base->revoluteJoint;
-	direct.localAnchorA = joint->localAnchorA;
-	direct.localAnchorB = joint->localAnchorB;
-	direct.centerDiff0 = joint->centerDiff0;
-	direct.referenceAngle = joint->referenceAngle;
-	direct.biasCoefficient = joint->biasCoefficient;
-	direct.massCoefficient = joint->massCoefficient;
-	direct.impulseCoefficient = joint->impulseCoefficient;
-	direct.linearImpulse = &joint->impulse;
-	direct.axialImpulse = joint->motorImpulse + joint->lowerImpulse - joint->upperImpulse;
-	return direct;
-}
-
-static bool s2UseDirect(s2World* world, s2Joint* joint)
-{
-	if (joint->type != s2_revoluteJoint && joint->type != s2_weldJoint)
-	{
-		return false;
-	}
-
-#if S2_SOFT_STEP_D_ALL_DIRECT == 0
-	bool enableDirect = joint->type == s2_revoluteJoint ? joint->revoluteJoint.enableDirect : joint->weldJoint.enableDirect;
-	if (enableDirect == false)
-	{
-		return false;
-	}
-#endif
-
-	s2Body* bodyA = world->bodies + joint->edges[0].bodyIndex;
-	s2Body* bodyB = world->bodies + joint->edges[1].bodyIndex;
-	return bodyA->type == s2_dynamicBody || bodyB->type == s2_dynamicBody;
-}
-
-static void s2UpdateDirectAnchors(s2World* world, s2JointFactor* factor)
-{
-	for (int i = 0; i < factor->jointCount; ++i)
-	{
-		s2DirectJoint direct = s2GetDirectJoint(world->joints + factor->jointIndices[i]);
-		s2JointRows* rows = factor->rows + i;
-		rows->rA = s2RotateVector(world->bodies[rows->indexA].rot, direct.localAnchorA);
-		rows->rB = s2RotateVector(world->bodies[rows->indexB].rot, direct.localAnchorB);
-	}
-}
-
 static void s2FactorDirect(s2World* world, s2JointFactor* factor, bool soft, float regularization)
 {
 #if S2_SOFT_STEP_D_REFACTOR == 1
-	s2UpdateDirectAnchors(world, factor);
+	s2UpdateDirectRows(world, factor);
 #endif
 
 	for (int i = 0; i < factor->jointCount; ++i)
@@ -137,114 +54,52 @@ static void s2FactorDirect(s2World* world, s2JointFactor* factor, bool soft, flo
 		factor->compliance[i] = soft ? direct.impulseCoefficient / direct.massCoefficient : 0.0f;
 	}
 
-	s2FactorJoints(world, factor, regularization);
-}
-
-static void s2WarmStartDirect(s2World* world, s2JointFactor* factor)
-{
-	for (int i = 0; i < factor->jointCount; ++i)
+	if (world->jointCRIterations > 0)
 	{
-		s2DirectJoint direct = s2GetDirectJoint(world->joints + factor->jointIndices[i]);
-		const s2JointRows* rows = factor->rows + i;
-		s2Body* bodyA = world->bodies + rows->indexA;
-		s2Body* bodyB = world->bodies + rows->indexB;
-
-		float angularImpulse = direct.axialImpulse + (direct.angularImpulse != NULL ? *direct.angularImpulse : 0.0f);
-		s2Vec2 P = *direct.linearImpulse;
-
-		bodyA->linearVelocity = s2MulSub(bodyA->linearVelocity, bodyA->invMass, P);
-		bodyA->angularVelocity -= bodyA->invI * (s2Cross(rows->rA, P) + angularImpulse);
-		bodyB->linearVelocity = s2MulAdd(bodyB->linearVelocity, bodyB->invMass, P);
-		bodyB->angularVelocity += bodyB->invI * (s2Cross(rows->rB, P) + angularImpulse);
+		factor->regularization = regularization;
+		return;
 	}
+
+	s2FactorJoints(world, factor, regularization);
 }
 
 // Equality rows of all direct joints in one solve against the current factor
 static void s2SolveDirect(s2World* world, s2JointFactor* factor, bool useBias)
 {
-	s2Body* bodies = world->bodies;
 	int jointCount = factor->jointCount;
 
-	for (int i = 0; i < jointCount; ++i)
+	s2BuildDirectRhs(world, factor, useBias, NULL, 1.0f);
+
+	if (world->jointCRIterations > 0)
 	{
-		s2DirectJoint direct = s2GetDirectJoint(world->joints + factor->jointIndices[i]);
-		const s2JointRows* rows = factor->rows + i;
-		s2Body* bodyA = bodies + rows->indexA;
-		s2Body* bodyB = bodies + rows->indexB;
-
-		s2Vec2 vrA = s2Add(bodyA->linearVelocity, s2CrossSV(bodyA->angularVelocity, rows->rA));
-		s2Vec2 vrB = s2Add(bodyB->linearVelocity, s2CrossSV(bodyB->angularVelocity, rows->rB));
-
-		s2JointVector rhs;
-		rhs.linear = s2Sub(vrA, vrB);
-		rhs.angular = bodyA->angularVelocity - bodyB->angularVelocity;
-
-		if (useBias)
+		s2SolveJointCR(world, factor, world->jointCRIterations);
+	}
+	else
+	{
+		s2JointVector* measuredRhs = NULL;
+		if (world->measureJointCR)
 		{
-			// Position error from current anchors even when the Jacobian anchors are fixed
-			s2Vec2 rA = s2RotateVector(bodyA->rot, direct.localAnchorA);
-			s2Vec2 rB = s2RotateVector(bodyB->rot, direct.localAnchorB);
-			s2Vec2 dcA = bodyA->deltaPosition;
-			s2Vec2 dcB = bodyB->deltaPosition;
-			s2Vec2 separation = s2Add(s2Add(s2Sub(dcB, dcA), s2Sub(rB, rA)), direct.centerDiff0);
-			rhs.linear = s2MulSub(rhs.linear, direct.biasCoefficient, separation);
-
-			if (rows->rowCount == 3)
+			measuredRhs = s2AllocateStackItem(world->stackAllocator, S2_MAX(1, jointCount) * sizeof(s2JointVector), "cr rhs");
+			for (int i = 0; i < jointCount; ++i)
 			{
-				float angle = s2RelativeAngle(bodyB->rot, bodyA->rot) - direct.referenceAngle;
-				rhs.angular -= direct.biasCoefficient * angle;
+				measuredRhs[i] = factor->rhs[i];
 			}
-
-			// Soft Step's impulse leak
-			float K[3][3];
-			s2ComputeJointBlock(world, rows, rows, K);
-			float lambda[3] = {direct.linearImpulse->x, direct.linearImpulse->y,
-							   direct.angularImpulse != NULL ? *direct.angularImpulse : 0.0f};
-			float leak[3] = {0.0f, 0.0f, 0.0f};
-			for (int r = 0; r < rows->rowCount; ++r)
-			{
-				for (int c = 0; c < rows->rowCount; ++c)
-				{
-					leak[r] += K[r][c] * lambda[c];
-				}
-			}
-
-			float compliance = factor->compliance[i];
-			rhs.linear.x -= compliance * leak[0];
-			rhs.linear.y -= compliance * leak[1];
-			rhs.angular -= compliance * leak[2];
 		}
 
-		factor->rhs[i] = rhs;
-	}
+		s2SolveJointFactor(factor);
 
-	s2SolveJointFactor(factor);
-
-	for (int i = 0; i < jointCount; ++i)
-	{
-		s2DirectJoint direct = s2GetDirectJoint(world->joints + factor->jointIndices[i]);
-		const s2JointRows* rows = factor->rows + i;
-		s2Body* bodyA = bodies + rows->indexA;
-		s2Body* bodyB = bodies + rows->indexB;
-
-		s2JointVector impulse = factor->rhs[i];
-		*direct.linearImpulse = s2Add(*direct.linearImpulse, impulse.linear);
-
-		float angularImpulse = 0.0f;
-		if (direct.angularImpulse != NULL)
+		if (measuredRhs != NULL)
 		{
-			*direct.angularImpulse += impulse.angular;
-			angularImpulse = impulse.angular;
+			s2MeasureJointCR(world, factor, measuredRhs, useBias ? &world->softCRStats : &world->relaxCRStats);
+			s2FreeStackItem(world->stackAllocator, measuredRhs);
 		}
-
-		bodyA->linearVelocity = s2MulSub(bodyA->linearVelocity, bodyA->invMass, impulse.linear);
-		bodyA->angularVelocity -= bodyA->invI * (s2Cross(rows->rA, impulse.linear) + angularImpulse);
-		bodyB->linearVelocity = s2MulAdd(bodyB->linearVelocity, bodyB->invMass, impulse.linear);
-		bodyB->angularVelocity += bodyB->invI * (s2Cross(rows->rB, impulse.linear) + angularImpulse);
 	}
+
+	s2ApplyDirectSolution(world, factor, 1.0f, true);
 }
 
-// Joints outside the direct solve get Soft Step's solve. Direct revolute joints get their motor and limits here.
+// Joints outside the direct solve get Soft Step's solve. Direct revolute and prismatic joints get their motor,
+// spring, and limits here.
 static void s2SolveJointsPGS(s2World* world, s2StepContext* context, const s2JointFactor* factor, float h, float inv_h,
 							 bool useBias)
 {
@@ -266,6 +121,10 @@ static void s2SolveJointsPGS(s2World* world, s2StepContext* context, const s2Joi
 		else if (joint->type == s2_revoluteJoint)
 		{
 			s2SolveRevoluteAxial_Soft(joint, context, h, inv_h, useBias);
+		}
+		else if (joint->type == s2_prismaticJoint)
+		{
+			s2SolvePrismaticAxial_Soft(joint, context, inv_h, useBias);
 		}
 	}
 }
@@ -304,12 +163,17 @@ void s2Solve_SoftStepD(s2World* world, s2StepContext* context)
 	float h = context->h;
 	float inv_h = context->inv_h;
 
+	world->softCRStats = (s2JointCRStats){0};
+	world->relaxCRStats = (s2JointCRStats){0};
+
 	float contactHertz = S2_MIN(s2_contactHertz, 0.25f * inv_h);
 	float jointHertz = s2GetJointHertz(world, inv_h);
 
+	// Prismatic limits stay Gauss-Seidel, so they keep Soft Step's cap
+	float limitHertz = S2_MIN(world->jointHertz, 0.25f * inv_h);
+
 	s2PrepareContacts_Soft(world, constraints, constraintCount, context, h, contactHertz);
 
-	int directCount = 0;
 	for (int i = 0; i < jointCapacity; ++i)
 	{
 		s2Joint* joint = joints + i;
@@ -321,33 +185,14 @@ void s2Solve_SoftStepD(s2World* world, s2StepContext* context)
 		bool warmStart = true;
 		s2PrepareJoint_Soft(joint, context, h, jointHertz, warmStart);
 
-		if (s2UseDirect(world, joint))
+		if (joint->type == s2_prismaticJoint)
 		{
-			directCount += 1;
+			s2PreparePrismaticLimit_Soft(joint, h, limitHertz);
 		}
 	}
 
 	s2JointFactor factor;
-	s2CreateJointFactor(world, &factor, directCount);
-
-	directCount = 0;
-	for (int i = 0; i < jointCapacity; ++i)
-	{
-		s2Joint* joint = joints + i;
-		if (s2IsFree(&joint->object) || s2UseDirect(world, joint) == false)
-		{
-			continue;
-		}
-
-		factor.jointIndices[directCount] = i;
-		factor.rows[directCount].indexA = joint->edges[0].bodyIndex;
-		factor.rows[directCount].indexB = joint->edges[1].bodyIndex;
-		factor.rows[directCount].rowCount = joint->type == s2_weldJoint ? 3 : 2;
-		directCount += 1;
-	}
-
-	s2UpdateDirectAnchors(world, &factor);
-	s2OrderJointFactor(world, &factor);
+	s2CreateDirectFactor(world, &factor, S2_SOFT_STEP_D_ALL_DIRECT == 1);
 
 	for (int substep = 0; substep < substepCount; ++substep)
 	{
@@ -356,7 +201,7 @@ void s2Solve_SoftStepD(s2World* world, s2StepContext* context)
 		if (context->warmStart)
 		{
 #if S2_SOFT_STEP_D_REFACTOR == 1
-			s2UpdateDirectAnchors(world, &factor);
+			s2UpdateDirectRows(world, &factor);
 #endif
 
 			for (int i = 0; i < jointCapacity; ++i)
@@ -370,11 +215,11 @@ void s2Solve_SoftStepD(s2World* world, s2StepContext* context)
 				s2WarmStartJoint(joint, context);
 			}
 
-			s2WarmStartDirect(world, &factor);
+			s2WarmStartDirect(world, &factor, 1.0f);
 			s2WarmStartContacts_Fixed(world, constraints, constraintCount);
 		}
 
-		// Direct joints go last so each pass ends with their point rows exact
+		// Direct joints go last so each pass ends with their equality rows exact
 		bool useBias = true;
 		s2SolveJointsPGS(world, context, &factor, h, inv_h, useBias);
 		s2SolveContacts_TGS_Fixed(world, constraints, constraintCount, inv_h, useBias);
@@ -383,7 +228,24 @@ void s2Solve_SoftStepD(s2World* world, s2StepContext* context)
 
 		s2IntegratePositions(world, h);
 
-		if (context->extraIterations > 0)
+		if (context->extraIterations > 0 && world->enableDirectRelax == false)
+		{
+			// Soft Step's relax, every joint by Gauss-Seidel. One factorization per substep instead of two.
+			useBias = false;
+			for (int i = 0; i < jointCapacity; ++i)
+			{
+				s2Joint* joint = joints + i;
+				if (s2IsFree(&joint->object))
+				{
+					continue;
+				}
+
+				s2SolveJoint_Soft(joint, context, h, inv_h, useBias);
+			}
+
+			s2SolveContacts_TGS_Fixed(world, constraints, constraintCount, inv_h, useBias);
+		}
+		else if (context->extraIterations > 0)
 		{
 			useBias = false;
 			s2SolveJointsPGS(world, context, &factor, h, inv_h, useBias);

@@ -19,7 +19,7 @@
 #include <vector>
 
 static const char* s_solverNames[s2_solverTypeCount] = {
-	"jacobi", "pgs", "pgs_ngs", "pgs_ngs_block", "pgs_soft", "soft_step", "tgs_sticky", "tgs_soft", "tgs_ngs", "xpbd", "dvi", "soft_step_d",
+	"jacobi", "pgs", "pgs_ngs", "pgs_ngs_block", "pgs_soft", "soft_step", "tgs_sticky", "tgs_soft", "tgs_ngs", "xpbd", "dvi", "soft_step_d", "soft_step_seed",
 };
 
 static_assert(S2_ARRAY_COUNT(s_solverNames) == s2_solverTypeCount);
@@ -31,11 +31,18 @@ struct Options
 	int stepCount = 600;
 	float hertz = 60.0f;
 	float jointHertz = 60.0f;
-	float jointHertzCap = 0.25f;
+	float jointHertzD = 480.0f;
+	float jointHertzCapD = 2.0f;
+	int jointCRIterationsD = 0;
+	bool directRelaxD = true;
+	float jointHertzSeed = 60.0f;
+	float jointHertzCapSeed = 0.25f;
+	int seedMode = 0;
 	int primaryIterations = 4;
 	int secondaryIterations = 2;
 	bool warmStart = true;
 	bool dumpBodies = false;
+	bool measureCR = false;
 	std::string outDir = "build/runner_out";
 };
 
@@ -85,12 +92,19 @@ static void PrintUsage()
 	printf("  -solvers=<a,b,...>    solver names or all (default all)\n");
 	printf("  -steps=<n>            steps to run (default 600)\n");
 	printf("  -hertz=<f>            step rate (default 60)\n");
-	printf("  -joint_hertz=<f>      Soft Step joint stiffness (default 60)\n");
-	printf("  -joint_cap=<f>        Soft Step D joint hertz cap as a fraction of the substep rate, 0 for none (default 0.25)\n");
+	printf("  -joint_hertz=<f>      Soft Step joint stiffness, capped at a quarter of the substep rate (default 60)\n");
+	printf("  -joint_hertz_d=<f>    Soft Step D joint stiffness (default 480)\n");
+	printf("  -joint_cap_d=<f>      Soft Step D joint hertz cap as a fraction of the substep rate, 0 for none (default 2)\n");
+	printf("  -cr_iters_d=<n>       Soft Step D solves joints by n conjugate residual iterations, 0 for exact (default 0)\n");
+	printf("  -gs_relax_d           Soft Step D relaxes joints with Soft Step's Gauss-Seidel pass, not the direct solve\n");
+	printf("  -joint_hertz_seed=<f> Soft Step Seed joint stiffness (default 60)\n");
+	printf("  -joint_cap_seed=<f>   Soft Step Seed joint hertz cap as a fraction of the substep rate, 0 for none (default 0.25)\n");
+	printf("  -seed=<s>             Soft Step Seed exact solve: first (substep), every (substep), or step (default first)\n");
 	printf("  -iters=<n>            primary iterations, substeps for substepping solvers (default 4)\n");
 	printf("  -extra=<n>            secondary iterations, relax or position (default 2)\n");
 	printf("  -nowarm               disable warm starting\n");
 	printf("  -bodies               also dump per body state each step\n");
+	printf("  -cr                   Soft Step D measures conjugate residual against its exact joint solves (slow)\n");
 	printf("  -out=<dir>            output directory (default build/runner_out)\n");
 }
 
@@ -261,9 +275,48 @@ static bool ParseArgs(int argc, char** argv, Options& options)
 		{
 			options.jointHertz = (float)atof(value);
 		}
-		else if (strncmp(arg, "-joint_cap=", 11) == 0)
+		else if (strncmp(arg, "-joint_hertz_d=", 15) == 0)
 		{
-			options.jointHertzCap = (float)atof(value);
+			options.jointHertzD = (float)atof(value);
+		}
+		else if (strncmp(arg, "-joint_cap_d=", 13) == 0)
+		{
+			options.jointHertzCapD = (float)atof(value);
+		}
+		else if (strncmp(arg, "-cr_iters_d=", 12) == 0)
+		{
+			options.jointCRIterationsD = atoi(value);
+		}
+		else if (strcmp(arg, "-gs_relax_d") == 0)
+		{
+			options.directRelaxD = false;
+		}
+		else if (strncmp(arg, "-joint_hertz_seed=", 18) == 0)
+		{
+			options.jointHertzSeed = (float)atof(value);
+		}
+		else if (strncmp(arg, "-joint_cap_seed=", 16) == 0)
+		{
+			options.jointHertzCapSeed = (float)atof(value);
+		}
+		else if (strncmp(arg, "-seed=", 6) == 0)
+		{
+			const char* modes[] = {"first", "every", "step"};
+			static_assert(S2_ARRAY_COUNT(modes) == s2_seedModeCount);
+			options.seedMode = -1;
+			for (int i = 0; i < s2_seedModeCount; ++i)
+			{
+				if (strcmp(value, modes[i]) == 0)
+				{
+					options.seedMode = i;
+				}
+			}
+
+			if (options.seedMode < 0)
+			{
+				fprintf(stderr, "unknown seed '%s'\n", value);
+				return false;
+			}
 		}
 		else if (strncmp(arg, "-iters=", 7) == 0)
 		{
@@ -280,6 +333,10 @@ static bool ParseArgs(int argc, char** argv, Options& options)
 		else if (strcmp(arg, "-bodies") == 0)
 		{
 			options.dumpBodies = true;
+		}
+		else if (strcmp(arg, "-cr") == 0)
+		{
+			options.measureCR = true;
 		}
 		else if (strncmp(arg, "-out=", 5) == 0)
 		{
@@ -298,7 +355,8 @@ static bool ParseArgs(int argc, char** argv, Options& options)
 	}
 
 	if (options.samples.empty() || options.stepCount <= 0 || options.hertz <= 0.0f || options.jointHertz <= 0.0f ||
-		options.jointHertzCap < 0.0f)
+		options.jointHertzD <= 0.0f || options.jointHertzCapD < 0.0f || options.jointCRIterationsD < 0 ||
+		options.jointHertzSeed <= 0.0f || options.jointHertzCapSeed < 0.0f)
 	{
 		return false;
 	}
@@ -326,7 +384,13 @@ static bool RunSolver(const Options& options, int sampleIndex, s2SolverType solv
 	settings.hertz = options.hertz;
 	settings.timeStep = 1.0f / options.hertz;
 	settings.jointHertz = options.jointHertz;
-	settings.jointHertzCap = options.jointHertzCap;
+	settings.jointHertzD = options.jointHertzD;
+	settings.jointHertzCapD = options.jointHertzCapD;
+	settings.jointCRIterationsD = options.jointCRIterationsD;
+	settings.directRelaxD = options.directRelaxD;
+	settings.jointHertzSeed = options.jointHertzSeed;
+	settings.jointHertzCapSeed = options.jointHertzCapSeed;
+	settings.seedMode = options.seedMode;
 	settings.primaryIterations = options.primaryIterations;
 	settings.secondaryIterations = options.secondaryIterations;
 	settings.enableWarmStarting = options.warmStart;
@@ -361,11 +425,19 @@ static bool RunSolver(const Options& options, int sampleIndex, s2SolverType solv
 
 	fprintf(stepFile, "step,time,ms,bodies,contacts,points,max_penetration,mean_penetration,normal_impulse,joints,"
 					  "max_joint_error,mean_joint_error,max_limit_error,kinetic,potential,energy,max_speed,max_angular_speed,"
-					  "max_weld_angle_error\n");
+					  "max_angle_error%s\n",
+			options.measureCR ? ",cr_soft_solves,cr_soft_it1,cr_soft_it2,cr_soft_e8,cr_soft_e32,cr_soft_exact,cr_relax_solves,"
+								"cr_relax_it1,cr_relax_it2,cr_relax_e8,cr_relax_e32,cr_relax_exact"
+							  : "");
 
 	Sample* sample = g_sampleEntries[sampleIndex].createFcn(settings, solverType);
 	Probe* probe = CreateProbe();
 	std::vector<ProbeBody> bodies;
+
+	if (options.measureCR)
+	{
+		Probe_EnableJointCR(sample->m_worldId);
+	}
 
 	// Step 0 is the initial state
 	for (int step = 0; step <= options.stepCount; ++step)
@@ -385,10 +457,19 @@ static bool RunSolver(const Options& options, int sampleIndex, s2SolverType solv
 		float time = step * settings.timeStep;
 		float energy = s.kineticEnergy + s.potentialEnergy;
 
-		fprintf(stepFile, "%d,%.6g,%.4f,%d,%d,%d,%.6g,%.6g,%.6g,%d,%.6g,%.6g,%.6g,%.8g,%.8g,%.8g,%.6g,%.6g,%.6g\n", step, time, ms,
+		fprintf(stepFile, "%d,%.6g,%.4f,%d,%d,%d,%.6g,%.6g,%.6g,%d,%.6g,%.6g,%.6g,%.8g,%.8g,%.8g,%.6g,%.6g,%.6g", step, time, ms,
 				s.bodyCount, s.contactCount, s.pointCount, s.maxPenetration, s.meanPenetration, s.normalImpulse, s.jointCount,
 				s.maxJointError, s.meanJointError, s.maxLimitError, s.kineticEnergy, s.potentialEnergy, energy, s.maxSpeed,
-				s.maxAngularSpeed, s.maxWeldAngleError);
+				s.maxAngularSpeed, s.maxAngleError);
+
+		if (options.measureCR)
+		{
+			fprintf(stepFile, ",%d,%d,%d,%.4g,%.4g,%.4g,%d,%d,%d,%.4g,%.4g,%.4g", s.crSoftSolves, s.crSoftIterations1,
+					s.crSoftIterations2, s.crSoftError8, s.crSoftError32, s.crSoftExactResidual, s.crRelaxSolves,
+					s.crRelaxIterations1, s.crRelaxIterations2, s.crRelaxError8, s.crRelaxError32, s.crRelaxExactResidual);
+		}
+
+		fprintf(stepFile, "\n");
 
 		if (bodyFile != nullptr)
 		{
@@ -456,11 +537,12 @@ int main(int argc, char** argv)
 	}
 
 	fprintf(summaryFile, "sample,solver,steps,hertz,iters,extra,warm_start,max_penetration,final_penetration,max_joint_error,"
-						 "final_joint_error,max_limit_error,initial_energy,final_energy,final_kinetic,total_ms,joint_hertz,joint_cap\n");
+						 "final_joint_error,max_limit_error,initial_energy,final_energy,final_kinetic,total_ms,joint_hertz,joint_hertz_d,"
+						 "joint_cap_d,cr_iters_d,joint_hertz_seed,joint_cap_seed,seed\n");
 
-	printf("steps=%d hertz=%g iters=%d extra=%d warm=%d joint_hertz=%g joint_cap=%g out=%s\n", options.stepCount, options.hertz,
-		   options.primaryIterations, options.secondaryIterations, options.warmStart ? 1 : 0, options.jointHertz,
-		   options.jointHertzCap, outDir.string().c_str());
+	printf("steps=%d hertz=%g iters=%d extra=%d warm=%d joint_hertz=%g joint_hertz_d=%g joint_cap_d=%g cr_iters_d=%d out=%s\n",
+		   options.stepCount, options.hertz, options.primaryIterations, options.secondaryIterations, options.warmStart ? 1 : 0,
+		   options.jointHertz, options.jointHertzD, options.jointHertzCapD, options.jointCRIterationsD, outDir.string().c_str());
 
 	int failures = 0;
 	for (int sampleIndex : options.samples)
@@ -490,11 +572,12 @@ int main(int argc, char** argv)
 			printf("  %-14s %10.4g %10.4g %10.4g %10.4g %12.6g %12.6g %9.1f\n", s_solverNames[i], r.maxPenetration,
 				   r.finalPenetration, r.maxJointError, r.finalJointError, r.initialEnergy, r.finalEnergy, r.totalMs);
 
-			fprintf(summaryFile, "\"%s\",%s,%d,%g,%d,%d,%d,%.6g,%.6g,%.6g,%.6g,%.6g,%.8g,%.8g,%.8g,%.3f,%g,%g\n", full.c_str(),
+			fprintf(summaryFile, "\"%s\",%s,%d,%g,%d,%d,%d,%.6g,%.6g,%.6g,%.6g,%.6g,%.8g,%.8g,%.8g,%.3f,%g,%g,%g,%d,%d,%g,%g,%d\n", full.c_str(),
 					s_solverNames[i], options.stepCount, options.hertz, options.primaryIterations, options.secondaryIterations,
 					options.warmStart ? 1 : 0, r.maxPenetration, r.finalPenetration, r.maxJointError, r.finalJointError,
 					r.maxLimitError, r.initialEnergy, r.finalEnergy, r.finalKinetic, r.totalMs, options.jointHertz,
-					options.jointHertzCap);
+					options.jointHertzD, options.jointHertzCapD, options.jointCRIterationsD, options.directRelaxD ? 1 : 0,
+					options.jointHertzSeed, options.jointHertzCapSeed, options.seedMode);
 		}
 	}
 

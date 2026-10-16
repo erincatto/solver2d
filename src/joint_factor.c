@@ -243,20 +243,76 @@ void s2DestroyJointFactor(s2World* world, s2JointFactor* factor)
 	*factor = (s2JointFactor){0};
 }
 
-// Jacobian of one row on one body. The sign is -1 for body A and 1 for body B.
-static void s2GetRowJacobian(s2Vec2 r, float sign, int row, s2Vec2* linear, float* angular)
+void s2GetJointRows(s2World* world, s2Joint* joint, s2JointRows* rows)
 {
-	if (row == 2)
+	S2_ASSERT(joint->type == s2_revoluteJoint || joint->type == s2_weldJoint || joint->type == s2_prismaticJoint);
+
+	s2Body* bodyA = world->bodies + joint->edges[0].bodyIndex;
+	s2Body* bodyB = world->bodies + joint->edges[1].bodyIndex;
+
+	rows->indexA = joint->edges[0].bodyIndex;
+	rows->indexB = joint->edges[1].bodyIndex;
+	rows->rA = s2RotateVector(bodyA->rot, s2Sub(joint->localOriginAnchorA, bodyA->localCenter));
+	rows->rB = s2RotateVector(bodyB->rot, s2Sub(joint->localOriginAnchorB, bodyB->localCenter));
+
+	if (joint->type == s2_prismaticJoint)
+	{
+		s2Vec2 centerDiff = s2Sub(bodyB->position, bodyA->position);
+		s2Vec2 d = s2Add(s2Add(s2Sub(bodyB->deltaPosition, bodyA->deltaPosition), s2Sub(rows->rB, rows->rA)), centerDiff);
+		rows->rA = s2Add(rows->rA, d);
+		rows->axes[0] = s2LeftPerp(s2RotateVector(bodyA->rot, joint->prismaticJoint.localAxisA));
+		rows->axes[1] = s2Vec2_zero;
+		rows->pointCount = 1;
+		rows->rowCount = 2;
+		return;
+	}
+
+	rows->axes[0] = (s2Vec2){1.0f, 0.0f};
+	rows->axes[1] = (s2Vec2){0.0f, 1.0f};
+	rows->pointCount = 2;
+	rows->rowCount = joint->type == s2_weldJoint ? 3 : 2;
+}
+
+void s2GetJointRowImpulses(s2Joint* joint, float* impulses[3])
+{
+	impulses[2] = NULL;
+
+	switch (joint->type)
+	{
+		case s2_revoluteJoint:
+			impulses[0] = &joint->revoluteJoint.impulse.x;
+			impulses[1] = &joint->revoluteJoint.impulse.y;
+			break;
+
+		case s2_weldJoint:
+			impulses[0] = &joint->weldJoint.linearImpulse.x;
+			impulses[1] = &joint->weldJoint.linearImpulse.y;
+			impulses[2] = &joint->weldJoint.angularImpulse;
+			break;
+
+		case s2_prismaticJoint:
+			impulses[0] = &joint->prismaticJoint.impulse.x;
+			impulses[1] = &joint->prismaticJoint.impulse.y;
+			break;
+
+		default:
+			S2_ASSERT(false);
+	}
+}
+
+// Jacobian of one row on one body. The sign is -1 for body A and 1 for body B.
+static void s2GetRowJacobian(const s2JointRows* rows, s2Vec2 r, float sign, int row, s2Vec2* linear, float* angular)
+{
+	if (row >= rows->pointCount)
 	{
 		*linear = s2Vec2_zero;
 		*angular = sign;
 		return;
 	}
 
-	// Angular Jacobian of the x and y rows is the perp of the anchor
-	s2Vec2 perp = s2LeftPerp(r);
-	*linear = row == 0 ? (s2Vec2){sign, 0.0f} : (s2Vec2){0.0f, sign};
-	*angular = sign * (row == 0 ? perp.x : perp.y);
+	s2Vec2 axis = rows->axes[row];
+	*linear = s2MulSV(sign, axis);
+	*angular = sign * s2Cross(r, axis);
 }
 
 void s2ComputeJointBlock(s2World* world, const s2JointRows* p, const s2JointRows* q, float K[3][3])
@@ -292,13 +348,13 @@ void s2ComputeJointBlock(s2World* world, const s2JointRows* p, const s2JointRows
 			{
 				s2Vec2 linearP;
 				float angularP;
-				s2GetRowJacobian(anchorsP[a], signs[a], r, &linearP, &angularP);
+				s2GetRowJacobian(p, anchorsP[a], signs[a], r, &linearP, &angularP);
 
 				for (int c = 0; c < q->rowCount; ++c)
 				{
 					s2Vec2 linearQ;
 					float angularQ;
-					s2GetRowJacobian(anchorsQ[b], signs[b], c, &linearQ, &angularQ);
+					s2GetRowJacobian(q, anchorsQ[b], signs[b], c, &linearQ, &angularQ);
 
 					K[r][c] += m * s2Dot(linearP, linearQ) + i * angularP * angularQ;
 				}
@@ -321,6 +377,8 @@ void s2FactorJoints(s2World* world, s2JointFactor* factor, float regularization)
 	const int* position = factor->position;
 	const int* adjacencyStart = factor->adjacencyStart;
 	const int* adjacency = factor->adjacency;
+
+	factor->regularization = regularization;
 
 	int size = factor->offset[rowCount];
 	for (int i = 0; i < size; ++i)
@@ -423,12 +481,10 @@ void s2SolveJointFactor(s2JointFactor* factor)
 	{
 		int node = factor->order[p];
 		int start = factor->rowStart[p];
-		s2JointVector b = factor->rhs[node];
-		x[start] = scale[start] * b.linear.x;
-		x[start + 1] = scale[start + 1] * b.linear.y;
-		if (factor->rows[node].rowCount == 3)
+		const s2JointVector* b = factor->rhs + node;
+		for (int r = 0; r < factor->rows[node].rowCount; ++r)
 		{
-			x[start + 2] = scale[start + 2] * b.angular;
+			x[start + r] = scale[start + r] * b->row[r];
 		}
 	}
 
@@ -460,7 +516,10 @@ void s2SolveJointFactor(s2JointFactor* factor)
 		int node = factor->order[p];
 		int start = factor->rowStart[p];
 		s2JointVector* solution = factor->rhs + node;
-		solution->linear = (s2Vec2){scale[start] * x[start], scale[start + 1] * x[start + 1]};
-		solution->angular = factor->rows[node].rowCount == 3 ? scale[start + 2] * x[start + 2] : 0.0f;
+		int rowCount = factor->rows[node].rowCount;
+		for (int r = 0; r < 3; ++r)
+		{
+			solution->row[r] = r < rowCount ? scale[start + r] * x[start + r] : 0.0f;
+		}
 	}
 }
